@@ -1,0 +1,25 @@
+import type { Role } from '../../shared/identifiers';
+import type { Operation } from '../operations/operation';
+
+/** Role → the operations that role may call. Checked before any module runs (ADR-10). One table to review. */
+export class PermissionTable {
+  private readonly rolesByOperation = new Map<string, ReadonlySet<Role>>();
+
+  constructor(operations: readonly Operation[]) {
+    for (const operation of operations) {
+      this.rolesByOperation.set(operation.name, new Set(operation.allowedRoles));
+    }
+  }
+
+  allows(role: Role, operationName: string): boolean {
+    return this.rolesByOperation.get(operationName)?.has(role) ?? false;
+  }
+
+  operationCount(): number {
+    return this.rolesByOperation.size;
+  }
+
+  entries(): readonly { operation: string; roles: readonly Role[] }[] {
+    return [...this.rolesByOperation].map(([operation, roles]) => ({ operation, roles: [...roles] }));
+  }
+}
