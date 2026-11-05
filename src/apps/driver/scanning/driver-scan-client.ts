@@ -45,6 +45,8 @@ export class DriverScanClient {
   private pendingOpen: PendingOpen | undefined;
   private pendingClose: PendingClose | undefined;
   private activeTicketId: TicketId | undefined;
+  private inFlightEntry: Promise<DriverScanClientResult<OpenedTicketScan>> | undefined;
+  private inFlightExit: Promise<DriverScanClientResult<ClosedTicketScan>> | undefined;
 
   constructor(options: DriverScanClientOptions) {
     this.api = options.api;
@@ -67,10 +69,38 @@ export class DriverScanClient {
   }
 
   /**
-   * Open a ticket from an entry code. A second tap before the answer arrives reuses the same request id.
-   * A transport failure keeps that request id so a retry cannot create a second ticket.
+   * Open a ticket from an entry code. A second tap before the answer arrives joins the same in-flight call
+   * and the same request id. A transport failure keeps that request id so a retry cannot create a second ticket.
    */
-  async scanEntry(siteId: SiteId, entryCode: string): Promise<DriverScanClientResult<OpenedTicketScan>> {
+  scanEntry(siteId: SiteId, entryCode: string): Promise<DriverScanClientResult<OpenedTicketScan>> {
+    if (this.inFlightEntry !== undefined) {
+      return this.inFlightEntry;
+    }
+
+    this.inFlightEntry = this.runEntryScan(siteId, entryCode).finally(() => {
+      this.inFlightEntry = undefined;
+    });
+    return this.inFlightEntry;
+  }
+
+  /**
+   * Close the active ticket from an exit code. Keeps one request id across connection-loss retries.
+   */
+  scanExit(siteId: SiteId, exitCode: string): Promise<DriverScanClientResult<ClosedTicketScan>> {
+    if (this.inFlightExit !== undefined) {
+      return this.inFlightExit;
+    }
+
+    this.inFlightExit = this.runExitScan(siteId, exitCode).finally(() => {
+      this.inFlightExit = undefined;
+    });
+    return this.inFlightExit;
+  }
+
+  private async runEntryScan(
+    siteId: SiteId,
+    entryCode: string,
+  ): Promise<DriverScanClientResult<OpenedTicketScan>> {
     if (this.pendingOpen === undefined) {
       this.pendingOpen = {
         requestId: this.createRequestId(),
@@ -97,10 +127,10 @@ export class DriverScanClient {
     }
   }
 
-  /**
-   * Close the active ticket from an exit code. Keeps one request id across connection-loss retries.
-   */
-  async scanExit(siteId: SiteId, exitCode: string): Promise<DriverScanClientResult<ClosedTicketScan>> {
+  private async runExitScan(
+    siteId: SiteId,
+    exitCode: string,
+  ): Promise<DriverScanClientResult<ClosedTicketScan>> {
     const ticketId = this.activeTicketId;
     if (ticketId === undefined) {
       throw new Error('no open ticket to close; scan entry first');
