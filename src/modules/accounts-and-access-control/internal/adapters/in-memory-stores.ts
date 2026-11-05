@@ -1,7 +1,7 @@
 import type { PersonId } from '../../../../shared/identifiers';
 import type { AccountStatus, CarRef } from '../../public';
 import type { Person } from '../domain/person';
-import type { CarRecord, ErasedRows, PeopleStore, PersonalDataStore, PersonDetails } from '../ports';
+import type { AccessFactsRow, AccessFactsStore, CarRecord, ErasedRows, PeopleStore, PersonalDataStore, PersonDetails } from '../ports';
 
 /**
  * In-memory stand-ins for this module's tables. They keep their own maps rather than the foundation's
@@ -72,5 +72,21 @@ export class InMemoryPersonalDataStore implements PersonalDataStore {
     const ownedCars = [...this.cars.values()].filter((car) => car.ownerRef === personRef);
     ownedCars.forEach((car) => this.cars.delete(car.carRef));
     return { personDetails, cars: ownedCars.length };
+  }
+}
+
+export class InMemoryAccessFactsStore implements AccessFactsStore {
+  private readonly facts = new Map<PersonId, AccessFactsRow>();
+
+  async factsOf(personId: PersonId): Promise<AccessFactsRow> {
+    return this.facts.get(personId) ?? { personId };
+  }
+
+  async update(personId: PersonId, change: (current: AccessFactsRow) => AccessFactsRow): Promise<void> {
+    this.facts.set(personId, change(await this.factsOf(personId)));
+  }
+
+  async remove(personId: PersonId): Promise<number> {
+    return this.facts.delete(personId) ? 1 : 0;
   }
 }

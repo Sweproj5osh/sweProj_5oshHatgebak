@@ -30,3 +30,17 @@ CREATE TABLE IF NOT EXISTS personal_data.cars (
 -- Erasure deletes personal rows, so the application role may delete in personal_data but nowhere in audit_log.
 GRANT SELECT, INSERT, UPDATE ON accounts_and_access_control.people TO sayes_application;
 GRANT SELECT, INSERT, DELETE ON personal_data.person_details, personal_data.cars TO sayes_application;
+
+-- What access control knows about each person's licence and posts (task A3). Written by the licensing module inside
+-- its own transaction, so that permission answers never wait on that may-fail module (Rule D). bound_site_id is the
+-- site an attendant's session is bound to at clock-in.
+CREATE TABLE IF NOT EXISTS accounts_and_access_control.access_facts (
+  person_id          text PRIMARY KEY REFERENCES accounts_and_access_control.people (person_id),
+  licence_state      text CHECK (licence_state IN ('valid', 'suspended', 'revoked')),
+  attendant_site_id  text,
+  inspector_zone_id  text,
+  member_district_id text,
+  bound_site_id      text
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON accounts_and_access_control.access_facts TO sayes_application;

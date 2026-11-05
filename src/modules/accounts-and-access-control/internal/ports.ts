@@ -1,5 +1,5 @@
-import type { PersonId } from '../../../shared/identifiers';
-import type { AccountStatus, CarRef } from '../public';
+import type { DistrictId, PersonId, SiteId, ZoneId } from '../../../shared/identifiers';
+import type { AccountStatus, CarRef, LicenceLiveState } from '../public';
 import type { Person } from './domain/person';
 
 /**
@@ -44,4 +44,25 @@ export interface PersonalDataStore {
   car(carRef: CarRef): Promise<CarRecord | undefined>;
   carsOf(ownerRef: PersonId): Promise<readonly CarRecord[]>;
   eraseEverythingAbout(personRef: PersonId): Promise<ErasedRows>;
+}
+
+/**
+ * What this module knows about a person's licence and posts, recorded by the licensing module inside its own
+ * transaction (Rule D: this must-stay-on module never calls the may-fail licensing module). Plus the site the
+ * attendant's session is bound to at clock-in.
+ */
+export interface AccessFactsRow {
+  readonly personId: PersonId;
+  readonly licenceState?: LicenceLiveState;
+  readonly attendantSiteId?: SiteId;
+  readonly inspectorZoneId?: ZoneId;
+  readonly memberDistrictId?: DistrictId;
+  readonly boundSiteId?: SiteId;
+}
+
+/** The `accounts_and_access_control.access_facts` table: one row per person, replaced field by field. */
+export interface AccessFactsStore {
+  factsOf(personId: PersonId): Promise<AccessFactsRow>;
+  update(personId: PersonId, change: (current: AccessFactsRow) => AccessFactsRow): Promise<void>;
+  remove(personId: PersonId): Promise<number>;
 }
