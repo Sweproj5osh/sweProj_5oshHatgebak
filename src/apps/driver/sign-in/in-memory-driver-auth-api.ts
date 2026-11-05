@@ -5,7 +5,8 @@
 import { signToken } from '../../../entrypoint/auth/token';
 import type { PersonId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
-import type { DriverAuthApi, SignInSuccess } from './driver-auth-api';
+import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from './driver-auth-api';
+
 
 export interface InMemoryDriverAuthApiOptions {
   readonly tokenSecret: string;
@@ -47,7 +48,7 @@ export class InMemoryDriverAuthApi implements DriverAuthApi {
 
     const expected = this.codes.get(phone) ?? `driver-code-${phone}`;
     if (code !== expected) {
-      throw new Error('wrong code');
+      throw new DriverAuthRefusedError('wrong code');
     }
 
     let driverId = this.driverByPhone.get(phone);
@@ -71,7 +72,7 @@ export class InMemoryDriverAuthApi implements DriverAuthApi {
 
     const driverId = this.currentDriverId;
     if (driverId === undefined) {
-      throw new Error('not signed in');
+      throw new DriverAuthRefusedError('not signed in');
     }
 
     const existing = this.carsByDriver.get(driverId) ?? [];
@@ -90,7 +91,7 @@ export class InMemoryDriverAuthApi implements DriverAuthApi {
   async listCars(): Promise<readonly string[]> {
     const driverId = this.currentDriverId;
     if (driverId === undefined) {
-      throw new Error('not signed in');
+      throw new DriverAuthRefusedError('not signed in');
     }
     return [...(this.carsByDriver.get(driverId) ?? [])];
   }
