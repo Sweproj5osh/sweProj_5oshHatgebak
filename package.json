@@ -1,0 +1,22 @@
+{
+  "name": "sayes-street-parking",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Street parking management system for Cairo: one modular monolith with fourteen modules behind declared public interfaces.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "tsx src/entrypoint/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "fitness": "tsx src/fitness/run-all.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
