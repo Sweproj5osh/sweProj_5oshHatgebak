@@ -5,6 +5,9 @@
  */
 import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../shared/identifiers';
 import type { Result } from '../../shared/result';
+import { InMemoryPeopleStore, InMemoryPersonalDataStore } from './internal/adapters/in-memory-stores';
+import { PersonalDataService } from './internal/personal-data-service';
+import type { PeopleStore, PersonalDataStore } from './internal/ports';
 
 export interface Scope {
   readonly siteId?: SiteId;
@@ -21,14 +24,38 @@ export interface Authorization {
   boundSite(personId: PersonId): Promise<SiteId | undefined>;
 }
 
-export type SignInRefusal = 'wrong code' | 'locked';
+/** The reference of one car in the personal-data store. Other modules hold this, never the plate. */
+export type CarRef = string;
+
+/** Who is creating a person: a driver registering themself, or the staff member doing it. */
+export type PersonCreator = 'self registration' | PersonId;
+
+export type CreatePersonRefusal = 'not allowed to create this role' | 'invalid phone' | 'invalid name' | 'phone already registered';
 
 export interface PersonalData {
-  createPerson(role: Role, phone: string, displayName: string): Promise<PersonId>;
-  requestSignInCode(phone: string): Promise<void>;
-  signIn(phone: string, code: string): Promise<Result<{ token: string }, SignInRefusal>>;
-  addCar(driverId: PersonId, plate: string): Promise<void>;
-  /** A logged join: every call writes a "plate read" audit entry naming the reader. */
-  readPlate(driverRef: PersonId, reader: PersonId, purpose: string): Promise<Result<string, 'refused'>>;
-  erase(personId: PersonId): Promise<void>;
+  createPerson(creator: PersonCreator, role: Role, phone: string, displayName: string): Promise<Result<PersonId, CreatePersonRefusal>>;
+}
+
+export interface AccountsAndAccessControlStores {
+  readonly people: PeopleStore;
+  readonly personalData: PersonalDataStore;
+}
+
+export interface AccountsAndAccessControl {
+  readonly personalData: PersonalData;
+  /** The one-time set-up of the first Chair, for the system operator only; no request reaches it. */
+  bootstrapChair(phone: string, displayName: string): Promise<Result<PersonId, CreatePersonRefusal>>;
+}
+
+/** The composition root builds this module through this one function; nothing else constructs its internals. */
+export function createAccountsAndAccessControl(stores: AccountsAndAccessControlStores): AccountsAndAccessControl {
+  const personalData = new PersonalDataService(stores);
+  return {
+    personalData,
+    bootstrapChair: (phone, displayName) => personalData.bootstrapChair(phone, displayName),
+  };
+}
+
+export function createInMemoryAccountsStores(): AccountsAndAccessControlStores {
+  return { people: new InMemoryPeopleStore(), personalData: new InMemoryPersonalDataStore() };
 }
