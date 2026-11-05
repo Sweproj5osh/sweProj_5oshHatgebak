@@ -106,7 +106,7 @@ export function clockInAttendant(
     return known;
   }
 
-  const expectedCode = `attendant-site-${request.siteId}`;
+  const expectedCode = `attendant-${request.siteId}`;
   if (request.code !== expectedCode) {
     const failure: AttendantClockInFailure = {
       ok: false,
@@ -216,7 +216,7 @@ export function markTicketPaid(state: AttendantModeState, request: MarkPaidReque
   }
 
   const ticket = state.tickets.get(request.ticketId);
-  if (ticket === undefined) {
+  if (ticket === undefined || ticket.siteId !== siteId) {
     const failure: MarkPaidFailure = {
       ok: false,
       requestId: request.requestId,
