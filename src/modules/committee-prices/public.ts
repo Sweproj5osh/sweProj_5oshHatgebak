@@ -4,7 +4,7 @@
  * so this file declares its own small types instead of using src/shared.
  */
 
-/** Amount in Egyptian pounds, whole piastres avoided: integer pounds for now; the owner may refine. */
+/** Amount in Egyptian pounds, always a whole number of pounds (decided for task B1). */
 export type Money = number;
 
 export interface PriceVersion {
@@ -28,3 +28,5 @@ export interface FeeCalculator {
   computeFee(entry: Date, exit: Date, version: PriceVersion): Money;
   computeResidentFee(): Money;
 }
+
+export { createFeeCalculator } from './internal/fee-calculator';
