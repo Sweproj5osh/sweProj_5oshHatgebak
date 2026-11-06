@@ -46,9 +46,26 @@ export interface PriceListOptions {
 }
 
 /** Fee from entry time, exit time and a price version. No database, no network, no other module (B1, B2, B4). */
+export interface CarAtSite {
+  readonly carRef: string;
+}
+
+/**
+ * The one question the calculator asks to apply the resident exemption (task B4): is this car registered to a street
+ * address at this site? The module cannot import the answer (F1), so the composition root hands it in.
+ */
+export type IsResident = (carRef: string, siteId: string) => boolean | Promise<boolean>;
+
+export interface FeeCalculatorOptions {
+  /** Without it nobody is a resident. */
+  readonly isResident?: IsResident;
+}
+
 export interface FeeCalculator {
   computeFee(entry: Date, exit: Date, version: PriceVersion): Money;
   computeResidentFee(): Money;
+  /** The fee for one car at the site of the price version: 0 for a resident, the normal fee for everyone else. */
+  computeFeeForCar(car: CarAtSite, entry: Date, exit: Date, version: PriceVersion): Promise<Money>;
 }
 
 export { createFeeCalculator } from './internal/fee-calculator';
