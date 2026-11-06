@@ -17,10 +17,32 @@ export interface PriceVersion {
   readonly validFrom: string;
 }
 
+/** The answer to "which price version was valid at this moment?": the version, or the fact that no price is known. */
+export type PriceLookup =
+  | { readonly found: true; readonly version: PriceVersion }
+  | { readonly found: false; readonly reason: 'no price known' };
+
+export type ApplyVersionRefusal =
+  | 'approval request not approved'
+  | 'invalid price version'
+  | 'a version already starts at that moment';
+
+export type ApplyVersionOutcome =
+  | { readonly applied: true }
+  | { readonly applied: false; readonly reason: ApplyVersionRefusal };
+
 /** Read the committee's prices. Writes come only from Approvals through `applyApprovedVersion` (B3). */
 export interface PriceList {
-  versionValidAt(siteId: string, moment: Date): Promise<PriceVersion>;
-  applyApprovedVersion(version: PriceVersion, approvalRequestId: string): Promise<void>;
+  versionValidAt(siteId: string, moment: Date): Promise<PriceLookup>;
+  applyApprovedVersion(version: PriceVersion, approvalRequestId: string): Promise<ApplyVersionOutcome>;
+}
+
+/**
+ * What the price list needs from the outside. This module imports nothing outside its folder (fitness function F1),
+ * so whoever wires the system together passes in the question "has the approvals area approved this request?".
+ */
+export interface PriceListOptions {
+  readonly isApproved: (approvalRequestId: string) => boolean | Promise<boolean>;
 }
 
 /** Fee from entry time, exit time and a price version. No database, no network, no other module (B1, B2, B4). */
@@ -30,3 +52,4 @@ export interface FeeCalculator {
 }
 
 export { createFeeCalculator } from './internal/fee-calculator';
+export { createPriceList } from './internal/price-list';
