@@ -61,10 +61,7 @@ describe('D3 Driver App scanning over the HTTP entry point', () => {
     const { client, ticketState, audit } = buildStack(dropSuccessfulAnswers);
 
     const lost = await client.scanEntry('site-9', 'entry-site-9');
-    expect(lost.ok).toBe(false);
-    if (!lost.ok) {
-      expect(lost.requestId).toBe('scan-req-0001');
-    }
+    expect(lost).toEqual({ ok: false, error: 'connection lost', requestId: 'scan-req-0001' });
     expect(client.pendingEntryRequestId()).toBe('scan-req-0001');
     expect(ticketState.ticketsOpened).toBe(1);
 
@@ -88,7 +85,7 @@ describe('D3 Driver App scanning over the HTTP entry point', () => {
     const opened = await client.scanEntry('site-4', 'entry-site-4');
     expect(opened.ok).toBe(true);
 
-    const closed = await client.scanExit('site-4', 'exit-site-4');
+    const closed = await client.scanExit('exit-site-4');
     expect(closed.ok).toBe(true);
     if (closed.ok) {
       expect(closed.value.status).toBe('closed');
@@ -102,5 +99,57 @@ describe('D3 Driver App scanning over the HTTP entry point', () => {
       'driver.openTicket',
       'driver.closeTicket',
     ]);
+  });
+
+    it('shows a forged code as a refusal and leaves no ticket and no audit entry', async () => {
+    const { client, ticketState, audit } = buildStack();
+
+    const result = await client.scanEntry('site-2', 'not-a-real-code');
+
+    expect(result).toEqual({ ok: false, error: 'forged code' });
+    expect(ticketState.ticketsOpened).toBe(0);
+    expect(client.pendingEntryRequestId()).toBeUndefined();
+    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(0);
+  });
+
+  it('refuses a second ticket for a car already parked, and the refusal leaves no second audit entry', async () => {
+    const { client, ticketState, audit } = buildStack();
+    await client.scanEntry('site-3', 'entry-site-3');
+
+    const second = await client.scanEntry('site-5', 'entry-site-5');
+
+    expect(second).toEqual({ ok: false, error: 'car already parked' });
+    expect(ticketState.ticketsOpened).toBe(1);
+    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(1);
+  });
+
+  it('refuses an exit scan with the entry code of the site, and the ticket stays open', async () => {
+    const { client, ticketState, audit } = buildStack();
+    await client.scanEntry('site-4', 'entry-site-4');
+
+    const wrong = await client.scanExit('entry-site-4');
+
+    expect(wrong).toEqual({ ok: false, error: 'wrong site' });
+    expect(client.activeTicket()).toBe('ticket-1');
+    expect(ticketState.openByDriver.size).toBe(1);
+    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(1);
+  });
+
+  it('shows "not signed in" when the server does not accept the token', async () => {
+    const ticketState = createStandInTicketDeskState();
+    const app = composeInMemoryApplication({
+      tokenSecret: TEST_TOKEN_SECRET,
+      clock: new FixedClock(new Date('2026-11-06T12:00:00Z')),
+      operations: [...foundationOperations, ...createStandInDriverTicketOperations(ticketState)],
+    });
+    const client = new DriverScanClient({
+      api: new HttpTicketScanApi({ handle: app.handle, authorizationHeader: () => 'Bearer not-a-token' }),
+      createRequestId: () => 'scan-req-0099',
+    });
+
+    const result = await client.scanEntry('site-1', 'entry-site-1');
+
+    expect(result).toEqual({ ok: false, error: 'not signed in' });
+    expect(ticketState.ticketsOpened).toBe(0);
   });
 });

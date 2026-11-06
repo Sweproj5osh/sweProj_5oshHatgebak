@@ -2,10 +2,13 @@
  * In-memory stand-in for the ticket scan HTTP API while Teammate B's TicketDesk is not yet plugged into the
  * entry point. It mirrors the server's repeatable-write rule: the same request id returns the same answer and
  * opens or closes at most once. Not a production module — tests and local prototypes only.
+ *
+ * The codes are `entry-<site>` and `exit-<site>`; the site a code belongs to is read from the code, as the real
+ * server reads it from the signed code.
  */
-import type { SiteId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
 import {
+  TicketScanRefusedError,
   TicketScanTransportError,
   type CloseTicketScanInput,
   type ClosedTicketScan,
@@ -14,15 +17,11 @@ import {
   type TicketScanApi,
 } from './ticket-scan-api';
 
-interface OpenRecord {
-  readonly response: OpenedTicketScan;
-  readonly driverKey: string;
-}
-
 export class InMemoryTicketScanApi implements TicketScanApi {
-  private readonly openResponses = new Map<RequestId, OpenRecord>();
+  private readonly openResponses = new Map<RequestId, OpenedTicketScan>();
   private readonly closeResponses = new Map<RequestId, ClosedTicketScan>();
-  private readonly openTicketByDriver = new Map<string, TicketId>();
+  /** The one open ticket of the current driver, with the site it was opened at. */
+  private openTicketOfDriver: OpenedTicketScan | undefined;
   private nextTicketNumber = 1;
   private transportDropsRemaining = 0;
 
@@ -40,28 +39,25 @@ export class InMemoryTicketScanApi implements TicketScanApi {
     const known = this.openResponses.get(input.requestId);
     if (known !== undefined) {
       this.maybeDropAfterApply();
-      return known.response;
+      return known;
     }
 
-    const driverKey = 'current-driver';
-    if (this.openTicketByDriver.has(driverKey)) {
-      throw new Error('car already parked');
+    if (this.openTicketOfDriver !== undefined) {
+      throw new TicketScanRefusedError('car already parked');
     }
 
-    const expected = `entry-${input.siteId}`;
-    if (input.entryCode !== expected) {
-      throw new Error(input.entryCode.startsWith('exit-') ? 'wrong site' : 'forged code');
+    if (input.entryCode !== `entry-${input.siteId}`) {
+      throw new TicketScanRefusedError(input.entryCode.startsWith('exit-') ? 'wrong site' : 'forged code');
     }
 
-    const ticketId = `ticket-${this.nextTicketNumber}`;
-    this.nextTicketNumber += 1;
     const response: OpenedTicketScan = {
-      ticketId,
+      ticketId: `ticket-${this.nextTicketNumber}`,
       siteId: input.siteId,
       status: 'opened',
     };
-    this.openResponses.set(input.requestId, { response, driverKey });
-    this.openTicketByDriver.set(driverKey, ticketId);
+    this.nextTicketNumber += 1;
+    this.openResponses.set(input.requestId, response);
+    this.openTicketOfDriver = response;
     this.maybeDropAfterApply();
     return response;
   }
@@ -73,24 +69,18 @@ export class InMemoryTicketScanApi implements TicketScanApi {
       return known;
     }
 
-    const driverKey = 'current-driver';
-    const openTicketId = this.openTicketByDriver.get(driverKey);
-    if (openTicketId === undefined || openTicketId !== input.ticketId) {
-      throw new Error('no open ticket');
+    const open = this.openTicketOfDriver;
+    if (open === undefined || open.ticketId !== input.ticketId) {
+      throw new TicketScanRefusedError('no open ticket');
     }
 
-    const expected = `exit-${input.siteId}`;
-    if (input.exitCode !== expected) {
-      throw new Error(input.exitCode.startsWith('entry-') ? 'wrong site' : 'forged code');
+    if (input.exitCode !== `exit-${open.siteId}`) {
+      throw new TicketScanRefusedError(input.exitCode.startsWith('entry-') ? 'wrong site' : 'forged code');
     }
 
-    const response: ClosedTicketScan = {
-      ticketId: input.ticketId,
-      siteId: input.siteId as SiteId,
-      status: 'closed',
-    };
+    const response: ClosedTicketScan = { ticketId: open.ticketId, siteId: open.siteId, status: 'closed' };
     this.closeResponses.set(input.requestId, response);
-    this.openTicketByDriver.delete(driverKey);
+    this.openTicketOfDriver = undefined;
     this.maybeDropAfterApply();
     return response;
   }
