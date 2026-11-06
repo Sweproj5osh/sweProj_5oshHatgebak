@@ -4,12 +4,15 @@
  * server. Needs SiteRegistry, FeeCalculator, AuditTrail (Q12a: not Authorization or LicenceStatus).
  */
 import type { Operation } from '../../entrypoint/operations/operation';
+import type { FeeCalculator, PriceList } from '../committee-prices/public';
 import type { Clock } from '../../shared/clock';
 import type { PersonId, SiteId, TicketId } from '../../shared/identifiers';
 import type { RequestId } from '../../shared/request-id';
 import type { Result } from '../../shared/result';
+import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
+import { createTicketClosingService } from './internal/ticket-closing';
 import { createTicketOpeningService } from './internal/ticket-opening';
 
 export { InMemoryTicketStore } from './internal/in-memory-ticket-store';
@@ -35,7 +38,7 @@ export interface Ticket {
 }
 
 export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site';
-export type CloseRefusal = 'no open ticket' | 'forged code' | 'wrong site';
+export type CloseRefusal = 'no open ticket' | 'forged code' | 'wrong site' | 'exit before entry' | 'no price known';
 
 export interface OpenTicketCommand {
   readonly requestId: RequestId;
@@ -81,6 +84,7 @@ export type SiteCodeProblem = 'forged' | 'wrong site' | 'wrong kind';
  */
 export interface TicketingSites {
   verifyEntryCode(code: string, siteId: SiteId): Promise<Result<SiteId, SiteCodeProblem>>;
+  verifyExitCode(code: string, siteId: SiteId): Promise<Result<SiteId, SiteCodeProblem>>;
   isOpenAt(siteId: SiteId, moment: Date): Promise<boolean>;
   capacityOf(siteId: SiteId): Promise<number | undefined>;
 }
@@ -100,7 +104,30 @@ export function createTicketOpening(dependencies: TicketOpeningDependencies): Ti
   return createTicketOpeningService(dependencies);
 }
 
+export interface TicketClosingDependencies {
+  readonly sites: Pick<TicketingSites, 'verifyExitCode'>;
+  readonly store: TicketStore;
+  readonly clock: Clock;
+  /** The price in force at the moment the ticket opened (FR4.3). */
+  readonly prices: Pick<PriceList, 'versionValidAt'>;
+  /** Rule C: the only place a fee is computed. */
+  readonly fees: Pick<FeeCalculator, 'computeFeeForCar'>;
+}
+
+export type TicketClosing = Pick<TicketDesk, 'closeTicket'>;
+
+/** Task B8: close a ticket by the exit scan, freeze the exit time, and ask the fee calculator for the fee. */
+export function createTicketClosing(dependencies: TicketClosingDependencies): TicketClosing {
+  return createTicketClosingService(dependencies);
+}
+
+export interface TicketingOperationDependencies {
+  readonly opening: TicketOpening;
+  readonly closing: TicketClosing;
+  readonly store: TicketStore;
+}
+
 /** The requests this module answers, for the composition root to register. */
-export function createTicketingOperations(opening: TicketOpening): readonly Operation[] {
-  return [createOpenTicketOperation(opening)];
+export function createTicketingOperations(dependencies: TicketingOperationDependencies): readonly Operation[] {
+  return [createOpenTicketOperation(dependencies.opening), createCloseTicketOperation(dependencies.closing, dependencies.store)];
 }

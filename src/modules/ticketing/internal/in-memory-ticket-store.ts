@@ -2,7 +2,7 @@ import { SerialQueue } from '../../../shared/serial-queue';
 import type { SiteId, TicketId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { Ticket } from '../public';
-import type { OpenRequest, StoreRefusal, TicketStore } from './ticket-store';
+import type { CloseRequest, OpenRequest, StoreRefusal, TicketStore } from './ticket-store';
 
 export class InMemoryTicketStore implements TicketStore {
   private readonly queue = new SerialQueue();
@@ -36,11 +36,24 @@ export class InMemoryTicketStore implements TicketStore {
     return this.openCount(siteId);
   }
 
-  close(ticketId: TicketId, closedAt: string): Promise<void> {
+  async findById(ticketId: TicketId): Promise<Ticket | undefined> {
+    return this.tickets.find((ticket) => ticket.ticketId === ticketId);
+  }
+
+  closeIfOpen(request: CloseRequest): Promise<Result<Ticket, 'no open ticket'>> {
     return this.queue.run(async () => {
-      this.tickets = this.tickets.map((ticket) =>
-        ticket.ticketId === ticketId ? { ...ticket, state: 'closed' as const, closedAt } : ticket,
-      );
+      const earlier = await this.findByRequestKey(request.requestKey);
+      if (earlier !== undefined) {
+        return succeed(earlier);
+      }
+      const current = this.tickets.find((ticket) => ticket.ticketId === request.ticketId);
+      if (current === undefined || current.state !== 'open') {
+        return fail('no open ticket');
+      }
+      const closed: Ticket = { ...current, state: 'closed', closedAt: request.closedAt, fee: request.fee };
+      this.tickets = this.tickets.map((ticket) => (ticket.ticketId === request.ticketId ? closed : ticket));
+      this.byRequestKey.set(request.requestKey, request.ticketId);
+      return succeed(closed);
     });
   }
 

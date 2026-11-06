@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTicketingWorld, openCommand, START } from './testing/ticketing-world';
+import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 
 describe('B6 the last-space rule (F3)', () => {
   it('opens exactly 5 tickets for 20 simultaneous opens on 5 spaces', async () => {
@@ -21,24 +21,24 @@ describe('B6 the last-space rule (F3)', () => {
   });
 
   it('frees exactly one space when one ticket closes', async () => {
-    const { opening, store } = buildTicketingWorld(2);
+    const { opening, closing } = await buildTicketingWorld(2);
     const first = await opening.openTicket(openCommand());
     await opening.openTicket(openCommand());
     expect(await opening.openTicket(openCommand())).toEqual({ ok: false, error: 'site full' });
     if (!first.ok) throw new Error('first open failed');
-    await store.close(first.value.ticketId, START.toISOString());
+    await closing.closeTicket('close-request-1', first.value.ticketId, 'exit-site-1');
     expect((await opening.openTicket(openCommand())).ok).toBe(true);
     expect(await opening.openTicket(openCommand())).toEqual({ ok: false, error: 'site full' });
   });
 
   it('refuses everything at a site with no spaces', async () => {
-    const { opening } = buildTicketingWorld(0);
+    const { opening } = await buildTicketingWorld(0);
     expect(await opening.openTicket(openCommand())).toEqual({ ok: false, error: 'site full' });
   });
 });
 
 async function runTwentyOnFive() {
-  const world = buildTicketingWorld(5);
+  const world = await buildTicketingWorld(5);
   const results = await Promise.all(Array.from({ length: 20 }, () => world.opening.openTicket(openCommand())));
   return { ...world, results };
 }
