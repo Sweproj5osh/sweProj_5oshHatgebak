@@ -21,6 +21,13 @@ function buildClient(api: AttendantModeApi = new InMemoryAttendantModeApi()) {
   return { client, issued };
 }
 
+function valueOf<T>(result: { readonly ok: true; readonly value: T } | { readonly ok: false }): T {
+  if (!result.ok) {
+    throw new Error(`Expected a successful result but received ${JSON.stringify(result)}`);
+  }
+  return result.value;
+}
+
 class AnswerLosingApi implements AttendantModeApi {
   readonly seenRequestIds: RequestId[] = [];
   readonly plan: boolean[];
@@ -68,39 +75,37 @@ class AnswerLosingApi implements AttendantModeApi {
   }
 }
 describe('D5 Staff App attendant mode client', () => {
-  it('clocks in on the correct site and lists unpaid cars', async () => {
+    it('clocks in on the correct site and lists unpaid cars', async () => {
     const { client } = buildClient();
 
     const signIn = await client.clockIn('attendant-7', SITE_ID, RIGHT_CODE);
 
-    expect(signIn.ok).toBe(true);
-    expect(signIn.value.siteId).toBe(SITE_ID);
+    expect(valueOf(signIn).siteId).toBe(SITE_ID);
     expect((await client.listOpenTickets()).ok).toBe(true);
     expect((await client.listCarsWaitingForCash()).ok).toBe(true);
 
     const added = await client.openAssistedTicket('driver-a', 'ABC-111');
 
-    expect(added.ok).toBe(true);
-    expect(added.value.assisted).toBe(true);
-    expect((await client.listOpenTickets()).value).toHaveLength(1);
-    expect((await client.listCarsWaitingForCash()).value).toEqual(['ABC-111']);
+    expect(valueOf(added).assisted).toBe(true);
+    expect(valueOf(await client.listOpenTickets())).toHaveLength(1);
+    expect(valueOf(await client.listCarsWaitingForCash())).toEqual(['ABC-111']);
   });
 
-  it('marks a ticket as paid in one tap and keeps the same request id for retry', async () => {
+    it('marks a ticket as paid in one tap and keeps the same request id for retry', async () => {
     const api = new AnswerLosingApi(new InMemoryAttendantModeApi(), [false, false, true, false]);
     const { client } = buildClient(api);
 
     await client.clockIn('attendant-8', 'site-4', 'attendant-site-4');
-    const created = await client.openAssistedTicket('driver-b', 'XYZ-222');
+    const ticketId = valueOf(await client.openAssistedTicket('driver-b', 'XYZ-222')).ticketId;
 
-    const lost = await client.markTicketPaid(created.value.ticketId);
+    const lost = await client.markTicketPaid(ticketId);
     expect(lost).toEqual({ ok: false, error: 'connection lost', requestId: 'd5-req-0003' });
     expect(client.pendingMarkPaidRequestId()).toBe('d5-req-0003');
 
-    const retry = await client.markTicketPaid(created.value.ticketId);
-    expect(retry).toEqual({ ok: true, value: { ok: true, requestId: 'd5-req-0003', ticketId: created.value.ticketId, paid: true } });
+    const retry = await client.markTicketPaid(ticketId);
+    expect(retry).toEqual({ ok: true, value: { ok: true, requestId: 'd5-req-0003', ticketId, paid: true } });
     expect(client.pendingMarkPaidRequestId()).toBeUndefined();
-    expect((await client.listOpenTickets()).value).toEqual([]);
+    expect(valueOf(await client.listOpenTickets())).toEqual([]);
     expect(api.seenRequestIds).toEqual(['d5-req-0001', 'd5-req-0002', 'd5-req-0003', 'd5-req-0003']);
   });
 
@@ -127,5 +132,17 @@ describe('D5 Staff App attendant mode client', () => {
     const { client } = buildClient(refusing);
     const result = await client.clockIn('attendant-1', 'site-1', 'attendant-site-1');
     expect(result).toEqual({ ok: false, error: 'wrong site' });
+  });
+
+  it('refuses a write when offline and never saves a local clock-in state', async () => {
+    const api = new AnswerLosingApi(new InMemoryAttendantModeApi(), [true]);
+    const { client } = buildClient(api);
+
+    const result = await client.clockIn('attendant-99', 'site-99', 'attendant-site-99');
+
+    expect(result).toEqual({ ok: false, error: 'connection lost', requestId: 'd5-req-0001' });
+    expect(client.attendant()).toBeUndefined();
+    expect(client.sessionSiteId()).toBeUndefined();
+    expect(client.pendingClockInRequestId()).toBe('d5-req-0001');
   });
 });
