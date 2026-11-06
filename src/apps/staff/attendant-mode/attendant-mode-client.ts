@@ -4,19 +4,36 @@ import {
   AttendantModeRefusedError,
   AttendantModeTransportError,
   type AssistedTicketInput,
-  type AssistedTicketResult,
-  type AttendantClockInResult,
+  type AssistedTicketSuccess,
+  type AttendantClockInSuccess,
   type AttendantModeApi,
   type AttendantModeRefusal,
-  type MarkPaidResult,
+  type MarkPaidSuccess,
   type TicketSummary,
 } from './attendant-mode-api';
 
+// export type AttendantModeClientSuccess<T> = { readonly ok: true; readonly value: T };
+// export type AttendantModeClientFailure =
+//   | { readonly ok: false; readonly error: 'connection lost'; readonly requestId: RequestId }
+//   | { readonly ok: false; readonly error: AttendantModeRefusal };
+// export type AttendantModeClientResult<T> = AttendantModeClientSuccess<T> | AttendantModeClientFailure;
+
 export type AttendantModeClientSuccess<T> = { readonly ok: true; readonly value: T };
-export type AttendantModeClientFailure =
-  | { readonly ok: false; readonly error: 'connection lost'; readonly requestId: RequestId }
-  | { readonly ok: false; readonly error: AttendantModeRefusal };
+export type AttendantModeClientRefusal = { readonly ok: false; readonly error: AttendantModeRefusal };
+export type AttendantModeClientConnectionLostOnRead = { readonly ok: false; readonly error: 'connection lost' };
+export type AttendantModeClientConnectionLostOnWrite = {
+  readonly ok: false;
+  readonly error: 'connection lost';
+  readonly requestId: RequestId;
+};
+
+export type AttendantModeClientFailure = AttendantModeClientConnectionLostOnWrite | AttendantModeClientRefusal;
 export type AttendantModeClientResult<T> = AttendantModeClientSuccess<T> | AttendantModeClientFailure;
+export type AttendantModeClientReadResult<T> =
+  | AttendantModeClientSuccess<T>
+  | AttendantModeClientConnectionLostOnRead
+  | AttendantModeClientRefusal;
+
 
 export interface AttendantModeClientOptions {
   readonly api: AttendantModeApi;
@@ -62,8 +79,7 @@ export class AttendantModeClient {
     return this.pendingMarkPaid?.requestId;
   }
 
-  async clockIn(attendantId: PersonId, siteId: SiteId, code: string): Promise<AttendantModeClientResult<AttendantClockInResult>> {
-    this.attendantId = attendantId;
+  async clockIn(attendantId: PersonId, siteId: SiteId, code: string): Promise<AttendantModeClientResult<AttendantClockInSuccess>> {
     const pending = this.keepOrCreate(this.pendingClockIn, `${attendantId}\u0000${siteId}\u0000${code}`);
     this.pendingClockIn = pending;
 
@@ -71,10 +87,12 @@ export class AttendantModeClient {
       const result = await this.api.clockIn(attendantId, siteId, code, pending.requestId);
       this.pendingClockIn = undefined;
       if (result.ok) {
+        this.attendantId = attendantId;
         this.siteId = result.siteId;
         return { ok: true, value: result };
       }
 
+      this.attendantId = undefined;
       this.siteId = undefined;
       return { ok: false, error: result.error };
     } catch (error) {
@@ -86,7 +104,7 @@ export class AttendantModeClient {
     }
   }
 
-  async listOpenTickets(): Promise<AttendantModeClientResult<readonly TicketSummary[]>> {
+  async listOpenTickets(): Promise<AttendantModeClientReadResult<readonly TicketSummary[]>> {
     if (this.siteId === undefined) {
       return { ok: false, error: 'not clocked in' };
     }
@@ -95,13 +113,13 @@ export class AttendantModeClient {
       return { ok: true, value: await this.api.listOpenTickets(this.siteId) };
     } catch (error) {
       if (error instanceof AttendantModeTransportError) {
-        return { ok: false, error: 'connection lost', requestId: this.pendingClockIn?.requestId ?? '' };
+        return { ok: false, error: 'connection lost' };
       }
       return this.refusalOrRethrow(error);
     }
   }
 
-  async listCarsWaitingForCash(): Promise<AttendantModeClientResult<readonly string[]>> {
+  async listCarsWaitingForCash(): Promise<AttendantModeClientReadResult<readonly string[]>> {
     if (this.siteId === undefined) {
       return { ok: false, error: 'not clocked in' };
     }
@@ -110,13 +128,13 @@ export class AttendantModeClient {
       return { ok: true, value: await this.api.listCarsWaitingForCash(this.siteId) };
     } catch (error) {
       if (error instanceof AttendantModeTransportError) {
-        return { ok: false, error: 'connection lost', requestId: this.pendingClockIn?.requestId ?? '' };
+        return { ok: false, error: 'connection lost' };
       }
       return this.refusalOrRethrow(error);
     }
   }
 
-  async openAssistedTicket(driverId: PersonId, plate: string): Promise<AttendantModeClientResult<AssistedTicketResult>> {
+  async openAssistedTicket(driverId: PersonId, plate: string): Promise<AttendantModeClientResult<AssistedTicketSuccess>> {
     if (this.attendantId === undefined || this.siteId === undefined) {
       return { ok: false, error: 'not clocked in' };
     }
@@ -148,7 +166,7 @@ export class AttendantModeClient {
     }
   }
 
-  async markTicketPaid(ticketId: TicketId): Promise<AttendantModeClientResult<MarkPaidResult>> {
+  async markTicketPaid(ticketId: TicketId): Promise<AttendantModeClientResult<MarkPaidSuccess>> {
     if (this.attendantId === undefined || this.siteId === undefined) {
       return { ok: false, error: 'not clocked in' };
     }
@@ -177,7 +195,7 @@ export class AttendantModeClient {
   }
 
   /** A refusal from the server goes to the screen; anything else is a fault and is not hidden. */
-  private refusalOrRethrow(error: unknown): AttendantModeClientFailure {
+  private refusalOrRethrow(error: unknown): AttendantModeClientRefusal {
     if (error instanceof AttendantModeRefusedError) {
       if (error.refusal === 'not clocked in') {
         this.attendantId = undefined;
