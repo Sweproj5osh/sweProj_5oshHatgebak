@@ -1,0 +1,50 @@
+import { SerialQueue } from '../../../shared/serial-queue';
+import type { SiteId, TicketId } from '../../../shared/identifiers';
+import { fail, succeed, type Result } from '../../../shared/result';
+import type { Ticket } from '../public';
+import type { OpenRequest, StoreRefusal, TicketStore } from './ticket-store';
+
+export class InMemoryTicketStore implements TicketStore {
+  private readonly queue = new SerialQueue();
+  private tickets: readonly Ticket[] = [];
+  private readonly byRequestKey = new Map<string, TicketId>();
+
+  async findByRequestKey(requestKey: string): Promise<Ticket | undefined> {
+    const ticketId = this.byRequestKey.get(requestKey);
+    return ticketId === undefined ? undefined : this.tickets.find((ticket) => ticket.ticketId === ticketId);
+  }
+
+  openIfPossible(request: OpenRequest): Promise<Result<Ticket, StoreRefusal>> {
+    return this.queue.run(async () => {
+      const earlier = await this.findByRequestKey(request.requestKey);
+      if (earlier !== undefined) {
+        return succeed(earlier);
+      }
+      if (this.tickets.some((ticket) => ticket.state === 'open' && ticket.carRef === request.ticket.carRef)) {
+        return fail('car already parked');
+      }
+      if (this.openCount(request.ticket.siteId) >= request.capacity) {
+        return fail('site full');
+      }
+      this.tickets = [...this.tickets, request.ticket];
+      this.byRequestKey.set(request.requestKey, request.ticket.ticketId);
+      return succeed(request.ticket);
+    });
+  }
+
+  async countOpen(siteId: SiteId): Promise<number> {
+    return this.openCount(siteId);
+  }
+
+  close(ticketId: TicketId, closedAt: string): Promise<void> {
+    return this.queue.run(async () => {
+      this.tickets = this.tickets.map((ticket) =>
+        ticket.ticketId === ticketId ? { ...ticket, state: 'closed' as const, closedAt } : ticket,
+      );
+    });
+  }
+
+  private openCount(siteId: SiteId): number {
+    return this.tickets.filter((ticket) => ticket.state === 'open' && ticket.siteId === siteId).length;
+  }
+}
