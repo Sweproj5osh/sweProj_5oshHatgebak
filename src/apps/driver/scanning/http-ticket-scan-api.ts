@@ -6,6 +6,8 @@ import type { HttpRequest, HttpResponse } from '../../../entrypoint/http';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import { DRIVER_CLOSE_TICKET_PATH, DRIVER_OPEN_TICKET_PATH } from './driver-ticket-routes';
 import {
+  isTicketScanRefusal,
+  TicketScanRefusedError,
   TicketScanTransportError,
   type CloseTicketScanInput,
   type ClosedTicketScan,
@@ -48,7 +50,6 @@ export class HttpTicketScanApi implements TicketScanApi {
   async closeTicket(input: CloseTicketScanInput): Promise<ClosedTicketScan> {
     const response = await this.send(DRIVER_CLOSE_TICKET_PATH, input.requestId, {
       ticketId: input.ticketId,
-      siteId: input.siteId,
       exitCode: input.exitCode,
     });
     return readClosed(response);
@@ -95,7 +96,7 @@ export class HttpTicketScanApi implements TicketScanApi {
 
 function readOpened(response: HttpResponse): OpenedTicketScan {
   if (response.status >= 400) {
-    throw new Error(errorMessage(response));
+    throw refusal(response);
   }
   const body = asRecord(response.body);
   const ticketId = requiredString(body, 'ticketId');
@@ -105,13 +106,28 @@ function readOpened(response: HttpResponse): OpenedTicketScan {
 
 function readClosed(response: HttpResponse): ClosedTicketScan {
   if (response.status >= 400) {
-    throw new Error(errorMessage(response));
+    throw refusal(response);
   }
   const body = asRecord(response.body);
   const ticketId = requiredString(body, 'ticketId');
   const siteId = requiredString(body, 'siteId');
   return { ticketId, siteId, status: 'closed' };
 }
+
+
+/**
+ * The server's "no": a token it did not accept (401), or a refusal named in the answer's `error` text. The name is
+ * read from the text, not from the status code, because the status codes of the ticket routes are not settled yet.
+ * An answer with any other text is a fault, not a refusal, and is not turned into one.
+ */
+function refusal(response: HttpResponse): Error {
+  if (response.status === 401) {
+    return new TicketScanRefusedError('not signed in');
+  }
+  const reason = errorMessage(response);
+  return isTicketScanRefusal(reason) ? new TicketScanRefusedError(reason) : new Error(reason);
+}
+
 
 function errorMessage(response: HttpResponse): string {
   const body = asRecord(response.body);

@@ -3,7 +3,7 @@
  * This is not the ticketing module: it only exists so the Driver App can exercise the entry point's
  * request-id and audit pipeline. Replace by composing B's operations when they land.
  */
-import type { TicketId } from '../../../shared/identifiers';
+import type { SiteId, TicketId } from '../../../shared/identifiers';
 import { respond, refuse } from '../../../entrypoint/http';
 import type { WriteOperation } from '../../../entrypoint/operations/operation';
 import {
@@ -14,7 +14,7 @@ import {
 } from './driver-ticket-routes';
 
 export interface StandInTicketDeskState {
-  readonly openByDriver: Map<string, TicketId>;
+  readonly openByDriver: Map<string, { readonly ticketId: TicketId; readonly siteId: SiteId }>;
   ticketsOpened: number;
   nextTicketNumber: number;
 }
@@ -57,7 +57,7 @@ export function createStandInDriverTicketOperations(state: StandInTicketDeskStat
       const ticketId = `ticket-${state.nextTicketNumber}`;
       state.nextTicketNumber += 1;
       state.ticketsOpened += 1;
-      state.openByDriver.set(driverId, ticketId);
+      state.openByDriver.set(driverId, { ticketId, siteId });
 
       context.events.publish({
         topic: 'TicketOpened',
@@ -76,22 +76,22 @@ export function createStandInDriverTicketOperations(state: StandInTicketDeskStat
     method: 'POST',
     path: DRIVER_CLOSE_TICKET_PATH,
     allowedRoles: ['driver'],
-    bodySchema: { fields: { ticketId: 'string', siteId: 'string', exitCode: 'string' } },
+    bodySchema: { fields: { ticketId: 'string', exitCode: 'string' } },
     examples: {
-      valid: { ticketId: 'ticket-1', siteId: 'site-1', exitCode: 'exit-site-1' },
+      valid: { ticketId: 'ticket-1', exitCode: 'exit-site-1' },
       invalid: { ticketId: 1 },
     },
     async handle(context) {
       const ticketId = String(context.body['ticketId']);
-      const siteId = String(context.body['siteId']);
       const exitCode = String(context.body['exitCode']);
       const driverId = context.actor.personId;
-      const openTicketId = state.openByDriver.get(driverId);
+      const open = state.openByDriver.get(driverId);
 
-      if (openTicketId === undefined || openTicketId !== ticketId) {
+      if (open === undefined || open.ticketId !== ticketId) {
         return { response: refuse(409, 'no open ticket') };
       }
 
+      const siteId = open.siteId;
       const expected = `exit-${siteId}`;
       if (exitCode !== expected) {
         const message = exitCode.startsWith('entry-') ? 'wrong site' : 'forged code';
