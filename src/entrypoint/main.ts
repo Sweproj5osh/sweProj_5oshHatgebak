@@ -1,3 +1,4 @@
+import { readSiteCodeSecret } from '../modules/sites-and-areas/public';
 import { readTokenSecret } from './auth/token';
 import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE, type BootstrapOutcome } from './bootstrap';
 import { composeInMemoryServer } from './composition';
@@ -5,7 +6,7 @@ import { createHttpServer } from './server';
 
 const DEFAULT_PORT = 3000;
 
-const application = composeInMemoryServer({ tokenSecret: readTokenSecret(process.env) });
+const application = composeInMemoryServer({ tokenSecret: readTokenSecret(process.env), siteCodeSecret: readSiteCodeSecret(process.env) });
 const port = Number(process.env['PORT'] ?? DEFAULT_PORT);
 
 const bootstrap = await application.bootstrapFirstChair(process.env);

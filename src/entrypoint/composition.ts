@@ -5,13 +5,29 @@ import { InMemorySlidingWindowRateLimiter } from '../adapters/in-memory/in-memor
 import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-store';
 import {
   createAccountsAndAccessControl,
-  createInMemoryAccountsStores,
+  createAccountsStores,
+  operations as accountsOperations,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
-  type SiteLocator,
 } from '../modules/accounts-and-access-control/public';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/audit-log/public';
 import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../modules/committee-prices/public';
+import {
+  createLicensingAssignmentAttendance,
+  createLicensingStores,
+  operations as licensingOperations,
+  type ApprovalVerifier,
+  type LicensingAssignmentAttendance,
+} from '../modules/licensing-assignment-attendance/public';
+import {
+  createSiteLocator,
+  createSiteRegistry,
+  createSitesStores,
+  operations as sitesOperations,
+  type FreeSpaceSource,
+  type PriceSource,
+  type SiteRegistry,
+} from '../modules/sites-and-areas/public';
 import {
   operations as ticketingOperations,
   TableTicketStore,
@@ -28,6 +44,7 @@ import type { Operation } from '../shared/operation-contract';
 import { fail, succeed } from '../shared/result';
 import { SerialQueue } from '../shared/serial-queue';
 import type { TokenIssuer } from '../shared/token-issuer';
+import type { TableAccess } from '../shared/unit-of-work';
 import { EVERYONE_IS_LIVE, type AccessChecks } from './auth/access-checks';
 import { PermissionTable } from './auth/permission-table';
 import { createTokenIssuer } from './auth/token-issuer';
@@ -39,6 +56,8 @@ import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
 
 /** What the modules' `operations(dependencies)` exports need. Each owner adds the fields their module needs (P4). */
 export interface ModuleDependencies {
+  /** Lino's accounts and access control module as composed (Area 2). */
+  readonly accounts: AccountsAndAccessControl;
   /** The audit trail read outside any transaction. */
   readonly audit: AuditTrail;
   /** Ticketing: whether a car belongs to a person; Lino's PersonalData fills it (P28 #32). */
@@ -46,10 +65,18 @@ export interface ModuleDependencies {
   readonly clock: Clock;
   /** Ticketing asks this for every fee and never computes one (Rule C). */
   readonly fees: FeeCalculator;
+  /** Lino's licensing, assignment and attendance module as composed (Area 2). */
+  readonly licensing: LicensingAssignmentAttendance;
   /** Ticketing: the plate join for receipts, answered by Lino's PersonalData (A4, P28 #33). */
   readonly plates: PlateLookup;
   /** The committee's dated prices; written only by Approvals through it (B3, P28 #34). */
   readonly prices: PriceList;
+  /** Keys the stored hash of every sign-in code (P23); the sign-in sample of the F5 harness seeds a code hashed with it. */
+  readonly signInCodeSecret: string;
+  /** Signs the site entry and exit codes; the clock-in and clock-out samples of the F5 harness carry a code signed with it. */
+  readonly siteCodeSecret: string;
+  /** Lino's site registry as composed (Area 2). */
+  readonly siteRegistry: SiteRegistry;
   /** Ticketing: the site registry's codes, opening hours and capacity (Lino's Sites & Areas). */
   readonly sites: TicketingSites;
   readonly tickets: TicketStore;
@@ -64,7 +91,10 @@ export interface ModuleDependencies {
  */
 export function composeRegistry(dependencies: ModuleDependencies, additionalOperations: readonly Operation[] = []): OperationRegistry {
   return new OperationRegistry([
+    ...accountsOperations(dependencies),
     ...auditLogOperations(dependencies),
+    ...licensingOperations(dependencies),
+    ...sitesOperations(dependencies),
     ...ticketingOperations(dependencies),
     ...foundationOperations,
     ...additionalOperations,
@@ -79,11 +109,19 @@ export function composeInMemoryRegistry(): OperationRegistry {
   const database = new InMemoryDatabase();
   const clock = new SystemClock();
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
-  return composeRegistry(moduleDependenciesFor({ audit, clock, tokens: createTokenIssuer(INSPECTION_ONLY_SECRET, clock) }, NO_TICKETING_PORTS_YET));
+  const tokens = createTokenIssuer(INSPECTION_ONLY_SECRET, clock);
+  const area2 = composeArea2({ database, clock, tokens, signInCodeSecret: INSPECTION_ONLY_SECRET, siteCodeSecret: INSPECTION_ONLY_SECRET });
+  return composeRegistry(moduleDependenciesFor({ audit, clock, tokens }, area2, ticketingPortsFrom(area2)));
 }
 
 export interface InMemoryApplicationOptions {
   readonly tokenSecret: string;
+  /**
+   * The secret that signs site codes (`SITE_CODE_SECRET`) and the one that keys the stored sign-in code hashes. Absent,
+   * the token secret keys them too: the in-memory server and the tests have one secret to carry. main.ts passes the site one.
+   */
+  readonly siteCodeSecret?: string;
+  readonly signInCodeSecret?: string;
   readonly clock?: Clock;
   /** Who answers live status, bound site and scope in tests. Absent: everyone is live. The server never uses this. */
   readonly accessChecks?: AccessChecks;
@@ -104,6 +142,8 @@ export interface InMemoryApplication {
   readonly database: InMemoryDatabase;
   /** The accounts module as composed, so the operator and the tests can register people and change their status. */
   readonly accounts: AccountsAndAccessControl;
+  /** Where the sign-in codes of the in-memory stack end up (no messaging provider is chosen yet, Rule B): tests read them here. */
+  readonly signInCodes: RecordingSignInCodeSender;
   readonly audit: AuditTrail;
   readonly outbox: InMemoryOutboxStore;
   readonly outboxDelivery: OutboxDeliveryJob;
@@ -115,20 +155,28 @@ export interface InMemoryApplication {
   bootstrapFirstChair(environment: NodeJS.ProcessEnv): Promise<BootstrapOutcome>;
 }
 
-/** The in-memory server as `main.ts` runs it: the real accounts module answers live status, bound site and scope. */
-export function composeInMemoryServer(options: Pick<InMemoryApplicationOptions, 'tokenSecret' | 'clock'>): InMemoryApplication {
-  return compose(options, { chooseAccessChecks: (accounts) => accounts.authorization, ticketingPorts: NO_TICKETING_PORTS_YET });
+/**
+ * The in-memory server as `main.ts` runs it: the real accounts module answers live status, bound site and scope, and
+ * Area 2's modules fill ticketing's site, car-ownership and plate ports (P26 Q8b, P27 Q3, P28 #32–#33).
+ */
+export function composeInMemoryServer(
+  options: Pick<InMemoryApplicationOptions, 'tokenSecret' | 'siteCodeSecret' | 'signInCodeSecret' | 'clock'>,
+): InMemoryApplication {
+  return compose(options, { chooseAccessChecks: (accounts) => accounts.authorization, chooseTicketingPorts: ticketingPortsFrom });
 }
 
-/** The in-memory application for tests: a stand-in answers live status unless the test passes its own checks. */
+/** The in-memory application for tests: stand-ins answer live status and ticketing's ports unless the test passes its own. */
 export function composeInMemoryApplication(options: InMemoryApplicationOptions): InMemoryApplication {
-  return compose(options, { chooseAccessChecks: () => options.accessChecks ?? EVERYONE_IS_LIVE_AND_CLOCKED_IN, ticketingPorts: TICKETING_PORTS_FOR_TESTS });
+  return compose(options, {
+    chooseAccessChecks: () => options.accessChecks ?? EVERYONE_IS_LIVE_AND_CLOCKED_IN,
+    chooseTicketingPorts: () => TICKETING_PORTS_FOR_TESTS,
+  });
 }
 
-/** What differs between the server and the test application: who answers access checks, and who fills the unfilled ports. */
+/** What differs between the server and the test application: who answers access checks, and who fills ticketing's ports. */
 interface StandIns {
   readonly chooseAccessChecks: (accounts: AccountsAndAccessControl) => AccessChecks;
-  readonly ticketingPorts: TicketingPorts;
+  readonly chooseTicketingPorts: (area2: Area2Modules) => TicketingPorts;
 }
 
 /** The composition root for the in-memory stack: construction happens here and nowhere else. */
@@ -138,15 +186,16 @@ function compose(options: InMemoryApplicationOptions, standIns: StandIns): InMem
   const outbox = new InMemoryOutboxStore(database, clock);
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
   const tokens = createTokenIssuer(options.tokenSecret, clock);
-  const accounts = createAccountsAndAccessControl({
-    stores: createInMemoryAccountsStores(),
-    siteLocator: NO_SITES_YET,
-    signInCodeSender: new RecordingSignInCodeSender(),
-    tokenIssuer: tokens,
+  const area2 = composeArea2({
+    database,
     clock,
+    tokens,
+    signInCodeSecret: options.signInCodeSecret ?? options.tokenSecret,
+    siteCodeSecret: options.siteCodeSecret ?? options.tokenSecret,
   });
+  const { accounts, signInCodes } = area2;
   const moduleDependencies: ModuleDependencies = {
-    ...moduleDependenciesFor({ audit, clock, tokens }, standIns.ticketingPorts),
+    ...moduleDependenciesFor({ audit, clock, tokens }, area2, standIns.chooseTicketingPorts(area2)),
     ...options.moduleDependencies,
   };
   const registry = registryFor(options, moduleDependencies);
@@ -183,6 +232,7 @@ function compose(options: InMemoryApplicationOptions, standIns: StandIns): InMem
     handle,
     database,
     accounts,
+    signInCodes,
     audit,
     outbox,
     outboxDelivery: new OutboxDeliveryJob(outbox, options.subscribers ?? [], clock),
@@ -200,32 +250,81 @@ function registryFor(options: InMemoryApplicationOptions, dependencies: ModuleDe
   return composeRegistry(dependencies, options.additionalOperations);
 }
 
-/** The foundation's own dependencies plus the committee-prices and ticketing wiring over the given ports. */
+/** The foundation's own dependencies plus Area 2's modules and the committee-prices and ticketing wiring over the given ports. */
 function moduleDependenciesFor(
   foundation: Pick<ModuleDependencies, 'audit' | 'clock' | 'tokens'>,
+  area2: Area2Modules,
   ports: TicketingPorts,
 ): ModuleDependencies {
   return {
     ...foundation,
+    accounts: area2.accounts,
     carOwnership: ports.carOwnership,
     fees: createFeeCalculator(),
+    licensing: area2.licensing,
     plates: ports.plates,
     prices: createPriceList({ isApproved: ports.isApproved }),
+    signInCodeSecret: area2.signInCodeSecret,
+    siteCodeSecret: area2.siteCodeSecret,
+    siteRegistry: area2.siteRegistry,
     sites: ports.sites,
     tickets: new TableTicketStore(),
   };
 }
 
-/**
- * No site registry implementation exists on main yet, so the accounts module is told that no site or zone is known;
- * every scoped request is then refused as "unknown place" until Lino's registry fills this port (see QUESTIONS.md).
- */
-const NO_SITES_YET: SiteLocator = {
-  locateSite: async () => undefined,
-  locateZone: async () => undefined,
-};
+interface Area2Construction {
+  readonly database: TableAccess;
+  readonly clock: Clock;
+  readonly tokens: TokenIssuer;
+  readonly signInCodeSecret: string;
+  readonly siteCodeSecret: string;
+}
 
-/** The ports Ticketing and Committee Prices need from modules not on main yet, filled here by the composition root (P26 Q8b). */
+interface Area2Modules extends Pick<Area2Construction, 'signInCodeSecret' | 'siteCodeSecret'> {
+  readonly accounts: AccountsAndAccessControl;
+  readonly siteRegistry: SiteRegistry;
+  readonly licensing: LicensingAssignmentAttendance;
+  readonly signInCodes: RecordingSignInCodeSender;
+}
+
+/**
+ * Area 2's three modules over one database, wired the way their ports ask (P26 Q8, P27 Q3): access control gets its
+ * SiteLocator from the site registry's tables, the registry gets Authorization, licensing gets both.
+ */
+function composeArea2({ database, clock, tokens, signInCodeSecret, siteCodeSecret }: Area2Construction): Area2Modules {
+  const sitesStores = createSitesStores();
+  const signInCodes = new RecordingSignInCodeSender();
+  const accounts = createAccountsAndAccessControl({
+    database,
+    stores: createAccountsStores(),
+    siteLocator: createSiteLocator(database, sitesStores),
+    signInCodeSender: signInCodes,
+    tokenIssuer: tokens,
+    signInCodeSecret,
+    clock,
+  });
+  const siteRegistry = createSiteRegistry({
+    database,
+    stores: sitesStores,
+    authorization: accounts.authorization,
+    siteCodeSecret,
+    freeSpaces: TICKET_COUNTS_NOT_WIRED_YET,
+    prices: PRICE_LIST_NOT_WIRED_YET,
+    clock,
+  });
+  const licensing = createLicensingAssignmentAttendance({
+    database,
+    stores: createLicensingStores(),
+    authorization: accounts.authorization,
+    accessFacts: accounts.accessFacts,
+    registry: siteRegistry,
+    approvals: APPROVALS_NOT_COMPOSED_YET,
+    clock,
+  });
+  return { accounts, siteRegistry, licensing, signInCodes, signInCodeSecret, siteCodeSecret };
+}
+
+/** The ports Ticketing and Committee Prices need from other modules, filled here by the composition root (P26 Q8b). */
 interface TicketingPorts {
   readonly sites: TicketingSites;
   readonly carOwnership: CarOwnership;
@@ -235,21 +334,44 @@ interface TicketingPorts {
 }
 
 /**
- * The server's answers until Lino's registry and PersonalData and Amina's Approvals fill these ports (P27 Q3, P28
- * #31–#34), in the spirit of NO_SITES_YET: no code is genuine, no site is open, no car belongs to anyone, no plate
- * resolves and nothing is approved, so every ticket request is refused rather than guessed. Dated 7 November 2026;
- * transitional until foundation 3 (see QUESTIONS.md).
+ * The server's ports, answered by Area 2's modules (P27 Q3, P28 #32–#33): the registry verifies codes, hours and
+ * capacity; PersonalData answers whose car it is and the plate for the receipt. Approval stays "nothing is approved"
+ * until Amina's desk is composed (P28 #34; transitional, see QUESTIONS.md).
  */
-const NO_TICKETING_PORTS_YET: TicketingPorts = {
-  sites: {
-    verifyEntryCode: async () => fail('forged'),
-    verifyExitCode: async () => fail('forged'),
-    isOpenAt: async () => false,
-    capacityOf: async () => undefined,
+function ticketingPortsFrom(area2: Area2Modules): TicketingPorts {
+  return {
+    sites: area2.siteRegistry,
+    carOwnership: area2.accounts.personalData,
+    plates: {
+      readPlate: async (request) => {
+        const served = await area2.accounts.personalData.readPlate(request);
+        return served.ok ? succeed(served.value.plate) : served;
+      },
+    },
+    isApproved: () => false,
+  };
+}
+
+/**
+ * Transitional (QUESTIONS.md item 17): the registry's free-space count and first-hour fee come from Karim's ticket
+ * counts and price list through two ports (P26 Q8b) that this file does not fill yet, so the map shows an unknown band
+ * and no fee for every site, which the registry treats as "the source did not answer" (ADR-09).
+ */
+const TICKET_COUNTS_NOT_WIRED_YET: FreeSpaceSource = {
+  freeSpaces: async () => {
+    throw new Error('the free-space count is not wired to ticketing yet');
   },
-  carOwnership: { carBelongsTo: async () => false },
-  plates: { readPlate: async () => fail('not resolvable') },
-  isApproved: () => false,
+};
+
+const PRICE_LIST_NOT_WIRED_YET: PriceSource = {
+  firstHourFee: async () => {
+    throw new Error('the first-hour fee is not wired to the price list yet');
+  },
+};
+
+/** Transitional: until Amina's ApprovalDesk is composed, no licence change is approved, so none is applied (P24). */
+const APPROVALS_NOT_COMPOSED_YET: ApprovalVerifier = {
+  isApproved: async () => false,
 };
 
 /** The spaces every site has in the in-memory test application. */
