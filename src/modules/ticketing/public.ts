@@ -103,6 +103,7 @@ export interface Receipt {
   readonly closedAt: string;
   readonly hours: number;
   readonly fee: number;
+  /** The plate from the logged join, or PLATE_UNAVAILABLE when the identity area cannot or will not give it. */
   readonly plate: string;
 }
 

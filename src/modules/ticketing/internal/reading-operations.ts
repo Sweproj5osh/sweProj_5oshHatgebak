@@ -6,7 +6,6 @@ import { TicketReadRefusal, type TicketReadReason } from './ticket-reading';
 const STATUS_FOR_REASON: Readonly<Record<TicketReadReason, number>> = {
   'unknown ticket': 404,
   'ticket not closed': 409,
-  'plate read refused': 403,
 };
 
 /**

@@ -1,6 +1,6 @@
 import type { Receipt, TicketReading, TicketReadingDependencies } from '../public';
 
-export type TicketReadReason = 'unknown ticket' | 'ticket not closed' | 'plate read refused';
+export type TicketReadReason = 'unknown ticket' | 'ticket not closed';
 
 /** Why a read could not be answered; the entry point turns the reason into a status code. */
 export class TicketReadRefusal extends Error {
@@ -10,7 +10,10 @@ export class TicketReadRefusal extends Error {
   }
 }
 
-/** Shown on a receipt when the plate cannot be resolved, for example because its owner was erased (task A5). */
+/**
+ * Shown on a receipt in place of the plate when the identity area cannot resolve it (its owner was erased, task A5) or
+ * refuses this reader. The receipt itself is still issued: the fee, the hours and the times are the driver's to see.
+ */
 export const PLATE_UNAVAILABLE = 'unavailable';
 
 export function createTicketReadingService(dependencies: TicketReadingDependencies): TicketReading {
@@ -36,9 +39,6 @@ export function createTicketReadingService(dependencies: TicketReadingDependenci
         throw new TicketReadRefusal('ticket not closed');
       }
       const looked = await plates.readPlate({ carRef: ticket.carRef, reader, purpose: 'receipt', siteId: ticket.siteId });
-      if (!looked.ok && looked.error === 'refused') {
-        throw new TicketReadRefusal('plate read refused');
-      }
       return {
         ticketId: ticket.ticketId,
         siteId: ticket.siteId,

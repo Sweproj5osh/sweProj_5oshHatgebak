@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
 import { TEST_TOKEN_SECRET, loggedReadRequest, readRequest, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
+import { PLATE_UNAVAILABLE } from '../public';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
 async function application() {
@@ -83,11 +84,13 @@ describe('reading tickets through the entry point', () => {
     expect((await auditRows(app)).filter((row) => row.operation === 'ticketing.receipt')).toHaveLength(0);
   });
 
-  it('answers 403 when the identity area refuses the reader', async () => {
+  it('prints the plate as unavailable when the identity area refuses the reader, and still answers 200', async () => {
     const world = await application();
     await closeAfterTwoHours(world);
     world.plates.refuse('driver-1');
-    expect((await world.app.handle(loggedReadRequest('/tickets/receipt', 'driver', 'receipt-request-1', { ticketId: world.ticketId }))).status).toBe(403);
+    const response = await world.app.handle(loggedReadRequest('/tickets/receipt', 'driver', 'receipt-request-1', { ticketId: world.ticketId }));
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ receipt: { plate: PLATE_UNAVAILABLE, fee: 15 } });
   });
 
   it('gives the free-space count of a site to any signed-in person, as site configuration', async () => {

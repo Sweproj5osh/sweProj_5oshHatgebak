@@ -106,11 +106,13 @@ describe('B13 the receipt', () => {
     expect(w.plates.requests).toHaveLength(0);
   });
 
-  it('refuses the receipt when the identity area refuses the reader, and shows no plate', async () => {
+  it('still issues the receipt, with the plate marked unavailable, when the identity area refuses the reader', async () => {
     const w = await world();
     const ticket = await closed(w);
     w.plates.refuse('stranger-1');
-    await expect(w.reading.receipt(w.database, ticket.ticketId, 'stranger-1')).rejects.toMatchObject({ reason: 'plate read refused' });
+    const receipt = await w.reading.receipt(w.database, ticket.ticketId, 'stranger-1');
+    expect(receipt).toMatchObject({ plate: PLATE_UNAVAILABLE, fee: 20, hours: 3 });
+    expect(JSON.stringify(receipt)).not.toContain('ABC 123');
   });
 
   it('still issues the receipt, with the plate marked unavailable, when the owner was erased', async () => {
