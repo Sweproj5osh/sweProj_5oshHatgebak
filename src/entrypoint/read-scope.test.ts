@@ -3,8 +3,7 @@ import type { Scope } from '../modules/accounts-and-access-control/public';
 import { ALL_ROLES, type PersonId } from '../shared/identifiers';
 import { respond, type ReadOperation } from '../shared/operation-contract';
 import type { AccessChecks } from './auth/access-checks';
-import { composeInMemoryApplication } from './composition';
-import { readRequest, TEST_TOKEN_SECRET, tokenFor } from './test-helpers';
+import { readRequest, testApplication, tokenFor } from './test-helpers';
 
 /** A stand-in for Lino's Authorization that remembers what it was asked and answers from one list. */
 function accessChecksAllowing(...allowed: readonly PersonId[]) {
@@ -43,9 +42,7 @@ const ownTickets = read('tickets.mine', '/my/tickets', 'own', ['driver']);
 const cashDue = read('payments.cashDue', '/cash-due', 'staff-scoped', ['attendant', 'inspector', 'member', 'chair']);
 
 function application(checks: AccessChecks) {
-  return composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
-    accessChecks: checks,
+  return testApplication({ accessChecks: checks,
     additionalOperations: [siteConfiguration, ownTickets, cashDue],
   });
 }

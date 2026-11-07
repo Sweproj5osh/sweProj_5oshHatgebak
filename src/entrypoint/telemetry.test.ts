@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import type { TelemetryOperation } from '../shared/operation-contract';
-import { composeInMemoryApplication } from './composition';
 import { TELEMETRY_READINGS_PER_PERSON, TOO_MANY_ATTEMPTS } from './rate-limits';
-import { TEST_TOKEN_SECRET, telemetryRequest, tokenFor } from './test-helpers';
+import { telemetryRequest, testApplication, tokenFor } from './test-helpers';
 
 const READINGS_TABLE = 'test_location_readings';
 const A_READING = { latitude: 30.0444, longitude: 31.2357 };
@@ -30,7 +29,7 @@ const recordLocation: TelemetryOperation = {
 
 function application() {
   const clock = new FixedClock(new Date('2026-11-07T10:00:00Z'));
-  return { clock, ...composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: [recordLocation] }) };
+  return { clock, ...testApplication({ clock, additionalOperations: [recordLocation] }) };
 }
 
 describe('telemetry operations (P7): measurements are not actions', () => {

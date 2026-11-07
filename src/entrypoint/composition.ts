@@ -100,6 +100,7 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
     registry,
     permissions,
     tokenSecret: options.tokenSecret,
+    clock,
     database,
     resources,
     accessChecks: options.accessChecks ?? accounts.authorization,

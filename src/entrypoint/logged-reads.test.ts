@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { refuse, respond, type ReadOperation } from '../shared/operation-contract';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
-import { composeInMemoryApplication } from './composition';
-import { loggedReadRequest, readRequest, TEST_TOKEN_SECRET, tokenFor } from './test-helpers';
+import { loggedReadRequest, readRequest, testApplication, tokenFor } from './test-helpers';
 
 const CARS_TABLE = 'test_cars';
 
@@ -44,7 +43,7 @@ const readOwnCars: ReadOperation = {
 };
 
 async function application() {
-  const composed = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [readPlate, readOwnCars] });
+  const composed = testApplication({ additionalOperations: [readPlate, readOwnCars] });
   await composed.database.insert(CARS_TABLE, 'car-7', { plate: 'ABC 123', ownerRef: 'driver-1' });
   await composed.database.insert(CARS_TABLE, 'car-8', { plate: 'EXPLODE', ownerRef: 'driver-2' });
   return composed;
@@ -77,7 +76,7 @@ describe('logged reads (P9)', () => {
 
   it('applies the declared redaction to the query it logs', async () => {
     const redacted: ReadOperation = { ...readPlate, name: 'test.redactedRead', path: '/redacted', audit: { omit: ['carRef'] } };
-    const { handle, audit, database } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [redacted] });
+    const { handle, audit, database } = testApplication({ additionalOperations: [redacted] });
     await database.insert(CARS_TABLE, 'car-7', { plate: 'ABC 123', ownerRef: 'driver-1' });
     await handle(loggedReadRequest('/redacted', 'chair', 'request-0001', { carRef: 'car-7', page: '1' }));
     const [entry] = await audit.readByScope({ personId: 'chair-1', role: 'chair' });

@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import { respond, type PublicWriteOperation } from '../shared/operation-contract';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
-import { composeInMemoryApplication } from './composition';
 import { PUBLIC_ATTEMPTS_PER_ADDRESS, PUBLIC_ATTEMPTS_PER_KEY, TOO_MANY_ATTEMPTS } from './rate-limits';
-import { publicRequest, TEST_ADDRESS, TEST_TOKEN_SECRET } from './test-helpers';
+import { publicRequest, TEST_ADDRESS, testApplication } from './test-helpers';
 
 const PHONE = '+201001234567';
 
@@ -25,9 +24,7 @@ const requestSignInCode: PublicWriteOperation = {
 };
 
 function application() {
-  return composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
-    clock: new FixedClock(new Date('2026-11-07T10:00:00Z')),
+  return testApplication({ clock: new FixedClock(new Date('2026-11-07T10:00:00Z')),
     additionalOperations: [requestSignInCode],
   });
 }
@@ -101,7 +98,7 @@ describe('public operations (P3, ADR-15)', () => {
 
   it('admits the same phone again once the window has slid past the earlier attempts', async () => {
     const clock = new FixedClock(new Date('2026-11-07T10:00:00Z'));
-    const { handle } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: [requestSignInCode] });
+    const { handle } = testApplication({ clock, additionalOperations: [requestSignInCode] });
     for (let attempt = 1; attempt <= PUBLIC_ATTEMPTS_PER_KEY.maximumAttempts; attempt += 1) {
       await handle(publicRequest('/sign-in/codes', `request-${attempt}00`, { phone: PHONE }));
     }

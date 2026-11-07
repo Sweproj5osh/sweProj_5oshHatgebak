@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
-import { composeInMemoryApplication } from './composition';
 import { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
 import { respond, type WriteOperation } from '../shared/operation-contract';
-import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
+import { readRequest, TEST_ADDRESS, testApplication, tokenFor, writeRequest } from './test-helpers';
 
 function application() {
-  return composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
-    clock: new FixedClock(new Date('2026-11-04T10:00:00Z')),
+  return testApplication({ clock: new FixedClock(new Date('2026-11-04T10:00:00Z')),
   });
 }
 
@@ -93,9 +90,7 @@ describe('entry point: token and permission table (Z4)', () => {
   });
 
   it('takes a member\'s district from the signed token only, never from the query string', async () => {
-    const districtOne = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      additionalOperations: [
+    const districtOne = testApplication({ additionalOperations: [
         auditedWriteInDistrict('/district-one-action', 'district-1'),
         auditedWriteInDistrict('/district-two-action', 'district-2'),
       ],
@@ -140,9 +135,7 @@ describe('entry point: repeatable writes (Z5)', () => {
 
   it('does not store a rolled-back failure: the same request id succeeds on retry and changes state once', async () => {
     let attempts = 0;
-    const { handle, audit } = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      additionalOperations: [
+    const { handle, audit } = testApplication({ additionalOperations: [
         {
           kind: 'write',
           name: 'test.failsOnce',
@@ -230,9 +223,7 @@ describe('entry point: audit entry and events commit together', () => {
   });
 
   it('rolls everything back when the handler throws', async () => {
-    const { handle, audit, outbox } = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      additionalOperations: [
+    const { handle, audit, outbox } = testApplication({ additionalOperations: [
         {
           kind: 'write',
           name: 'test.explodes',

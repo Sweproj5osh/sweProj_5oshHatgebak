@@ -31,4 +31,6 @@ export interface Actor {
   readonly role: Role;
   /** The district a committee member belongs to; absent for every other role. */
   readonly districtId?: DistrictId;
+  /** The site an attendant's session was bound to at clock-in, read fresh on every request; absent otherwise. */
+  readonly boundSiteId?: SiteId;
 }

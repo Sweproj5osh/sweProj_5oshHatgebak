@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { refuse, respond, type PublicWriteOperation, type ReadOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
-import { composeInMemoryApplication, type InMemoryApplication } from './composition';
+import type { InMemoryApplication } from './composition';
 import type { HttpRequest } from './http';
-import { publicRequest, telemetryRequest, TEST_TOKEN_SECRET, writeRequest } from './test-helpers';
+import { publicRequest, telemetryRequest, testApplication, writeRequest } from './test-helpers';
 
 type AuditedWrite = WriteOperation | PublicWriteOperation;
 
@@ -12,7 +12,7 @@ type AuditedWrite = WriteOperation | PublicWriteOperation;
  * exist first seeds them through its `fixture` (P26 Q10); F5 runs the fixture before the sample request.
  */
 describe('F5 audit coverage over every write and public operation in the composed registry', () => {
-  const { registry } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+  const { registry } = testApplication();
   const audited: readonly AuditedWrite[] = [...registry.writes(), ...registry.publicWrites()];
 
   it('has at least one write operation registered', () => {
@@ -22,18 +22,18 @@ describe('F5 audit coverage over every write and public operation in the compose
 
   for (const operation of audited) {
     it(`${operation.name}: a valid payload leaves exactly one audit row`, async () => {
-      await expectOneAuditRowForTheValidExample(composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET }), operation);
+      await expectOneAuditRowForTheValidExample(testApplication(), operation);
     });
 
     it(`${operation.name}: an invalid payload leaves zero audit rows`, async () => {
-      await expectNoAuditRowForTheInvalidExample(composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET }), operation);
+      await expectNoAuditRowForTheInvalidExample(testApplication(), operation);
     });
   }
 });
 
 /** Rule F: showing personal data is a logged join, so a read that declares it touches personal data must be logged (P9). */
 describe('F5: every read that touches personal data is a logged read', () => {
-  const { registry } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+  const { registry } = testApplication();
 
   it('holds for every read in the composed registry', () => {
     expect(unloggedReadsOfPersonalData(registry.reads())).toEqual([]);
@@ -62,7 +62,7 @@ function unloggedReadsOfPersonalData(reads: readonly ReadOperation[]): string[] 
 
 /** Telemetry is left out of the one-entry rule on purpose (P7): a measurement is not an action, so it leaves no entry. */
 describe('F5 ignores telemetry operations explicitly: a telemetry post leaves no audit entry', () => {
-  const { registry } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+  const { registry } = testApplication();
   const reading: TelemetryOperation = {
     kind: 'telemetry',
     name: 'test.reading',
@@ -78,7 +78,7 @@ describe('F5 ignores telemetry operations explicitly: a telemetry post leaves no
 
   for (const operation of [...registry.telemetry(), reading]) {
     it(`${operation.name}: a valid reading is accepted with 204 and leaves zero audit rows`, async () => {
-      const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [reading] });
+      const application = testApplication({ additionalOperations: [reading] });
       await operation.fixture?.(application.database);
       const response = await application.handle(telemetryRequest(operation.path, firstAllowedRole(operation), operation.examples.valid));
       expect(response.status).toBe(204);
@@ -107,7 +107,7 @@ describe('F5 runs an operation\'s fixture before its sample request', () => {
   };
 
   it('the handler finds the seeded row and leaves one audit entry', async () => {
-    const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [needsASeededRow] });
+    const application = testApplication({ additionalOperations: [needsASeededRow] });
     await expectOneAuditRowForTheValidExample(application, needsASeededRow);
   });
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { respond, type AuditDetail, type AuditRedaction, type WriteOperation } from '../shared/operation-contract';
-import { composeInMemoryApplication } from './composition';
-import { TEST_TOKEN_SECRET, writeRequest } from './test-helpers';
+import { testApplication, writeRequest } from './test-helpers';
 
 const CAR_BODY = { plate: 'ABC 123', colour: 'red' };
 
@@ -22,7 +21,7 @@ function addCar(audit: AuditRedaction | undefined, detail: AuditDetail = {}): Wr
 }
 
 async function auditInputAfter(operation: WriteOperation) {
-  const { handle, audit } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [operation] });
+  const { handle, audit } = testApplication({ additionalOperations: [operation] });
   const response = await handle(writeRequest(operation.path, 'driver', 'request-0001', CAR_BODY));
   const [entry] = await audit.readByScope({ personId: 'chair-1', role: 'chair' });
   return { response, entry };
