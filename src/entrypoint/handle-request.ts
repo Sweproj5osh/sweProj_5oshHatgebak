@@ -16,7 +16,7 @@ export interface RequestHandlerDependencies extends WriteDependencies, ReadDepen
 
 export type RequestHandler = (request: HttpRequest) => Promise<HttpResponse>;
 
-export { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './intake';
+export { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './intake';
 
 /**
  * The single entry point. Every request passes, in order: route → token → permission table → the operation's own

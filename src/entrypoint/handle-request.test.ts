@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
 import { composeInMemoryApplication } from './composition';
-import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
+import { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
 import { respond, type WriteOperation } from '../shared/operation-contract';
 import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
 
@@ -170,6 +170,23 @@ describe('entry point: repeatable writes (Z5)', () => {
     expect(third).toEqual(second);
     expect(attempts).toBe(2);
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
+  });
+
+  it('refuses the same request id with a different body with 409 and writes nothing (P19)', async () => {
+    const { handle, audit, outbox } = application();
+    const first = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', chairApproval));
+    const reused = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { ...chairApproval, reason: 'Changed my mind' }));
+    expect(first.status).toBe(201);
+    expect(reused).toEqual({ status: 409, body: { error: REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT } });
+    expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
+    expect(outbox.allEvents()).toHaveLength(1);
+  });
+
+  it('treats the same body with its keys in another order as the same content', async () => {
+    const { handle } = application();
+    const first = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { approvalRequestId: 'request-1', reason: 'Within budget' }));
+    const reordered = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { reason: 'Within budget', approvalRequestId: 'request-1' }));
+    expect(reordered).toEqual(first);
   });
 
   it('treats a different request id as a new write', async () => {

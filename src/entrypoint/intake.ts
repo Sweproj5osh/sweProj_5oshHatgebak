@@ -4,21 +4,23 @@ import { isWellFormedRequestId, REQUEST_ID_HEADER, type RequestId } from '../sha
 import { fail, succeed, type Result } from '../shared/result';
 import { findTimestampFields } from '../shared/timestamp-fields';
 import type { HttpRequest } from './http';
-import { responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
+import { bodyHashOf, responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
 
 export const TIMESTAMPS_ARE_SET_BY_THE_SERVER = 'timestamps are set by the server';
+export const REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT = 'request id reused with different content';
 
 /** A write the pipeline has admitted: well-formed request id, clean body, not a repeat. */
 export interface AdmittedWrite {
   readonly requestId: RequestId;
   readonly body: ValidBody;
   readonly responseKey: string;
+  readonly bodyHash: string;
 }
 
 /**
  * The checks every write passes before any unit of work opens, in order: request id → server clock rule → body schema
- * → repeat check (Rule H, Rule I). The failure side carries the answer to send instead: a refusal, or the stored
- * response of an earlier identical write.
+ * → repeat check (Rule H, Rule I, P19). The failure side carries the answer to send instead: a refusal, the stored
+ * response of an earlier identical write, or 409 when the same id arrives with different content.
  */
 export async function admitWrite(
   request: HttpRequest,
@@ -35,11 +37,12 @@ export async function admitWrite(
     return body;
   }
   const responseKey = responseKeyFor(responseOwner, requestId.value);
+  const bodyHash = bodyHashOf(body.value);
   const earlier = await responses.find(responseKey);
   if (earlier !== undefined) {
-    return fail(earlier);
+    return fail(earlier.bodyHash === bodyHash ? earlier.response : refuse(409, REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT));
   }
-  return succeed({ requestId: requestId.value, body: body.value, responseKey });
+  return succeed({ requestId: requestId.value, body: body.value, responseKey, bodyHash });
 }
 
 /** Rule H: the client's request id, well formed, or the refusal naming who needs it ("every write", "a logged read"). */
@@ -67,7 +70,7 @@ export function admitBody(request: HttpRequest, schema: BodySchema): Result<Vali
 /** Only a committed write's response is stored, so a refusal or a rolled-back failure is re-evaluated on retry. */
 export async function rememberIfCommitted(admitted: AdmittedWrite, response: HttpResponse, responses: ResponseStore): Promise<HttpResponse> {
   if (response.status < 400) {
-    await responses.save(admitted.responseKey, response);
+    await responses.save(admitted.responseKey, { response, bodyHash: admitted.bodyHash });
   }
   return response;
 }

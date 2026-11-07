@@ -69,6 +69,14 @@ describe('public operations (P3, ADR-15)', () => {
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(2);
   });
 
+  it('refuses the same address and request id with a different body with 409 and no new entry (P19)', async () => {
+    const { handle, audit } = application();
+    await handle(publicRequest('/sign-in/codes', 'request-0001', { phone: PHONE }));
+    const reused = await handle(publicRequest('/sign-in/codes', 'request-0001', { phone: '+201009876543' }));
+    expect(reused.status).toBe(409);
+    expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
+  });
+
   it(`refuses the ${PUBLIC_ATTEMPTS_PER_KEY.maximumAttempts + 1}th attempt for one phone with 429 and a plain message`, async () => {
     const { handle, audit } = application();
     for (let attempt = 1; attempt <= PUBLIC_ATTEMPTS_PER_KEY.maximumAttempts; attempt += 1) {
