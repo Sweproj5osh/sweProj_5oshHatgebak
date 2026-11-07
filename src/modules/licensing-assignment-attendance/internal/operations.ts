@@ -12,7 +12,7 @@ import {
 } from '../../../shared/operation-contract';
 import type { Result } from '../../../shared/result';
 import type { TableAccess } from '../../../shared/unit-of-work';
-import { createAccountsStores } from '../../accounts-and-access-control/public';
+import { createAccountsStores, type Authorization } from '../../accounts-and-access-control/public';
 import { createSitesStores, signedSiteCodes, type SiteRegistry } from '../../sites-and-areas/public';
 import {
   createLicensingStores,
@@ -25,6 +25,8 @@ import {
 
 export interface LicensingOperationsDependencies {
   readonly licensing: LicensingAssignmentAttendance;
+  /** The accounts module: its Authorization decides who may read which attendant's licence (P10). */
+  readonly accounts: { readonly authorization: Authorization };
   readonly siteRegistry: SiteRegistry;
   /** The secret the site codes are signed with; the clock-in and clock-out sample bodies carry a code signed the same way. */
   readonly siteCodeSecret: string;
@@ -36,7 +38,7 @@ export interface LicensingOperationsDependencies {
  * and the district, so its members can (ADR-10). A location reading is a measurement, not an action (P7): it is the one
  * telemetry operation, with no request id, no audit entry and no event; the flag it may raise stays an audited fact.
  */
-export function licensingOperations({ licensing, siteRegistry, siteCodeSecret }: LicensingOperationsDependencies): readonly Operation[] {
+export function licensingOperations({ licensing, accounts, siteRegistry, siteCodeSecret }: LicensingOperationsDependencies): readonly Operation[] {
   const { assignments } = licensing;
   const districtOfSite = async (siteId: unknown) => (await siteRegistry.locateSite(String(siteId)))?.districtId;
   const districtOfZone = async (zoneId: unknown) => (await siteRegistry.locateZone(String(zoneId)))?.districtId;
@@ -90,7 +92,7 @@ export function licensingOperations({ licensing, siteRegistry, siteCodeSecret }:
       district: ({ body }) => districtOfZone(body['zoneId']),
     }),
     issueLicence(licensing, districtOfSite),
-    readLicenceStatus(licensing),
+    readLicenceStatus(licensing, accounts.authorization),
     clockIn(licensing, districtOfSite, sampleCodes.entryCode),
     clockOut(licensing, districtOfSite, sampleCodes.exitCode),
     recordLocation(licensing),
@@ -150,17 +152,28 @@ const LICENCE_REFUSAL_STATUS: Readonly<Record<LicenceRefusal, number>> = {
   'not allowed here': 403,
 };
 
-/** GET /licences/status?attendantId=…&siteId=…: an attendant never licensed is a valid answer, with no state and no history (P23 #10). */
-function readLicenceStatus(module: LicensingAssignmentAttendance): ReadOperation {
+const LICENCE_STATUS_OPERATION = 'licences.status';
+
+/**
+ * GET /licences/status?attendantId=…&siteId=…: an attendant never licensed is a valid answer, with no state and no
+ * history (P23 #10). Staff-scoped twice over (P10): the pipeline checks the place the query names, and the handler
+ * checks the attendant's own assigned site, so a reader cannot name a place inside their scope to read an attendant
+ * outside it; an unknown or unassigned attendant is a system-wide matter, the Chair's alone, with the one refusal.
+ */
+function readLicenceStatus(module: LicensingAssignmentAttendance, authorization: Authorization): ReadOperation {
   return {
     kind: 'read',
-    name: 'licences.status',
+    name: LICENCE_STATUS_OPERATION,
     method: 'GET',
     path: '/licences/status',
     allowedRoles: ['inspector', 'member', 'chair'],
     scope: 'staff-scoped',
-    async handle({ query }) {
+    async handle({ actor, query }) {
       const attendantId = query['attendantId'] ?? '';
+      const attendantSiteId = await module.assignments.siteOf(attendantId);
+      if (!(await authorization.may(actor.personId, LICENCE_STATUS_OPERATION, attendantSiteId === undefined ? {} : { siteId: attendantSiteId }))) {
+        return { response: refuse(403, 'not allowed here') };
+      }
       const licenceId = await module.licences.licenceOf(attendantId);
       const state = (await module.licences.statusOf(attendantId)) ?? null;
       const history = licenceId === undefined ? [] : await module.licences.history(licenceId);

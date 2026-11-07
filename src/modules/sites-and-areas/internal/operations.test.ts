@@ -98,6 +98,16 @@ describe('A6 through the entry point', () => {
     expect(await application.audit.readByScope({ personId: world.chair, role: 'chair' })).toHaveLength(1);
   });
 
+  it('refuses a member the capacity history of a site outside their district, through the pipeline\'s scope check (P10)', async () => {
+    const districtTwo = valueOf(await world.registry.createDistrict(world.chair, 'Dokki'));
+    const zoneTwo = valueOf(await world.registry.createZone(world.chair, districtTwo, 'Dokki zone 1'));
+    const siteInDistrictTwo = valueOf(await world.registry.createSite(world.chair, zoneTwo, 'Tahrir Street', squareAround(30.0385, 31.2118), 8));
+    const memberToken = tokenFor('member', { personId: memberOfDistrictOne });
+    expect((await application.handle(readRequest('/sites/capacity-history', memberToken, { siteId: siteInDistrictTwo }))).status).toBe(403);
+    const siteInDistrictOne = await createSiteInDistrictOne();
+    expect((await application.handle(readRequest('/sites/capacity-history', memberToken, { siteId: siteInDistrictOne }))).status).toBe(200);
+  });
+
   it('declares no timestamp field in any write body (fitness function F11 for this module)', () => {
     const fields = application.registry.writes().flatMap((operation) => Object.keys(operation.bodySchema.fields));
     expect(fields.filter(looksLikeTimestampKey)).toEqual([]);

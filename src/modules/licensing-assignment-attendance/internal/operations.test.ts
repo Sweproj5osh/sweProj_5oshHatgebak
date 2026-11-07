@@ -122,6 +122,22 @@ describe('A11 through the entry point', () => {
     const response = await application.handle(readRequest('/licences/status', tokenFor('chair', { personId: world.chair }), { attendantId: attendant, siteId: world.siteOne }));
     expect(response).toEqual({ status: 200, body: { attendantId: attendant, licenceId: null, state: null, history: [] } });
   });
+
+  it('refuses a member the licence status of an attendant assigned outside their district, even when the query names a site inside it (P10)', async () => {
+    const elsewhere = await createPerson('attendant');
+    valueOf(await world.licensing.assignments.assignAttendantToSite(world.chair, elsewhere, world.siteTwo, 'morning'));
+    const unassigned = await createPerson('attendant');
+    const memberToken = tokenFor('member', { personId: world.memberOfDistrictOne });
+    const ownDistrictNamed = await application.handle(readRequest('/licences/status', memberToken, { attendantId: elsewhere, siteId: world.siteOne }));
+    const unassignedAttendant = await application.handle(readRequest('/licences/status', memberToken, { attendantId: unassigned, siteId: world.siteOne }));
+    const otherDistrictNamed = await application.handle(readRequest('/licences/status', memberToken, { attendantId: elsewhere, siteId: world.siteTwo }));
+    expect([ownDistrictNamed, unassignedAttendant]).toEqual([
+      { status: 403, body: { error: 'not allowed here' } },
+      { status: 403, body: { error: 'not allowed here' } },
+    ]);
+    expect(otherDistrictNamed.status).toBe(403);
+    expect((await application.handle(readRequest('/licences/status', tokenFor('chair', { personId: world.chair }), { attendantId: unassigned }))).status).toBe(200);
+  });
 });
 
 describe('A13 and A14 through the entry point', () => {
@@ -155,6 +171,16 @@ describe('A13 and A14 through the entry point', () => {
     expect(readings[0]?.distanceMeters).toBe(600);
     expect(JSON.stringify(readings)).not.toContain('31.2197');
     expect((await application.audit.readByScope({ personId: attendant, role: 'attendant' })).map((entry) => entry.operation)).toEqual(['attendance.clockIn']);
+  });
+
+  it('refuses the off-site flags of a zone to an inspector of another zone, through the pipeline\'s scope check (P10)', async () => {
+    const inspectorOfZoneTwo = await createPerson('inspector');
+    const zoneTwo = (await world.registry.locateSite(world.siteTwo))?.zoneId ?? '';
+    const zoneOne = (await world.registry.locateSite(world.siteOne))?.zoneId ?? '';
+    valueOf(await world.licensing.assignments.assignInspectorToZone(world.chair, inspectorOfZoneTwo, zoneTwo));
+    const token = tokenFor('inspector', { personId: inspectorOfZoneTwo });
+    expect((await application.handle(readRequest('/attendance/off-site-flags', token, { zoneId: zoneOne }))).status).toBe(403);
+    expect(await application.handle(readRequest('/attendance/off-site-flags', token, { zoneId: zoneTwo }))).toEqual({ status: 200, body: { flags: [] } });
   });
 
   it('drops a reading from an attendant who is not clocked in, with 204 and nothing stored', async () => {
