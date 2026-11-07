@@ -1,6 +1,5 @@
 import type { TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
-import type { UnitOfWork } from '../../../shared/unit-of-work';
 import type { PaymentRecord } from '../public';
 
 /**
@@ -25,10 +24,3 @@ export interface PaymentStore {
   byRequestId(requestId: RequestId): Promise<StoredPayment | undefined>;
 }
 
-/**
- * Hands out a store that joins the write's unit of work, so the payment row commits together with the ticket
- * status, the audit entry and the event, or not at all (Rule E).
- */
-export interface PaymentStores {
-  boundTo(unitOfWork: UnitOfWork): PaymentStore;
-}

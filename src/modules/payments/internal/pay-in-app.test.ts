@@ -7,10 +7,9 @@ import { FixedClock } from '../../../shared/clock';
 import type { PersonId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../shared/result';
-import type { PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
+import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
 import {
   createFakePaymentGateway,
-  createInMemoryPaymentStores,
   createPayments,
   PAYMENTS_TABLE,
   TICKET_PAID_TOPIC,
@@ -25,6 +24,7 @@ import type { StoredPayment } from './ports';
  */
 const PAY_PATH = '/payments/app';
 const DRIVER: PersonId = 'driver-1';
+const CAR: CarReference = 'car-1';
 
 /** A stand-in for Teammate B's Ticketing, holding tickets in a map; only the two calls payments makes are real. */
 class FakeTickets implements TicketDesk, TicketQuery {
@@ -94,6 +94,7 @@ function closedTicket(ticketId: TicketId, fee: number, overrides: Partial<Ticket
     ticketId,
     siteId: 'site-1',
     driverRef: DRIVER,
+    carRef: CAR,
     state: 'closed',
     paymentStatus: 'unpaid',
     openedAt: '2026-11-06T08:00:00.000Z',
@@ -113,7 +114,6 @@ function setUp() {
     ticketDesk: tickets,
     ticketQuery: tickets,
     clock,
-    stores: createInMemoryPaymentStores(),
   });
   const application = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
@@ -122,7 +122,7 @@ function setUp() {
   });
   const pay = (requestId: string, ticketId: string) =>
     application.handle(writeRequest(PAY_PATH, 'driver', requestId, { ticketId }));
-  const paymentRows = () => application.database.rows<StoredPayment>(PAYMENTS_TABLE);
+  const paymentRows = () => application.database.list<StoredPayment>(PAYMENTS_TABLE);
   const auditRows = () => application.audit.readByScope({ personId: 'chair-1', role: 'chair' });
   return { tickets, gateway, application, pay, paymentRows, auditRows };
 }
@@ -152,8 +152,8 @@ describe('C2 paying in the app', () => {
     expect(payment.providerReference).toMatch(/^fake-/);
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
 
-    expect(paymentRows()).toHaveLength(1);
-    expect(paymentRows()[0]).toMatchObject({
+    expect(await paymentRows()).toHaveLength(1);
+    expect((await paymentRows())[0]).toMatchObject({
       paymentId: payment.paymentId,
       requestId: 'request-pay-0001',
       payerId: DRIVER,
@@ -182,8 +182,8 @@ describe('C2 paying in the app', () => {
     expect(response.status).toBe(202);
     expect(paymentIn(response).outcome).toBe('pending');
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
-    expect(paymentRows()).toHaveLength(1);
-    expect(paymentRows()[0]?.outcome).toBe('pending');
+    expect(await paymentRows()).toHaveLength(1);
+    expect((await paymentRows())[0]?.outcome).toBe('pending');
     expect(application.outbox.allEvents()).toHaveLength(0);
   });
 
@@ -196,7 +196,7 @@ describe('C2 paying in the app', () => {
     expect(response.status).toBe(402);
     expect(errorIn(response)).toBe('declined');
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
-    expect(paymentRows()).toHaveLength(0);
+    expect(await paymentRows()).toHaveLength(0);
     expect(await auditRows()).toHaveLength(0);
     expect(application.outbox.allEvents()).toHaveLength(0);
   });
@@ -207,6 +207,7 @@ describe('C2 paying in the app', () => {
       ticketId: 'ticket-1',
       siteId: 'site-1',
       driverRef: DRIVER,
+      carRef: CAR,
       state: 'open',
       paymentStatus: 'unpaid',
       openedAt: '2026-11-06T08:00:00.000Z',
@@ -217,7 +218,7 @@ describe('C2 paying in the app', () => {
 
     expect(response.status).toBe(409);
     expect(errorIn(response)).toBe('ticket not closed');
-    expect(paymentRows()).toHaveLength(0);
+    expect(await paymentRows()).toHaveLength(0);
   });
 
   it('refuses to pay a ticket that is already paid, so a second request id cannot charge it again', async () => {
@@ -229,7 +230,7 @@ describe('C2 paying in the app', () => {
 
     expect(again.status).toBe(409);
     expect(errorIn(again)).toBe('nothing to pay');
-    expect(paymentRows()).toHaveLength(1);
+    expect(await paymentRows()).toHaveLength(1);
     expect(gateway.chargeCallCount()).toBe(1);
   });
 
@@ -241,7 +242,7 @@ describe('C2 paying in the app', () => {
 
     expect(response.status).toBe(403);
     expect(errorIn(response)).toBe('not your ticket');
-    expect(paymentRows()).toHaveLength(0);
+    expect(await paymentRows()).toHaveLength(0);
   });
 
   it('is open to drivers only: the permission table refuses an attendant before the ledger runs', async () => {
@@ -257,7 +258,7 @@ describe('C2 paying in the app', () => {
     });
 
     expect(response.status).toBe(403);
-    expect(paymentRows()).toHaveLength(0);
+    expect(await paymentRows()).toHaveLength(0);
   });
 
   it('leaves zero audit rows for a body that fails validation (fitness function F5)', async () => {

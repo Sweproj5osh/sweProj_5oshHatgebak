@@ -8,8 +8,8 @@ import { FixedClock } from '../../../shared/clock';
 import type { PersonId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../shared/result';
-import type { PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
-import { createFakePaymentGateway, createInMemoryPaymentStores, createPayments, PAYMENTS_TABLE } from '../public';
+import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
+import { createFakePaymentGateway, createPayments, PAYMENTS_TABLE } from '../public';
 import type { StoredPayment } from './ports';
 
 /**
@@ -19,6 +19,7 @@ import type { StoredPayment } from './ports';
  */
 const PAY_PATH = '/payments/app';
 const DRIVER: PersonId = 'driver-1';
+const CAR: CarReference = 'car-1';
 const ONE_ID: RequestId = 'request-repeat-0001';
 
 /** A stand-in for Teammate B's Ticketing: tickets in a map, only the two calls payments makes are real. */
@@ -89,6 +90,7 @@ function closedUnpaidTicket(ticketId: TicketId, fee: number): Ticket {
     ticketId,
     siteId: 'site-1',
     driverRef: DRIVER,
+    carRef: CAR,
     state: 'closed',
     paymentStatus: 'unpaid',
     openedAt: '2026-11-06T08:00:00.000Z',
@@ -102,7 +104,7 @@ function setUp() {
   const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
   const tickets = new FakeTickets();
   const gateway = createFakePaymentGateway();
-  const payments = createPayments({ gateway, ticketDesk: tickets, ticketQuery: tickets, clock, stores: createInMemoryPaymentStores() });
+  const payments = createPayments({ gateway, ticketDesk: tickets, ticketQuery: tickets, clock });
   return { clock, tickets, gateway, payments };
 }
 
@@ -123,7 +125,7 @@ describe('C3 one charge per request id', () => {
 
     expect(first.status).toBe(201);
     expect(second).toEqual(first);
-    expect(application.database.rows<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
+    expect(await application.database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
     expect(gateway.chargeCallCount(ONE_ID)).toBe(1);
     expect(gateway.chargeCallCount()).toBe(1);
     expect(await application.audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
@@ -138,19 +140,34 @@ describe('C3 one charge per request id', () => {
     const outbox = new InMemoryOutboxStore(database, clock);
 
     const firstTransaction = database.begin();
-    const first = await payments.ledgerBoundTo(firstTransaction, outbox.publisherBoundTo(firstTransaction)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+    const first = await payments.ledgerBoundTo(firstTransaction, outbox.publisherBoundTo(firstTransaction.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
     await firstTransaction.commit();
 
     const secondTransaction = database.begin();
-    const second = await payments.ledgerBoundTo(secondTransaction, outbox.publisherBoundTo(secondTransaction)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+    const second = await payments.ledgerBoundTo(secondTransaction, outbox.publisherBoundTo(secondTransaction.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
     await secondTransaction.commit();
 
     expect(first.ok).toBe(true);
     expect(second).toEqual(first);
-    expect(database.rows<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
+    expect(await database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
     expect(gateway.chargeCallCount(ONE_ID)).toBe(1);
     expect(outbox.allEvents()).toHaveLength(1);
     results.ledger = 'PASS';
+  });
+
+  it('stages the payment row inside the write\'s unit of work: nothing is committed until the unit of work commits (ADR-13)', async () => {
+    const { clock, tickets, payments } = setUp();
+    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const database = new InMemoryDatabase();
+    const outbox = new InMemoryOutboxStore(database, clock);
+
+    const transaction = database.begin();
+    const paid = await payments.ledgerBoundTo(transaction, outbox.publisherBoundTo(transaction.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+
+    expect(paid.ok).toBe(true);
+    expect(await database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(0);
+    await transaction.commit();
+    expect(await database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
   });
 
   it('a pay that was rolled back leaves no row, so the same id on retry charges once and lands once', async () => {
@@ -160,16 +177,16 @@ describe('C3 one charge per request id', () => {
     const outbox = new InMemoryOutboxStore(database, clock);
 
     const abandoned = database.begin();
-    await payments.ledgerBoundTo(abandoned, outbox.publisherBoundTo(abandoned)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+    await payments.ledgerBoundTo(abandoned, outbox.publisherBoundTo(abandoned.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
     await abandoned.rollback();
     tickets.seed(closedUnpaidTicket('ticket-1', 11));
 
     const retry = database.begin();
-    const retried = await payments.ledgerBoundTo(retry, outbox.publisherBoundTo(retry)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+    const retried = await payments.ledgerBoundTo(retry, outbox.publisherBoundTo(retry.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
     await retry.commit();
 
     expect(retried.ok).toBe(true);
-    expect(database.rows<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
+    expect(await database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
     expect(gateway.chargeCallCount(ONE_ID)).toBe(2);
     expect(retried.ok && retried.value.providerReference).toBeTruthy();
   });

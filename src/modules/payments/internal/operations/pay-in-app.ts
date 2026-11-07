@@ -1,12 +1,11 @@
-import { refuse, respond } from '../../../../entrypoint/http';
-import type { WriteContext, WriteOperation, WriteOutcome } from '../../../../entrypoint/operations/operation';
 import type { EventPublisher } from '../../../../shared/events/event';
-import type { UnitOfWork } from '../../../../shared/unit-of-work';
+import { refuse, respond, type WriteContext, type WriteOperation, type WriteOutcome } from '../../../../shared/operation-contract';
+import type { Transaction } from '../../../../shared/unit-of-work';
 import type { PaymentLedger, PayRefusal } from '../../public';
 
 /** What the operation needs from the module: a ledger joined to the write's unit of work. */
 export interface LedgerFactory {
-  ledgerBoundTo(unitOfWork: UnitOfWork, events: EventPublisher): PaymentLedger;
+  ledgerBoundTo(transaction: Transaction, events: EventPublisher): PaymentLedger;
 }
 
 export const PAY_IN_APP_OPERATION = 'payments.payInApp';

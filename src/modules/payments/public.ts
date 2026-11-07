@@ -3,17 +3,17 @@
  * Payment records (app and cash), corrections as new rows, one charge per request id. Needs TicketDesk, AuditTrail
  * and the PaymentGateway port.
  */
-import type { Operation } from '../../entrypoint/operations/operation';
+import type { Operation } from '../../shared/operation-contract';
 import type { Clock } from '../../shared/clock';
 import type { EventPublisher } from '../../shared/events/event';
 import type { PaymentId, PersonId, SiteId, TicketId } from '../../shared/identifiers';
 import type { RequestId } from '../../shared/request-id';
 import type { Result } from '../../shared/result';
-import type { UnitOfWork } from '../../shared/unit-of-work';
+import type { Transaction } from '../../shared/unit-of-work';
 import type { TicketDesk, TicketQuery } from '../ticketing/public';
 import { payInAppOperation } from './internal/operations/pay-in-app';
 import { PaymentLedgerService } from './internal/payment-ledger';
-import type { PaymentStores } from './internal/ports';
+import { TableAccessPaymentStore } from './internal/adapters/table-access-payment-store';
 
 export type ChargeOutcome = 'paid' | 'declined' | 'pending' | 'timed out';
 
@@ -66,23 +66,21 @@ export interface PaymentsDependencies {
   readonly ticketDesk: TicketDesk;
   readonly ticketQuery: TicketQuery;
   readonly clock: Clock;
-  readonly stores: PaymentStores;
 }
 
 export interface Payments {
-  /** The ledger joined to one write's unit of work, so its rows and events commit with the audit entry (Rule E). */
-  ledgerBoundTo(unitOfWork: UnitOfWork, events: EventPublisher): PaymentLedger;
+  /** The ledger joined to one write's unit of work, so its rows and events commit with the audit entry (Rule E, ADR-13). */
+  ledgerBoundTo(transaction: Transaction, events: EventPublisher): PaymentLedger;
   /** The operations this module registers with the entry point. */
   readonly operations: readonly Operation[];
 }
 
 /** The composition root builds this module through this one function; nothing else constructs its internals. */
 export function createPayments(dependencies: PaymentsDependencies): Payments {
-  const ledgerBoundTo: Payments['ledgerBoundTo'] = (unitOfWork, events) =>
-    new PaymentLedgerService(dependencies, dependencies.stores.boundTo(unitOfWork), events);
+  const ledgerBoundTo: Payments['ledgerBoundTo'] = (transaction, events) =>
+    new PaymentLedgerService(dependencies, new TableAccessPaymentStore(transaction), events);
   return { ledgerBoundTo, operations: [payInAppOperation({ ledgerBoundTo })] };
 }
 
-export type { PaymentStores } from './internal/ports';
-export { createInMemoryPaymentStores, PAYMENTS_TABLE } from './internal/adapters/in-memory-payment-store';
+export { PAYMENTS_TABLE } from './internal/adapters/table-access-payment-store';
 export { PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './internal/payment-ledger';
