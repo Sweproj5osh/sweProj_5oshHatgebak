@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CarRef, PlateReadRequest, SiteLocator } from '../public';
+import type { CarRef, SiteLocator } from '../public';
 import type { PersonId } from '../../../shared/identifiers';
-import { PLATE_READ_OPERATION } from './personal-data-service';
 import { createAccountsWorld, type AccountsWorld } from './testing/accounts-world';
 
-/** Task A4: save a car to a driver; show its plate only through a role-checked, logged join. */
+/**
+ * Task A4: save a car to a driver; show its plate only through a role-checked join. The one audit entry per plate served
+ * is the pipeline's (P9); operations.test.ts proves it through the entry point, this file proves the module's answers.
+ */
 const siteLocator: SiteLocator = {
   locateSite: async (siteId) =>
     ({ 'site-a': { zoneId: 'zone-a', districtId: 'district-1' }, 'site-b': { zoneId: 'zone-b', districtId: 'district-1' } })[siteId],
@@ -17,7 +19,6 @@ let attendantOfSiteA: PersonId;
 let attendantOfSiteB: PersonId;
 let inspectorOfZoneA: PersonId;
 let carRef: CarRef;
-let platesServed = 0;
 
 async function created(outcome: Promise<{ ok: true; value: PersonId } | { ok: false; error: string }>): Promise<PersonId> {
   const result = await outcome;
@@ -25,18 +26,6 @@ async function created(outcome: Promise<{ ok: true; value: PersonId } | { ok: fa
     throw new Error(result.error);
   }
   return result.value;
-}
-
-async function plateReadEntries() {
-  return (await world.audit.readByScope({ personId: 'anyone', role: 'chair' })).filter((entry) => entry.operation === PLATE_READ_OPERATION);
-}
-
-async function read(request: PlateReadRequest) {
-  const outcome = await world.accounts.personalData.readPlate(request);
-  if (outcome.ok) {
-    platesServed += 1;
-  }
-  return outcome;
 }
 
 beforeEach(async () => {
@@ -59,47 +48,40 @@ beforeEach(async () => {
 });
 
 describe('A4 the task sheet cases', () => {
-  it('shows the plate on the driver\'s receipt and writes one "plate read" audit entry', async () => {
-    expect(await read({ carRef, reader: driver, purpose: 'receipt', siteId: 'site-a' })).toEqual({ ok: true, value: 'ABC123' });
-    const entries = await plateReadEntries();
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      personId: driver,
-      role: 'driver',
-      input: { carRef, purpose: 'receipt', siteId: 'site-a' },
-      subjectPersonIds: [driver],
-      districtId: 'district-1',
+  it('serves the plate for the driver\'s own receipt, naming the owner and the district for the audit entry', async () => {
+    expect(await world.accounts.personalData.readPlate({ carRef, reader: driver, purpose: 'receipt', siteId: 'site-a' })).toEqual({
+      ok: true,
+      value: { plate: 'ABC123', ownerRef: driver, districtId: 'district-1' },
     });
-    expect(JSON.stringify(entries)).not.toContain('ABC123');
   });
 
-  it('refuses an attendant of another site and logs nothing', async () => {
-    expect(await read({ carRef, reader: attendantOfSiteB, purpose: 'cash list', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
-    expect(await plateReadEntries()).toHaveLength(0);
+  it('refuses an attendant of another site', async () => {
+    expect(await world.accounts.personalData.readPlate({ carRef, reader: attendantOfSiteB, purpose: 'cash list', siteId: 'site-a' })).toEqual({
+      ok: false,
+      error: 'refused',
+    });
   });
 });
 
-describe('A4 the rest of the logged join', () => {
-  it('serves the attendant of the site for the cash list and the inspector of the zone for a look-up, each logged', async () => {
-    expect((await read({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).ok).toBe(true);
-    expect((await read({ carRef, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-a' })).ok).toBe(true);
-    const readers = (await plateReadEntries()).map((entry) => [entry.personId, entry.role]);
-    expect(readers).toEqual([
-      [attendantOfSiteA, 'attendant'],
-      [inspectorOfZoneA, 'inspector'],
-    ]);
+describe('A4 the rest of the join', () => {
+  it('serves the attendant of the site for the cash list and the inspector of the zone for a look-up', async () => {
+    expect((await world.accounts.personalData.readPlate({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).ok).toBe(true);
+    expect((await world.accounts.personalData.readPlate({ carRef, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-a' })).ok).toBe(true);
   });
 
-  it('refuses a purpose the reader\'s role does not have, and a reader without scope over the site', async () => {
+  it('refuses a purpose the reader\'s role does not have, a reader without scope over the site, and a suspended attendant', async () => {
+    const read = world.accounts.personalData.readPlate.bind(world.accounts.personalData);
     expect(await read({ carRef, reader: attendantOfSiteA, purpose: 'inspector look-up', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
     expect(await read({ carRef, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-b' })).toEqual({ ok: false, error: 'refused' });
     await world.accounts.accessFacts.recordLicenceState(attendantOfSiteA, 'suspended');
     expect(await read({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
-    expect(await plateReadEntries()).toHaveLength(0);
   });
 
   it('answers "not resolvable" for an unknown car', async () => {
-    expect(await read({ carRef: 'car-unknown', reader: driver, purpose: 'receipt', siteId: 'site-a' })).toEqual({ ok: false, error: 'not resolvable' });
+    expect(await world.accounts.personalData.readPlate({ carRef: 'car-unknown', reader: driver, purpose: 'receipt', siteId: 'site-a' })).toEqual({
+      ok: false,
+      error: 'not resolvable',
+    });
   });
 
   it('saves a car once per plate, shows a driver their own cars, and refuses a non-driver or a bad plate', async () => {
@@ -115,19 +97,5 @@ describe('A4 the rest of the logged join', () => {
   it('keeps the plate in the personal-data store only', async () => {
     expect(await world.stores.personalData.car(carRef)).toEqual({ carRef, ownerRef: driver, plate: 'ABC123' });
     expect(JSON.stringify(await world.stores.people.find(driver))).not.toContain('ABC123');
-  });
-});
-
-describe('A4 report', () => {
-  it('logs every plate served', async () => {
-    platesServed = 0;
-    for (let index = 0; index < 10; index += 1) {
-      await read({ carRef, reader: driver, purpose: 'receipt', siteId: 'site-a' });
-      await read({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' });
-      await read({ carRef, reader: attendantOfSiteB, purpose: 'cash list', siteId: 'site-a' });
-    }
-    const logged = (await plateReadEntries()).length;
-    expect(logged).toBe(platesServed);
-    console.log(`A4 report: plate reads logged ${logged} / plate reads served ${platesServed} (100 %); 10 refused reads served nothing and logged nothing`);
   });
 });

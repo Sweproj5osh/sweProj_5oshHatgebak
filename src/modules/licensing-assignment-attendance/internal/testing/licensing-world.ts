@@ -1,11 +1,7 @@
-import { InMemoryAuditLogStore } from '../../../../adapters/in-memory/in-memory-audit-log-store';
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
-import { signToken } from '../../../../entrypoint/auth/token';
-import { TEST_TOKEN_SECRET } from '../../../../entrypoint/test-helpers';
-import { createHashChainedAuditTrail, type AuditTrail } from '../../../audit-log/public';
 import { FixedClock } from '../../../../shared/clock';
-import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
+import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
 import type { Result } from '../../../../shared/result';
+import type { TokenIssuer } from '../../../../shared/token-issuer';
 import {
   createAccountsAndAccessControl,
   createInMemoryAccountsStores,
@@ -21,7 +17,6 @@ import {
   type LicensingAssignmentAttendance,
   type LicensingAssignmentAttendanceStores,
 } from '../../public';
-import type { ApprovalRequestId, LicenceId } from '../../../../shared/identifiers';
 
 /** A stand-in for Approvals: it confirms exactly the requests a test has marked approved, for exactly that move. */
 export class FakeApprovals implements ApprovalVerifier {
@@ -39,13 +34,15 @@ export class FakeApprovals implements ApprovalVerifier {
 
 export const TEST_SITE_CODE_SECRET = 'site-code-secret-for-tests';
 
+/** Nobody signs in through this world, so the token minter is a stand-in; this file never imports the entry point (F2). */
+const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
+
 /**
  * Access control, the site registry and this module wired over in-memory stores the way the composition root wires
  * them, with two districts, each holding one zone and one site, and a member appointed to district one.
  */
 export interface LicensingWorld {
   readonly clock: FixedClock;
-  readonly audit: AuditTrail;
   readonly accounts: AccountsAndAccessControl;
   readonly registry: SiteRegistry;
   readonly licensing: LicensingAssignmentAttendance;
@@ -64,14 +61,12 @@ export interface LicensingWorld {
 
 export async function createLicensingWorld(): Promise<LicensingWorld> {
   const clock = new FixedClock(new Date('2026-11-05T08:00:00Z'));
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(new InMemoryDatabase()), clock);
   const sitesStores = createInMemorySitesStores();
   const accounts = createAccountsAndAccessControl({
     stores: createInMemoryAccountsStores(),
     siteLocator: createSiteLocator(sitesStores),
     signInCodeSender: new RecordingSignInCodeSender(),
-    tokenIssuer: { issue: (actor) => signToken(actor, TEST_TOKEN_SECRET) },
-    audit,
+    tokenIssuer: NO_TOKENS_NEEDED,
     clock,
   });
   const registry = createSiteRegistry({
@@ -100,7 +95,7 @@ export async function createLicensingWorld(): Promise<LicensingWorld> {
   const siteOne = valueOf(await registry.createSite(chair, zoneOne, '26 July Street', squareAround(30.0626, 31.2197), 12));
   const siteOneBis = valueOf(await registry.createSite(chair, zoneOne, 'Brazil Street', squareAround(30.0650, 31.2210), 8));
   const siteTwo = valueOf(await registry.createSite(chair, zoneTwo, 'Tahrir Street', squareAround(30.0385, 31.2118), 20));
-  const world = { clock, audit, accounts, registry, licensing, stores, approvals, chair, districtOne, districtTwo, zoneOne, zoneTwo, siteOne, siteOneBis, siteTwo };
+  const world = { clock, accounts, registry, licensing, stores, approvals, chair, districtOne, districtTwo, zoneOne, zoneTwo, siteOne, siteOneBis, siteTwo };
   const memberOfDistrictOne = await createPerson({ ...world, memberOfDistrictOne: chair }, 'member');
   valueOf(await licensing.assignments.appointMemberToDistrict(chair, memberOfDistrictOne, districtOne));
   return { ...world, memberOfDistrictOne };

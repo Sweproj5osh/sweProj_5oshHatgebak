@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { signToken } from '../../../entrypoint/auth/token';
 import { composeInMemoryApplication, type InMemoryApplication } from '../../../entrypoint/composition';
 import type { HttpRequest } from '../../../entrypoint/http';
-import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
 import type { PersonId, Role } from '../../../shared/identifiers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import { createLicensingOperations } from '../public';
@@ -19,16 +18,21 @@ function post(path: string, personId: PersonId, role: Role, body: unknown): Http
     path,
     query: {},
     headers: {
-      authorization: `Bearer ${signToken({ personId, role }, TEST_TOKEN_SECRET)}`,
+      authorization: `Bearer ${tokenFor(role, { personId })}`,
       [REQUEST_ID_HEADER]: `request-${String(++requestCounter).padStart(4, '0')}`,
     },
+    address: TEST_ADDRESS,
     body,
   };
 }
 
 beforeEach(async () => {
   world = await createLicensingWorld();
-  application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, operations: createLicensingOperations(world.licensing, world.registry) });
+  application = composeInMemoryApplication({
+    tokenSecret: TEST_TOKEN_SECRET,
+    accessChecks: world.accounts.authorization,
+    additionalOperations: createLicensingOperations(world.licensing, world.registry),
+  });
 });
 
 describe('A12 through the entry point', () => {

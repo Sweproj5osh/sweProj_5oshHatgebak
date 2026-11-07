@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { verifyToken } from '../../../entrypoint/auth/token';
+import { createTokenIssuer } from '../../../entrypoint/auth/token-issuer';
 import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
+import { FixedClock } from '../../../shared/clock';
 import type { PersonId } from '../../../shared/identifiers';
 import { SIGN_IN_POLICY } from '../public';
-import { createAccountsWorld, type AccountsWorld } from './testing/accounts-world';
+import { createAccountsWorld, NO_SITES, type AccountsWorld } from './testing/accounts-world';
 
 /** Task A1: create a person with a role; sign in by phone and one-time code (fake sender); issue a token. */
 const DRIVER_PHONE = '+201012345678';
@@ -21,8 +23,14 @@ function wrongCodeFor(phone: string): string {
   return right === '000000' ? '111111' : '000000';
 }
 
+/** The world's own fixed clock also issues the tokens, so a token's expiry can be checked against it. */
+function worldWithRealTokens(): AccountsWorld {
+  const clock = new FixedClock(new Date('2026-11-05T08:00:00Z'));
+  return createAccountsWorld(NO_SITES, createTokenIssuer(TEST_TOKEN_SECRET, clock));
+}
+
 beforeEach(async () => {
-  world = createAccountsWorld();
+  world = worldWithRealTokens();
   const created = await world.accounts.personalData.createPerson('self registration', 'driver', '010 1234 5678', 'Mona Adel');
   if (!created.ok) {
     throw new Error(created.error);
@@ -36,7 +44,9 @@ describe('A1 the task sheet cases', () => {
     if (!outcome.ok) {
       throw new Error(`expected a token, got ${outcome.error}`);
     }
-    expect(verifyToken(outcome.value.token, TEST_TOKEN_SECRET)).toEqual({ ok: true, value: { personId: driver, role: 'driver' } });
+    const claims = verifyToken(outcome.value.token, TEST_TOKEN_SECRET, world.clock.now());
+    expect(claims).toMatchObject({ ok: true, value: { personId: driver, role: 'driver' } });
+    expect(claims.ok && claims.value.expiresAt).toBe('2026-12-05T08:00:00.000Z');
   });
 
   it('refuses a wrong code', async () => {
@@ -103,7 +113,7 @@ describe('A1 the rest of sign-in', () => {
     if (!outcome.ok) {
       throw new Error(outcome.error);
     }
-    expect(verifyToken(outcome.value.token, TEST_TOKEN_SECRET)).toEqual({
+    expect(verifyToken(outcome.value.token, TEST_TOKEN_SECRET, world.clock.now())).toMatchObject({
       ok: true,
       value: { personId: member.value, role: 'member', districtId: 'district-1' },
     });

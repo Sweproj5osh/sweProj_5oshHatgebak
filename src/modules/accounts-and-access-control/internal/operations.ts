@@ -1,5 +1,4 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, ReadOperation, WriteOperation } from '../../../entrypoint/operations/operation';
+import { refuse, respond, type Operation, type ReadOperation, type WriteOperation } from '../../../shared/operation-contract';
 import type { AccountsAndAccessControl, ErasureRefusal } from '../public';
 
 /**
@@ -44,7 +43,7 @@ const ERASURE_REFUSAL_STATUS: Readonly<Record<ErasureRefusal, number>> = {
   'already erased': 409,
 };
 
-/** A driver's own cars, for the driver's own screen. */
+/** A driver's own cars, for the driver's own screen: one's own data, so nothing for accountability to gain (P9). */
 function readOwnCars(accounts: AccountsAndAccessControl): ReadOperation {
   return {
     kind: 'read',
@@ -52,13 +51,18 @@ function readOwnCars(accounts: AccountsAndAccessControl): ReadOperation {
     method: 'GET',
     path: '/cars',
     allowedRoles: ['driver'],
+    scope: 'own',
+    logged: false,
     async handle({ actor }) {
-      return respond(200, { cars: await accounts.personalData.ownCars(actor.personId) });
+      return { response: respond(200, { cars: await accounts.personalData.ownCars(actor.personId) }) };
     },
   };
 }
 
-/** An inspector's (or committee member's) plate look-up at a site in their scope; each plate served is logged. */
+/**
+ * An inspector's (or committee member's) plate look-up at a site in their scope (Rule F, P9): a logged read, so the
+ * pipeline requires a request id and writes the one audit entry naming the reader, the car reference and the owner.
+ */
 function lookUpPlate(accounts: AccountsAndAccessControl): ReadOperation {
   return {
     kind: 'read',
@@ -66,17 +70,24 @@ function lookUpPlate(accounts: AccountsAndAccessControl): ReadOperation {
     method: 'GET',
     path: '/plates',
     allowedRoles: ['inspector', 'member', 'chair'],
+    scope: 'staff-scoped',
+    logged: true,
+    audit: { touchesPersonalData: true },
     async handle({ actor, query }) {
-      const plate = await accounts.personalData.readPlate({
+      const served = await accounts.personalData.readPlate({
         carRef: query['carRef'] ?? '',
         siteId: query['siteId'] ?? '',
         reader: actor.personId,
         purpose: 'inspector look-up',
       });
-      if (!plate.ok) {
-        return refuse(plate.error === 'refused' ? 403 : 404, plate.error);
+      if (!served.ok) {
+        return { response: refuse(served.error === 'refused' ? 403 : 404, served.error) };
       }
-      return respond(200, { plate: plate.value });
+      const { plate, ownerRef, districtId } = served.value;
+      return {
+        response: respond(200, { plate }),
+        audit: districtId === undefined ? { subjectPersonIds: [ownerRef] } : { subjectPersonIds: [ownerRef], districtId },
+      };
     },
   };
 }

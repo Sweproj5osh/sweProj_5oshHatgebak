@@ -1,17 +1,13 @@
-import { InMemoryAuditLogStore } from '../../../../adapters/in-memory/in-memory-audit-log-store';
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
-import { signToken } from '../../../../entrypoint/auth/token';
-import { TEST_TOKEN_SECRET } from '../../../../entrypoint/test-helpers';
 import {
   createAccountsAndAccessControl,
   createInMemoryAccountsStores,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
 } from '../../../accounts-and-access-control/public';
-import { createHashChainedAuditTrail, type AuditTrail } from '../../../audit-log/public';
 import { FixedClock } from '../../../../shared/clock';
 import type { PersonId, Role, SiteId } from '../../../../shared/identifiers';
 import type { Result } from '../../../../shared/result';
+import type { TokenIssuer } from '../../../../shared/token-issuer';
 import {
   createInMemorySitesStores,
   createSiteLocator,
@@ -23,10 +19,12 @@ import {
 export const TEST_SITE_CODE_SECRET = 'site-code-secret-for-tests';
 export const TEST_START = new Date('2026-11-05T08:00:00Z');
 
+/** Nobody signs in through this world, so the token minter is a stand-in; this file never imports the entry point (F2). */
+const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
+
 /** Access control and the site registry wired together over in-memory stores, the way the composition root wires them. */
 export interface RegistryWorld {
   readonly clock: FixedClock;
-  readonly audit: AuditTrail;
   readonly accounts: AccountsAndAccessControl;
   readonly sitesStores: SitesAndAreasStores;
   readonly registry: SiteRegistry;
@@ -39,14 +37,12 @@ export interface RegistryWorld {
 
 export async function createRegistryWorld(): Promise<RegistryWorld> {
   const clock = new FixedClock(TEST_START);
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(new InMemoryDatabase()), clock);
   const sitesStores = createInMemorySitesStores();
   const accounts = createAccountsAndAccessControl({
     stores: createInMemoryAccountsStores(),
     siteLocator: createSiteLocator(sitesStores),
     signInCodeSender: new RecordingSignInCodeSender(),
-    tokenIssuer: { issue: (actor) => signToken(actor, TEST_TOKEN_SECRET) },
-    audit,
+    tokenIssuer: NO_TOKENS_NEEDED,
     clock,
   });
   const freeSpaceCounts = new Map<SiteId, number>();
@@ -60,7 +56,7 @@ export async function createRegistryWorld(): Promise<RegistryWorld> {
     clock,
   });
   const chair = valueOf(await accounts.bootstrapChair('01000000000', 'The Chair'));
-  return { clock, audit, accounts, sitesStores, registry, chair, freeSpaceCounts, firstHourFees };
+  return { clock, accounts, sitesStores, registry, chair, freeSpaceCounts, firstHourFees };
 }
 
 let nextPhoneSuffix = 1;

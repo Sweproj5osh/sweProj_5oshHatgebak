@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { signToken } from '../../../entrypoint/auth/token';
 import { composeInMemoryApplication, type InMemoryApplication } from '../../../entrypoint/composition';
 import type { HttpRequest } from '../../../entrypoint/http';
-import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
+import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
 import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import { looksLikeTimestampKey } from '../../../shared/timestamp-fields';
@@ -23,14 +22,19 @@ function post(path: string, personId: PersonId, role: Role, body: unknown, reque
     method: 'POST',
     path,
     query: {},
-    headers: { authorization: `Bearer ${signToken({ personId, role }, TEST_TOKEN_SECRET)}`, [REQUEST_ID_HEADER]: requestId },
+    headers: { authorization: `Bearer ${tokenFor(role, { personId })}`, [REQUEST_ID_HEADER]: requestId },
+    address: TEST_ADDRESS,
     body,
   };
 }
 
 beforeEach(async () => {
   world = await createRegistryWorld();
-  application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, operations: createSitesOperations(world.registry, world.clock) });
+  application = composeInMemoryApplication({
+    tokenSecret: TEST_TOKEN_SECRET,
+    accessChecks: world.accounts.authorization,
+    additionalOperations: createSitesOperations(world.registry, world.clock),
+  });
   districtOne = valueOf(await world.registry.createDistrict(world.chair, 'Zamalek'));
   memberOfDistrictOne = await createStaff(world, 'member');
   await world.accounts.accessFacts.recordMemberDistrict(memberOfDistrictOne, districtOne);
@@ -102,16 +106,12 @@ describe('A6 through the entry point', () => {
     const siteId = valueOf(await world.registry.createSite(world.chair, zoneId, '26 July Street', squareAround(30.0626, 31.2197), 5));
     world.freeSpaceCounts.set(siteId, 4);
     world.firstHourFees.set(siteId, 10);
-    const token = signToken({ personId: 'any-driver', role: 'driver' }, TEST_TOKEN_SECRET);
-    const map = await application.handle({
-      method: 'GET',
-      path: '/sites/nearby',
-      query: { latitude: '30.0626', longitude: '31.2197', radius: '500' },
-      headers: { authorization: `Bearer ${token}` },
-    });
+    const driver = valueOf(await world.accounts.personalData.createPerson('self registration', 'driver', '01099999999', 'A Driver'));
+    const token = tokenFor('driver', { personId: driver });
+    const map = await application.handle(readRequest('/sites/nearby', token, { latitude: '30.0626', longitude: '31.2197', radius: '500' }));
     expect(map.status).toBe(200);
     expect((map.body as { sites: { siteId: string; band: string }[] }).sites).toMatchObject([{ siteId, band: 'free', firstHourFee: 10 }]);
-    const missingPoint = await application.handle({ method: 'GET', path: '/sites/nearby', query: { radius: '500' }, headers: { authorization: `Bearer ${token}` } });
+    const missingPoint = await application.handle(readRequest('/sites/nearby', token, { radius: '500' }));
     expect(missingPoint).toEqual({ status: 400, body: { error: 'invalid point' } });
   });
 });

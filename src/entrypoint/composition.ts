@@ -6,6 +6,7 @@ import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-
 import {
   createAccountsAndAccessControl,
   createInMemoryAccountsStores,
+  RecordingSignInCodeSender,
   type AccountsAndAccessControl,
   type SiteLocator,
 } from '../modules/accounts-and-access-control/public';
@@ -136,9 +137,16 @@ function compose(options: InMemoryApplicationOptions, standIns: StandIns): InMem
   const database = new InMemoryDatabase();
   const outbox = new InMemoryOutboxStore(database, clock);
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
-  const accounts = createAccountsAndAccessControl({ stores: createInMemoryAccountsStores(), siteLocator: NO_SITES_YET });
+  const tokens = createTokenIssuer(options.tokenSecret, clock);
+  const accounts = createAccountsAndAccessControl({
+    stores: createInMemoryAccountsStores(),
+    siteLocator: NO_SITES_YET,
+    signInCodeSender: new RecordingSignInCodeSender(),
+    tokenIssuer: tokens,
+    clock,
+  });
   const moduleDependencies: ModuleDependencies = {
-    ...moduleDependenciesFor({ audit, clock, tokens: createTokenIssuer(options.tokenSecret, clock) }, standIns.ticketingPorts),
+    ...moduleDependenciesFor({ audit, clock, tokens }, standIns.ticketingPorts),
     ...options.moduleDependencies,
   };
   const registry = registryFor(options, moduleDependencies);

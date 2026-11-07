@@ -3,10 +3,10 @@
  * Identities, roles, the hierarchy Chair > Member > Inspector > Attendant, session binding to a site, and the
  * personal-data store with logged joins and erasure (ADR-06 Rule F). Needs AuditTrail.
  */
-import type { AuditTrail } from '../audit-log/public';
 import type { Clock } from '../../shared/clock';
-import type { Actor, DistrictId, PersonId, Role, SiteId, ZoneId } from '../../shared/identifiers';
+import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../shared/identifiers';
 import type { Result } from '../../shared/result';
+import type { TokenIssuer } from '../../shared/token-issuer';
 import {
   InMemoryAccessFactsStore,
   InMemoryCommitteePasswordStore,
@@ -107,6 +107,13 @@ export interface PlateReadRequest {
 /** "not resolvable": no such car, or its owner was erased; the ticket keeps the reference all the same. */
 export type PlateReadRefusal = 'refused' | 'not resolvable';
 
+/** A plate served by the logged join, with what the pipeline's audit entry names: the owner and the site's district. */
+export interface ServedPlate {
+  readonly plate: string;
+  readonly ownerRef: PersonId;
+  readonly districtId?: DistrictId;
+}
+
 /** A car as its own driver sees it. */
 export interface OwnCar {
   readonly carRef: CarRef;
@@ -128,10 +135,10 @@ export interface PersonalData {
   ownCars(driverId: PersonId): Promise<readonly OwnCar[]>;
   /**
    * The logged join (task A4, Rule F): the owner, or a reader whose role fits the purpose and who has scope over the
-   * site, gets the plate, and every plate served first writes a "plate read" audit entry naming the reader and the
-   * owner (never the plate). Anyone else is refused, and a refusal is not served, so it leaves no entry.
+   * site, gets the plate. The one audit entry is written by the entry point's pipeline (P9): the read that calls this
+   * declares `logged: true` and names the owner as the entry's subject; this module never appends an entry itself.
    */
-  readPlate(request: PlateReadRequest): Promise<Result<string, PlateReadRefusal>>;
+  readPlate(request: PlateReadRequest): Promise<Result<ServedPlate, PlateReadRefusal>>;
   /**
    * Deletes the person's name, phone, cars and plates (task A5). The reference stays, so tickets keep it and remain
    * whole, but it no longer resolves to anyone. A driver erases themself; the Chair erases anyone but a Chair.
@@ -171,11 +178,6 @@ export interface SignInCodeSender {
   send(phone: string, code: string): Promise<void>;
 }
 
-/** Port: signs the system's own token for an actor. The composition root fills it with the entry point's signer. */
-export interface TokenIssuer {
-  issue(actor: Actor): string;
-}
-
 /** The sign-in policy: code length and lifetime, wrong codes before a lock-out, and its length. */
 export const SIGN_IN_POLICY: Readonly<Record<keyof typeof POLICY, number>> = POLICY;
 
@@ -211,9 +213,8 @@ export interface AccountsAndAccessControlDependencies {
   readonly stores: AccountsAndAccessControlStores;
   readonly siteLocator: SiteLocator;
   readonly signInCodeSender: SignInCodeSender;
+  /** The entry point's token minter, handed in by the composition root (Q4, P27): sign-in never imports the entry point. */
   readonly tokenIssuer: TokenIssuer;
-  /** The audit trail outside any request's transaction, for plate reads. */
-  readonly audit: AuditTrail;
   readonly clock: Clock;
 }
 
@@ -228,7 +229,7 @@ export interface AccountsAndAccessControl {
 
 /** The composition root builds this module through this one function; nothing else constructs its internals. */
 export function createAccountsAndAccessControl(dependencies: AccountsAndAccessControlDependencies): AccountsAndAccessControl {
-  const { stores, siteLocator, signInCodeSender, tokenIssuer, audit, clock } = dependencies;
+  const { stores, siteLocator, signInCodeSender, tokenIssuer, clock } = dependencies;
   const authorization = new AuthorizationService({ people: stores.people, accessFacts: stores.accessFacts, siteLocator });
   const personalData = new PersonalDataService({
     people: stores.people,
@@ -238,7 +239,6 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
     accessFacts: stores.accessFacts,
     authorization,
     siteLocator,
-    audit,
   });
   const signIn = new SignInService({
     people: stores.people,

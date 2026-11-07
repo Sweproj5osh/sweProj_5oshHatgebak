@@ -1,7 +1,8 @@
 import type { Clock } from '../../../shared/clock';
 import type { PersonId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
-import type { Authorization, PasswordRefusal, SignIn, SignInCodeSender, SignInRefusal, TokenIssuer } from '../public';
+import type { TokenIssuer } from '../../../shared/token-issuer';
+import type { Authorization, PasswordRefusal, SignIn, SignInCodeSender, SignInRefusal } from '../public';
 import { codeMatches, hashOfCode, minutesAfter, newOneTimeCode, SIGN_IN_POLICY } from './domain/one-time-code';
 import { hashPassword, MINIMUM_PASSWORD_LENGTH, needsSecondStep, passwordMatches } from './domain/password';
 import { normalisePhone } from './domain/person';

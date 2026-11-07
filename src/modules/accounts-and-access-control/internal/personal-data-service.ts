@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { AuditTrail } from '../../audit-log/public';
 import type { PersonId, Role } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type {
@@ -14,6 +13,7 @@ import type {
   PersonCreator,
   PlateReadRefusal,
   PlateReadRequest,
+  ServedPlate,
   SiteLocator,
 } from '../public';
 import { mayCreate, normaliseDisplayName, normalisePhone, normalisePlate } from './domain/person';
@@ -28,16 +28,15 @@ export interface PersonalDataDependencies {
   readonly accessFacts: AccessFactsStore;
   readonly authorization: Authorization;
   readonly siteLocator: SiteLocator;
-  /** The audit trail outside any request's transaction: a plate read is a read, yet it must leave an entry. */
-  readonly audit: AuditTrail;
 }
 
+/** The operation name the scope rules are asked about for every plate read, whichever route serves the plate. */
 export const PLATE_READ_OPERATION = 'personalData.readPlate';
 
 /**
  * Creates people and their cars and keeps their personal data apart: roles and statuses go to the people table, names,
  * phones and plates go to the personal-data store, joined only by references (ADR-06, Rule F). A plate leaves this
- * module only through readPlate, which checks the reader and writes a "plate read" audit entry first.
+ * module only through readPlate, which checks the reader; the entry point's logged read writes the one audit entry (P9).
  */
 export class PersonalDataService implements PersonalData {
   constructor(private readonly dependencies: PersonalDataDependencies) {}
@@ -86,7 +85,7 @@ export class PersonalDataService implements PersonalData {
     return cars.map(({ carRef, plate }) => ({ carRef, plate }));
   }
 
-  async readPlate(request: PlateReadRequest): Promise<Result<string, PlateReadRefusal>> {
+  async readPlate(request: PlateReadRequest): Promise<Result<ServedPlate, PlateReadRefusal>> {
     const car = await this.dependencies.personalData.car(request.carRef);
     if (car === undefined) {
       return fail('not resolvable');
@@ -96,16 +95,7 @@ export class PersonalDataService implements PersonalData {
       return fail('refused');
     }
     const districtId = (await this.dependencies.siteLocator.locateSite(request.siteId))?.districtId;
-    await this.dependencies.audit.append({
-      personId: request.reader,
-      role: readerRole,
-      operation: PLATE_READ_OPERATION,
-      input: { carRef: request.carRef, purpose: request.purpose, siteId: request.siteId },
-      requestId: `plate-read-${randomUUID()}`,
-      subjectPersonIds: [car.ownerRef],
-      ...(districtId === undefined ? {} : { districtId }),
-    });
-    return succeed(car.plate);
+    return succeed(districtId === undefined ? { plate: car.plate, ownerRef: car.ownerRef } : { plate: car.plate, ownerRef: car.ownerRef, districtId });
   }
 
   /**

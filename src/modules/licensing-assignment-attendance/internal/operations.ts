@@ -1,7 +1,14 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, ReadOperation, WriteContext, WriteOperation, WriteOutcome } from '../../../entrypoint/operations/operation';
-import type { BodySchema, ValidBody } from '../../../entrypoint/operations/body-schema';
+import type { BodySchema, ValidBody } from '../../../shared/body-schema';
 import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';
+import {
+  refuse,
+  respond,
+  type Operation,
+  type ReadOperation,
+  type WriteContext,
+  type WriteOperation,
+  type WriteOutcome,
+} from '../../../shared/operation-contract';
 import type { Result } from '../../../shared/result';
 import type { SiteRegistry } from '../../sites-and-areas/public';
 import type { AssignmentRefusal, ClockInRefusal, LicenceRefusal, LicensingAssignmentAttendance } from '../public';
@@ -161,6 +168,7 @@ function readOffSiteFlags(module: LicensingAssignmentAttendance): ReadOperation 
     method: 'GET',
     path: '/attendance/off-site-flags',
     allowedRoles: ['inspector', 'member', 'chair'],
+    scope: 'staff-scoped',
     async handle({ actor, query }) {
       const flags = await module.attendance.offSiteFlags(actor.personId, query['zoneId'] ?? '');
       return flags.ok ? respond(200, { flags: flags.value }) : refuse(403, flags.error);

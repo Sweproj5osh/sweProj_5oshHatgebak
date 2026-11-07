@@ -1,7 +1,6 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, ReadOperation, WriteOperation, WriteOutcome } from '../../../entrypoint/operations/operation';
 import type { Clock } from '../../../shared/clock';
 import type { DistrictId } from '../../../shared/identifiers';
+import { refuse, respond, type Operation, type ReadOperation, type WriteOperation, type WriteOutcome } from '../../../shared/operation-contract';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { GeoPoint, PlaceRefusal, SiteRegistry } from '../public';
 import { parseWeeklyHours } from './domain/site-calendar';
@@ -210,6 +209,7 @@ function readSiteStatus(registry: SiteRegistry, clock: Clock): ReadOperation {
     method: 'GET',
     path: '/sites/status',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
+    scope: 'open',
     async handle({ query }) {
       const status = await registry.statusAt(query['siteId'] ?? '', clock.now());
       return status === undefined ? refuse(404, 'unknown site') : respond(200, status);
@@ -225,6 +225,7 @@ function readNearbySites(registry: SiteRegistry): ReadOperation {
     method: 'GET',
     path: '/sites/nearby',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
+    scope: 'open',
     async handle({ query }) {
       const from = { latitude: Number(query['latitude']), longitude: Number(query['longitude']) };
       const nearby = await registry.nearbySites(from, Number(query['radius']));
@@ -240,6 +241,7 @@ function readCapacityHistory(registry: SiteRegistry): ReadOperation {
     method: 'GET',
     path: '/sites/capacity-history',
     allowedRoles: ['inspector', 'member', 'chair'],
+    scope: 'staff-scoped',
     async handle({ query }) {
       const siteId = query['siteId'] ?? '';
       if ((await registry.locateSite(siteId)) === undefined) {
@@ -257,6 +259,7 @@ function readSiteDetails(registry: SiteRegistry): ReadOperation {
     method: 'GET',
     path: '/sites/details',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
+    scope: 'open',
     async handle({ query }) {
       const details = await registry.siteDetails(query['siteId'] ?? '');
       return details === undefined ? refuse(404, 'unknown site') : respond(200, details);
