@@ -1,19 +1,21 @@
 import type { DistrictId, PersonId, SiteId, ZoneId } from '../../../shared/identifiers';
+import type { TableAccess } from '../../../shared/unit-of-work';
 import type { AccountStatus, CarRef, LicenceLiveState } from '../public';
 import type { PasswordHash } from './domain/password';
 import type { Person } from './domain/person';
 
 /**
- * Storage ports owned by this module. The in-memory adapters in `adapters/` implement them for every test; the
- * PostgreSQL adapters will implement the same ports over the tables in `db/migrations/0002_identity_and_registry.sql`.
+ * Storage ports owned by this module. Every method takes the tables it works on (ADR-13): the committed tables for a
+ * read outside a request, the request's unit of work for a write, so the same adapter serves both. The adapters in
+ * `adapters/` work over any TableAccess, over the tables of `db/migrations/0002_identity_and_registry.sql`.
  */
 
 /** The `accounts_and_access_control.people` table: references, roles and statuses only. */
 export interface PeopleStore {
-  add(person: Person): Promise<void>;
-  find(personId: PersonId): Promise<Person | undefined>;
-  setStatus(personId: PersonId, status: AccountStatus): Promise<void>;
-  markErased(personId: PersonId): Promise<void>;
+  add(tables: TableAccess, person: Person): Promise<void>;
+  find(tables: TableAccess, personId: PersonId): Promise<Person | undefined>;
+  setStatus(tables: TableAccess, personId: PersonId, status: AccountStatus): Promise<void>;
+  markErased(tables: TableAccess, personId: PersonId): Promise<void>;
 }
 
 /** A person's name and phone, held only in the `personal_data` schema. */
@@ -30,21 +32,35 @@ export interface CarRecord {
   readonly plate: string;
 }
 
+/** "Car X is registered at site Y" (P28 #31, task A16): an address, so personal data, held only in `personal_data`. */
+export interface ResidencyRecord {
+  readonly carRef: CarRef;
+  readonly siteId: SiteId;
+  readonly registeredBy: PersonId;
+  /** Set from the server clock (Rule I). */
+  readonly registeredAt: string;
+}
+
 /** Rows removed from each personal-data table by one erasure (task A5). */
 export interface ErasedRows {
   readonly personDetails: number;
   readonly cars: number;
+  readonly residency: number;
 }
 
 /** The `personal_data` schema. Nothing outside this port stores a name, a phone or a plate (Rule F, F10). */
 export interface PersonalDataStore {
-  addDetails(details: PersonDetails): Promise<void>;
-  detailsOf(personRef: PersonId): Promise<PersonDetails | undefined>;
-  personWithPhone(phone: string): Promise<PersonId | undefined>;
-  addCar(car: CarRecord): Promise<void>;
-  car(carRef: CarRef): Promise<CarRecord | undefined>;
-  carsOf(ownerRef: PersonId): Promise<readonly CarRecord[]>;
-  eraseEverythingAbout(personRef: PersonId): Promise<ErasedRows>;
+  addDetails(tables: TableAccess, details: PersonDetails): Promise<void>;
+  detailsOf(tables: TableAccess, personRef: PersonId): Promise<PersonDetails | undefined>;
+  personWithPhone(tables: TableAccess, phone: string): Promise<PersonId | undefined>;
+  addCar(tables: TableAccess, car: CarRecord): Promise<void>;
+  car(tables: TableAccess, carRef: CarRef): Promise<CarRecord | undefined>;
+  carsOf(tables: TableAccess, ownerRef: PersonId): Promise<readonly CarRecord[]>;
+  /** The first car saved under this plate, whoever owns it; undefined when nobody saved it. */
+  carWithPlate(tables: TableAccess, plate: string): Promise<CarRecord | undefined>;
+  addResidency(tables: TableAccess, residency: ResidencyRecord): Promise<void>;
+  isResident(tables: TableAccess, carRef: CarRef, siteId: SiteId): Promise<boolean>;
+  eraseEverythingAbout(tables: TableAccess, personRef: PersonId): Promise<ErasedRows>;
 }
 
 /**
@@ -63,16 +79,17 @@ export interface AccessFactsRow {
 
 /** The `accounts_and_access_control.access_facts` table: one row per person, replaced field by field. */
 export interface AccessFactsStore {
-  factsOf(personId: PersonId): Promise<AccessFactsRow>;
-  update(personId: PersonId, change: (current: AccessFactsRow) => AccessFactsRow): Promise<void>;
-  remove(personId: PersonId): Promise<number>;
+  factsOf(tables: TableAccess, personId: PersonId): Promise<AccessFactsRow>;
+  update(tables: TableAccess, personId: PersonId, change: (current: AccessFactsRow) => AccessFactsRow): Promise<void>;
+  remove(tables: TableAccess, personId: PersonId): Promise<number>;
 }
 
 /**
- * One outstanding one-time code for one person (task A1). Only the code's hash is kept. Times come from the server
- * clock. A lock-out survives a new code request until it ends.
+ * The one outstanding one-time code for one phone (task A1), keyed by the phone so that the wrong-code count and the
+ * lock-out survive a new code request (P23). Only a keyed hash of the code is kept. Times come from the server clock.
  */
 export interface SignInChallenge {
+  readonly phone: string;
   readonly personId: PersonId;
   readonly codeHash: string;
   readonly expiresAt: string;
@@ -80,16 +97,17 @@ export interface SignInChallenge {
   readonly lockedUntil?: string;
 }
 
-/** The `accounts_and_access_control.sign_in_challenges` table: at most one row per person. */
+/** The `personal_data.sign_in_challenges` table (it is keyed by a phone, so it lives beside the other phones): one row per phone. */
 export interface SignInChallengeStore {
-  find(personId: PersonId): Promise<SignInChallenge | undefined>;
-  save(challenge: SignInChallenge): Promise<void>;
-  remove(personId: PersonId): Promise<number>;
+  find(tables: TableAccess, phone: string): Promise<SignInChallenge | undefined>;
+  save(tables: TableAccess, challenge: SignInChallenge): Promise<void>;
+  remove(tables: TableAccess, phone: string): Promise<number>;
+  removeForPerson(tables: TableAccess, personId: PersonId): Promise<number>;
 }
 
 /** The `accounts_and_access_control.committee_passwords` table: a salted scrypt hash per member or Chair. */
 export interface CommitteePasswordStore {
-  find(personId: PersonId): Promise<PasswordHash | undefined>;
-  save(personId: PersonId, password: PasswordHash): Promise<void>;
-  remove(personId: PersonId): Promise<number>;
+  find(tables: TableAccess, personId: PersonId): Promise<PasswordHash | undefined>;
+  save(tables: TableAccess, personId: PersonId, password: PasswordHash): Promise<void>;
+  remove(tables: TableAccess, personId: PersonId): Promise<number>;
 }

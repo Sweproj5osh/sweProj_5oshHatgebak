@@ -40,7 +40,7 @@ describe('A5 the task sheet case', () => {
     valueOf(await world.accounts.personalData.erase(driver, driver));
 
     expect(oldTicket).toEqual({ ticketId: 'ticket-1', siteId: 'site-a', driverRef: driver, carRef });
-    expect(await world.stores.people.find(oldTicket.driverRef)).toEqual({ personId: driver, role: 'driver', status: 'active', erased: true });
+    expect(await world.stores.people.find(world.database, oldTicket.driverRef)).toEqual({ personId: driver, role: 'driver', status: 'active', erased: true });
     expect(await world.accounts.personalData.readPlate({ carRef: oldTicket.carRef, reader: chair, purpose: 'receipt', siteId: 'site-a' })).toEqual({
       ok: false,
       error: 'not resolvable',
@@ -52,9 +52,9 @@ describe('A5 the rest of erasure', () => {
   it('leaves no name, phone or plate behind, and the person can no longer sign in or act', async () => {
     await world.accounts.signIn.requestSignInCode('01011111111');
     valueOf(await world.accounts.personalData.erase(chair, driver));
-    expect(await world.stores.personalData.detailsOf(driver)).toBeUndefined();
-    expect(await world.stores.personalData.carsOf(driver)).toEqual([]);
-    expect(await world.stores.signInChallenges.find(driver)).toBeUndefined();
+    expect(await world.stores.personalData.detailsOf(world.database, driver)).toBeUndefined();
+    expect(await world.stores.personalData.carsOf(world.database, driver)).toEqual([]);
+    expect(await world.stores.signInChallenges.find(world.database, '+201011111111')).toBeUndefined();
     expect(await world.accounts.personalData.ownCars(driver)).toEqual([]);
     expect(await world.accounts.authorization.liveStatus(driver)).toBe('revoked');
     await world.accounts.signIn.requestSignInCode('01011111111');
@@ -87,7 +87,8 @@ describe('A5 report', () => {
     expect(report.rowsRemoved).toEqual({
       'personal_data.person_details': 1,
       'personal_data.cars': 2,
-      'accounts_and_access_control.sign_in_challenges': 0,
+      'personal_data.residency': 0,
+      'personal_data.sign_in_challenges': 0,
       'accounts_and_access_control.access_facts': 0,
       'accounts_and_access_control.committee_passwords': 0,
     });

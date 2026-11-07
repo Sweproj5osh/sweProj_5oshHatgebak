@@ -1,19 +1,20 @@
 /**
  * Accounts & Access Control — owner: Teammate A (Area 2). Must-stay-on set.
- * Identities, roles, the hierarchy Chair > Member > Inspector > Attendant, session binding to a site, and the
- * personal-data store with logged joins and erasure (ADR-06 Rule F). Needs AuditTrail.
+ * Identities, roles, the hierarchy Chair > Member > Inspector > Attendant, session binding to a site, sign-in through
+ * the entry point's public operations, and the personal-data store with logged joins and erasure (ADR-06 Rule F).
  */
 import type { Clock } from '../../shared/clock';
 import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../shared/identifiers';
 import type { Result } from '../../shared/result';
 import type { TokenIssuer } from '../../shared/token-issuer';
+import type { TableAccess } from '../../shared/unit-of-work';
 import {
-  InMemoryAccessFactsStore,
-  InMemoryCommitteePasswordStore,
-  InMemoryPeopleStore,
-  InMemoryPersonalDataStore,
-  InMemorySignInChallengeStore,
-} from './internal/adapters/in-memory-stores';
+  TableAccessFactsStore,
+  TableCommitteePasswordStore,
+  TablePeopleStore,
+  TablePersonalDataStore,
+  TableSignInChallengeStore,
+} from './internal/adapters/table-stores';
 import { AuthorizationService } from './internal/authorization-service';
 import { SIGN_IN_POLICY as POLICY } from './internal/domain/one-time-code';
 import { SCOPE_RULES } from './internal/domain/scope-rules';
@@ -40,7 +41,8 @@ export type BindSessionRefusal = 'only an attendant clocks in' | 'account or lic
 
 /**
  * Asked by the entry point on every request and by modules for scope (task A3). Every answer is read fresh: a licence
- * revoked a moment ago is refused on the very next call, with no new sign-in.
+ * revoked a moment ago is refused on the very next call, with no new sign-in. The two writes take the caller's unit of
+ * work first (ADR-13), so a clock-in binds the session in the same transaction as its attendance row.
  */
 export interface Authorization {
   /** Chair everywhere; member in their district; inspector in their zone; attendant at their one site. */
@@ -51,8 +53,8 @@ export interface Authorization {
   roleOf(personId: PersonId): Promise<Role | undefined>;
   memberDistrictOf(personId: PersonId): Promise<DistrictId | undefined>;
   /** Called by attendance at clock-in, after the site's code was verified; the session then carries its proven site. */
-  bindSessionToSite(personId: PersonId, siteId: SiteId): Promise<Result<void, BindSessionRefusal>>;
-  unbindSession(personId: PersonId): Promise<void>;
+  bindSessionToSite(transaction: TableAccess, personId: PersonId, siteId: SiteId): Promise<Result<void, BindSessionRefusal>>;
+  unbindSession(transaction: TableAccess, personId: PersonId): Promise<void>;
   boundSite(personId: PersonId): Promise<SiteId | undefined>;
 }
 
@@ -60,20 +62,20 @@ export interface Authorization {
 export type LicenceLiveState = 'valid' | 'suspended' | 'revoked';
 
 /**
- * Written by the licensing module, inside the same transaction as its own change, so that this must-stay-on module
- * answers from its own table and never calls the may-fail licensing module (Rule D, fitness function F8).
+ * Written by the licensing module, inside the same unit of work as its own change (ADR-13), so that this must-stay-on
+ * module answers from its own table and never calls the may-fail licensing module (Rule D, fitness function F8).
  */
 export interface AccessFacts {
-  recordLicenceState(attendantId: PersonId, state: LicenceLiveState): Promise<void>;
-  recordAttendantSite(attendantId: PersonId, siteId: SiteId): Promise<void>;
-  clearAttendantSite(attendantId: PersonId): Promise<void>;
-  recordInspectorZone(inspectorId: PersonId, zoneId: ZoneId): Promise<void>;
-  recordMemberDistrict(memberId: PersonId, districtId: DistrictId): Promise<void>;
+  recordLicenceState(transaction: TableAccess, attendantId: PersonId, state: LicenceLiveState): Promise<void>;
+  recordAttendantSite(transaction: TableAccess, attendantId: PersonId, siteId: SiteId): Promise<void>;
+  clearAttendantSite(transaction: TableAccess, attendantId: PersonId): Promise<void>;
+  recordInspectorZone(transaction: TableAccess, inspectorId: PersonId, zoneId: ZoneId): Promise<void>;
+  recordMemberDistrict(transaction: TableAccess, memberId: PersonId, districtId: DistrictId): Promise<void>;
 }
 
 /**
- * Port: where a site or zone sits in the hierarchy. The composition root fills it from the site registry, so this
- * module and sites-and-areas never import each other in a circle.
+ * Port: where a site or zone sits in the hierarchy. The composition root fills it from the site registry (P27 Q3), so
+ * this module and sites-and-areas never import each other in a circle.
  */
 export interface SiteLocator {
   locateSite(siteId: SiteId): Promise<{ readonly zoneId: ZoneId; readonly districtId: DistrictId } | undefined>;
@@ -120,6 +122,14 @@ export interface OwnCar {
   readonly plate: string;
 }
 
+/** The car of an assisted ticket and the driver it belongs to: a registered driver, or a walk-in known only by this reference (P15). */
+export interface WalkInCar {
+  readonly carRef: CarRef;
+  readonly driverRef: PersonId;
+}
+
+export type ResidencyRefusal = 'not allowed here' | 'unknown car';
+
 export type ErasureRefusal = 'not allowed' | 'unknown person' | 'already erased';
 
 /** What one erasure touched: rows deleted per table, and rows kept but marked erased per table. */
@@ -132,6 +142,13 @@ export interface PersonalData {
   createPerson(creator: PersonCreator, role: Role, phone: string, displayName: string): Promise<Result<PersonId, CreatePersonRefusal>>;
   /** Saves a car to a driver and returns its reference; ticketing holds the reference, never the plate (task A4). */
   addCar(driverId: PersonId, plate: string): Promise<Result<CarRef, CarRefusal>>;
+  /**
+   * The assisted ticket's car (P15, P28 #32): the car already saved under this plate, or a new car owned by a new
+   * walk-in driver, created inside the caller's unit of work so the ticket and the car commit together (Rule E).
+   */
+  findOrCreateCarByPlate(transaction: TableAccess, plate: string): Promise<Result<WalkInCar, 'invalid plate'>>;
+  /** Ticketing's ownership check before a driver opens a ticket for a car (P28 #32). */
+  carBelongsTo(carRef: CarRef, personId: PersonId): Promise<boolean>;
   ownCars(driverId: PersonId): Promise<readonly OwnCar[]>;
   /**
    * The logged join (task A4, Rule F): the owner, or a reader whose role fits the purpose and who has scope over the
@@ -139,9 +156,13 @@ export interface PersonalData {
    * declares `logged: true` and names the owner as the entry's subject; this module never appends an entry itself.
    */
   readPlate(request: PlateReadRequest): Promise<Result<ServedPlate, PlateReadRefusal>>;
+  /** "Car X is registered at site Y" (P28 #31, task A16), written by a Member of the site's district or the Chair. */
+  registerResidency(actor: PersonId, carRef: CarRef, siteId: SiteId): Promise<Result<void, ResidencyRefusal>>;
+  /** Answered to the fee calculator through the composition root; nobody is a resident until a Member says so. */
+  isResident(carRef: CarRef, siteId: SiteId): Promise<boolean>;
   /**
-   * Deletes the person's name, phone, cars and plates (task A5). The reference stays, so tickets keep it and remain
-   * whole, but it no longer resolves to anyone. A driver erases themself; the Chair erases anyone but a Chair.
+   * Deletes the person's name, phone, cars, plates and residencies (task A5). The reference stays, so tickets keep it
+   * and remain whole, but it no longer resolves to anyone. A driver erases themself; the Chair erases anyone but a Chair.
    */
   erase(actor: PersonId, personId: PersonId): Promise<Result<ErasureReport, ErasureRefusal>>;
 }
@@ -159,17 +180,24 @@ export type SignInRefusal =
   | 'wrong password'
   | 'password not set';
 
-export type PasswordRefusal = 'not a committee member' | 'not allowed' | 'password too short';
+export type PasswordRefusal = 'not a committee member' | 'not allowed' | 'password too short' | 'password too long';
+
+/** A fresh token and the person it names, so the sign-in's audit entry can name its subject. */
+export interface SignedIn {
+  readonly token: string;
+  readonly personId: PersonId;
+}
 
 /**
  * Sign-in by phone and one-time code (task A1). The code goes out through the SignInCodeSender port. Members and the
  * Chair need a second step, their password (task A15): with the code alone they are answered "second step required"
- * and the code stays usable for the second step.
+ * and the code stays usable for the second step. Wrong codes are counted per phone; three lock the phone out, and a
+ * locked phone is refused a new code until the lock-out ends (P23).
  */
 export interface SignIn {
-  requestSignInCode(phone: string): Promise<void>;
-  signIn(phone: string, code: string): Promise<Result<{ token: string }, SignInRefusal>>;
-  signInWithSecondStep(phone: string, code: string, password: string): Promise<Result<{ token: string }, SignInRefusal>>;
+  requestSignInCode(phone: string): Promise<Result<void, 'locked'>>;
+  signIn(phone: string, code: string): Promise<Result<SignedIn, SignInRefusal>>;
+  signInWithSecondStep(phone: string, code: string, password: string): Promise<Result<SignedIn, SignInRefusal>>;
   setCommitteePassword(actor: PersonId, personId: PersonId, password: string): Promise<Result<void, PasswordRefusal>>;
 }
 
@@ -181,8 +209,8 @@ export interface SignInCodeSender {
 /** The sign-in policy: code length and lifetime, wrong codes before a lock-out, and its length. */
 export const SIGN_IN_POLICY: Readonly<Record<keyof typeof POLICY, number>> = POLICY;
 
-/** The roles that need the second sign-in step, and the shortest password accepted. */
-export { COMMITTEE_ROLES, MINIMUM_PASSWORD_LENGTH } from './internal/domain/password';
+/** The roles that need the second sign-in step, and the shortest and longest password accepted. */
+export { COMMITTEE_ROLES, MAXIMUM_PASSWORD_BYTES, MINIMUM_PASSWORD_LENGTH } from './internal/domain/password';
 
 /** The fake sender for tests and for development: it records every code instead of sending it. */
 export class RecordingSignInCodeSender implements SignInCodeSender {
@@ -210,11 +238,15 @@ export interface AccountsAndAccessControlStores {
 }
 
 export interface AccountsAndAccessControlDependencies {
+  /** The committed tables (ADR-13): reads outside a request, and the writes that do not arrive with a unit of work yet. */
+  readonly database: TableAccess;
   readonly stores: AccountsAndAccessControlStores;
   readonly siteLocator: SiteLocator;
   readonly signInCodeSender: SignInCodeSender;
   /** The entry point's token minter, handed in by the composition root (Q4, P27): sign-in never imports the entry point. */
   readonly tokenIssuer: TokenIssuer;
+  /** The server secret that keys the stored hash of every sign-in code (P23). */
+  readonly signInCodeSecret: string;
   readonly clock: Clock;
 }
 
@@ -229,9 +261,10 @@ export interface AccountsAndAccessControl {
 
 /** The composition root builds this module through this one function; nothing else constructs its internals. */
 export function createAccountsAndAccessControl(dependencies: AccountsAndAccessControlDependencies): AccountsAndAccessControl {
-  const { stores, siteLocator, signInCodeSender, tokenIssuer, clock } = dependencies;
-  const authorization = new AuthorizationService({ people: stores.people, accessFacts: stores.accessFacts, siteLocator });
+  const { database, stores, siteLocator, signInCodeSender, tokenIssuer, signInCodeSecret, clock } = dependencies;
+  const authorization = new AuthorizationService({ database, people: stores.people, accessFacts: stores.accessFacts, siteLocator });
   const personalData = new PersonalDataService({
+    database,
     people: stores.people,
     personalData: stores.personalData,
     signInChallenges: stores.signInChallenges,
@@ -239,8 +272,10 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
     accessFacts: stores.accessFacts,
     authorization,
     siteLocator,
+    clock,
   });
   const signIn = new SignInService({
+    database,
     people: stores.people,
     personalData: stores.personalData,
     challenges: stores.signInChallenges,
@@ -248,6 +283,7 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
     authorization,
     codeSender: signInCodeSender,
     tokenIssuer,
+    codeHashSecret: signInCodeSecret,
     clock,
   });
   return {
@@ -259,14 +295,16 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
   };
 }
 
-export function createInMemoryAccountsStores(): AccountsAndAccessControlStores {
+/** The stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database and PostgreSQL later. */
+export function createAccountsStores(): AccountsAndAccessControlStores {
   return {
-    people: new InMemoryPeopleStore(),
-    personalData: new InMemoryPersonalDataStore(),
-    accessFacts: new InMemoryAccessFactsStore(),
-    signInChallenges: new InMemorySignInChallengeStore(),
-    committeePasswords: new InMemoryCommitteePasswordStore(),
+    people: new TablePeopleStore(),
+    personalData: new TablePersonalDataStore(),
+    accessFacts: new TableAccessFactsStore(),
+    signInChallenges: new TableSignInChallengeStore(),
+    committeePasswords: new TableCommitteePasswordStore(),
   };
 }
 
-export { createAccountsOperations } from './internal/operations';
+/** The operations this module registers with the entry point; the composition root calls this once (P4). */
+export { accountsOperations as operations, type AccountsOperationsDependencies } from './internal/operations';

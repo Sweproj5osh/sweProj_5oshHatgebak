@@ -105,7 +105,7 @@ describe('A1 the rest of sign-in', () => {
     if (!member.ok) {
       throw new Error(member.error);
     }
-    await world.accounts.accessFacts.recordMemberDistrict(member.value, 'district-1');
+    await world.accounts.accessFacts.recordMemberDistrict(world.database, member.value, 'district-1');
     await world.accounts.signIn.setCommitteePassword(member.value, member.value, 'a long enough password');
     await world.accounts.signIn.requestSignInCode('01111111111');
     const code = world.codeSender.lastCodeSentTo('+201111111111') ?? '';
@@ -134,7 +134,7 @@ describe('A1 the rest of sign-in', () => {
       error: 'account not live',
     });
 
-    await world.stores.people.setStatus(driver, 'suspended');
+    await world.stores.people.setStatus(world.database, driver, 'suspended');
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
     expect(await world.accounts.signIn.signIn(DRIVER_PHONE, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '')).toEqual({
       ok: false,
@@ -144,7 +144,7 @@ describe('A1 the rest of sign-in', () => {
 
   it('keeps only the hash of the code', async () => {
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
-    const challenge = await world.stores.signInChallenges.find(driver);
+    const challenge = await world.stores.signInChallenges.find(world.database, DRIVER_PHONE);
     expect(challenge?.codeHash).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(challenge)).not.toContain(world.codeSender.lastCodeSentTo(DRIVER_PHONE));
   });

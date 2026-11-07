@@ -36,10 +36,10 @@ beforeEach(async () => {
   attendantOfSiteB = await created(world.accounts.personalData.createPerson(chair, 'attendant', '01033333333', 'Attendant B'));
   inspectorOfZoneA = await created(world.accounts.personalData.createPerson(chair, 'inspector', '01044444444', 'Inspector A'));
   for (const [attendant, siteId] of [[attendantOfSiteA, 'site-a'], [attendantOfSiteB, 'site-b']] as const) {
-    await world.accounts.accessFacts.recordAttendantSite(attendant, siteId);
-    await world.accounts.accessFacts.recordLicenceState(attendant, 'valid');
+    await world.accounts.accessFacts.recordAttendantSite(world.database, attendant, siteId);
+    await world.accounts.accessFacts.recordLicenceState(world.database, attendant, 'valid');
   }
-  await world.accounts.accessFacts.recordInspectorZone(inspectorOfZoneA, 'zone-a');
+  await world.accounts.accessFacts.recordInspectorZone(world.database, inspectorOfZoneA, 'zone-a');
   const added = await world.accounts.personalData.addCar(driver, 'abc 123');
   if (!added.ok) {
     throw new Error(added.error);
@@ -73,7 +73,7 @@ describe('A4 the rest of the join', () => {
     const read = world.accounts.personalData.readPlate.bind(world.accounts.personalData);
     expect(await read({ carRef, reader: attendantOfSiteA, purpose: 'inspector look-up', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
     expect(await read({ carRef, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-b' })).toEqual({ ok: false, error: 'refused' });
-    await world.accounts.accessFacts.recordLicenceState(attendantOfSiteA, 'suspended');
+    await world.accounts.accessFacts.recordLicenceState(world.database, attendantOfSiteA, 'suspended');
     expect(await read({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
   });
 
@@ -95,7 +95,7 @@ describe('A4 the rest of the join', () => {
   });
 
   it('keeps the plate in the personal-data store only', async () => {
-    expect(await world.stores.personalData.car(carRef)).toEqual({ carRef, ownerRef: driver, plate: 'ABC123' });
-    expect(JSON.stringify(await world.stores.people.find(driver))).not.toContain('ABC123');
+    expect(await world.stores.personalData.car(world.database, carRef)).toEqual({ carRef, ownerRef: driver, plate: 'ABC123' });
+    expect(JSON.stringify(await world.stores.people.find(world.database, driver))).not.toContain('ABC123');
   });
 });

@@ -25,15 +25,15 @@ describe('A2 the personal-data store', () => {
   });
 
   it('keeps the name and phone in the personal-data store and only a reference in the people table', async () => {
-    const { accounts, stores } = createAccountsWorld();
+    const { accounts, stores, database } = createAccountsWorld();
     const created = await accounts.personalData.createPerson('self registration', 'driver', '010 1234 5678', '  Mona   Adel ');
     if (!created.ok) {
       throw new Error(`expected the driver to be created, got ${created.error}`);
     }
-    const person = await stores.people.find(created.value);
+    const person = await stores.people.find(database, created.value);
     expect(person).toEqual({ personId: created.value, role: 'driver', status: 'active', erased: false });
     expect(JSON.stringify(person)).not.toMatch(/Mona|1012345678/);
-    expect(await stores.personalData.detailsOf(created.value)).toEqual({
+    expect(await stores.personalData.detailsOf(database, created.value)).toEqual({
       personRef: created.value,
       displayName: 'Mona Adel',
       phone: '+201012345678',

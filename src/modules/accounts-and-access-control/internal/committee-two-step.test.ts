@@ -39,7 +39,7 @@ beforeEach(async () => {
     attendant: await created(world.accounts.personalData.createPerson(chair, 'attendant', PHONES.attendant, 'An Attendant')),
     driver: await created(world.accounts.personalData.createPerson('self registration', 'driver', PHONES.driver, 'A Driver')),
   };
-  await world.accounts.accessFacts.recordLicenceState(people.attendant, 'valid');
+  await world.accounts.accessFacts.recordLicenceState(world.database, people.attendant, 'valid');
   await world.accounts.signIn.setCommitteePassword(people.chair, people.chair, PASSWORD);
   await world.accounts.signIn.setCommitteePassword(people.member, people.member, PASSWORD);
 });
@@ -82,7 +82,7 @@ describe('A15 the rest of the second step', () => {
     expect(await world.accounts.signIn.setCommitteePassword(people.member, people.chair, PASSWORD)).toEqual({ ok: false, error: 'not allowed' });
     expect(await world.accounts.signIn.setCommitteePassword(people.chair, people.attendant, PASSWORD)).toEqual({ ok: false, error: 'not a committee member' });
     expect(await world.accounts.signIn.setCommitteePassword(people.member, people.member, 'short')).toEqual({ ok: false, error: 'password too short' });
-    const stored = await world.stores.committeePasswords.find(people.member);
+    const stored = await world.stores.committeePasswords.find(world.database, people.member);
     expect(stored?.hash).toMatch(/^[0-9a-f]{128}$/);
     expect(JSON.stringify(stored)).not.toContain(PASSWORD);
   });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
 import type { PersonId, Role } from '../../../shared/identifiers';
 import {
   SCOPE_RULE_DESCRIPTIONS,
@@ -31,6 +32,7 @@ interface Cast {
 
 let stores: AccountsAndAccessControlStores;
 let accounts: AccountsAndAccessControl;
+let database: InMemoryDatabase;
 let cast: Cast;
 
 async function created(result: Promise<{ ok: true; value: PersonId } | { ok: false; error: string }>): Promise<PersonId> {
@@ -48,15 +50,15 @@ async function createCast(): Promise<Cast> {
   const inspector = await make(member, 'inspector', '01000000003');
   const attendant = await make(member, 'attendant', '01000000004');
   const driver = await created(accounts.personalData.createPerson('self registration', 'driver', '01000000005', 'driver'));
-  await accounts.accessFacts.recordMemberDistrict(member, 'district-1');
-  await accounts.accessFacts.recordInspectorZone(inspector, 'zone-3');
-  await accounts.accessFacts.recordAttendantSite(attendant, 'site-in-zone-3');
-  await accounts.accessFacts.recordLicenceState(attendant, 'valid');
+  await accounts.accessFacts.recordMemberDistrict(database, member, 'district-1');
+  await accounts.accessFacts.recordInspectorZone(database, inspector, 'zone-3');
+  await accounts.accessFacts.recordAttendantSite(database, attendant, 'site-in-zone-3');
+  await accounts.accessFacts.recordLicenceState(database, attendant, 'valid');
   return { chair, member, inspector, attendant, driver };
 }
 
 beforeEach(async () => {
-  ({ stores, accounts } = createAccountsWorld(siteLocator));
+  ({ stores, accounts, database } = createAccountsWorld(siteLocator));
   cast = await createCast();
 });
 
@@ -78,7 +80,7 @@ describe('A3 permission and scope rules, the task sheet cases', () => {
   it('refuses a revoked attendant on the very next call, without a new sign-in', async () => {
     const atOwnSite = { siteId: 'site-in-zone-3' };
     expect(await accounts.authorization.may(cast.attendant, 'payments.tickCash', atOwnSite)).toBe(true);
-    await accounts.accessFacts.recordLicenceState(cast.attendant, 'revoked');
+    await accounts.accessFacts.recordLicenceState(database, cast.attendant, 'revoked');
     expect(await accounts.authorization.may(cast.attendant, 'payments.tickCash', atOwnSite)).toBe(false);
     expect(await accounts.authorization.liveStatus(cast.attendant)).toBe('revoked');
   });
@@ -97,7 +99,7 @@ describe('A3 the rest of the hierarchy', () => {
   });
 
   it('refuses an attendant whose licence is suspended or was never issued', async () => {
-    await accounts.accessFacts.recordLicenceState(cast.attendant, 'suspended');
+    await accounts.accessFacts.recordLicenceState(database, cast.attendant, 'suspended');
     expect(await accounts.authorization.liveStatus(cast.attendant)).toBe('suspended');
     expect(await accounts.authorization.may(cast.attendant, 'payments.tickCash', { siteId: 'site-in-zone-3' })).toBe(false);
   });
@@ -110,7 +112,7 @@ describe('A3 the rest of the hierarchy', () => {
   });
 
   it('refuses a suspended account and an unknown person', async () => {
-    await stores.people.setStatus(cast.member, 'suspended');
+    await stores.people.setStatus(database, cast.member, 'suspended');
     expect(await accounts.authorization.may(cast.member, 'sites.changeCapacity', { districtId: 'district-1' })).toBe(false);
     expect(await accounts.authorization.may('nobody', 'sites.changeCapacity', { districtId: 'district-1' })).toBe(false);
     expect(await accounts.authorization.liveStatus('nobody')).toBe('revoked');
@@ -131,26 +133,26 @@ describe('A3 the rest of the hierarchy', () => {
 
 describe('A3 binding an attendant session to a site at clock-in', () => {
   it('binds the session to the assigned site, so a ticket request carries its proven site', async () => {
-    expect(await accounts.authorization.bindSessionToSite(cast.attendant, 'site-in-zone-3')).toEqual({ ok: true, value: undefined });
+    expect(await accounts.authorization.bindSessionToSite(database, cast.attendant, 'site-in-zone-3')).toEqual({ ok: true, value: undefined });
     expect(await accounts.authorization.boundSite(cast.attendant)).toBe('site-in-zone-3');
-    await accounts.authorization.unbindSession(cast.attendant);
+    await accounts.authorization.unbindSession(database, cast.attendant);
     expect(await accounts.authorization.boundSite(cast.attendant)).toBeUndefined();
   });
 
   it('refuses to bind to another site, a non-attendant, or an attendant whose licence is not live', async () => {
-    expect(await accounts.authorization.bindSessionToSite(cast.attendant, 'site-in-zone-4')).toEqual({ ok: false, error: 'not assigned to this site' });
-    expect(await accounts.authorization.bindSessionToSite(cast.inspector, 'site-in-zone-3')).toEqual({ ok: false, error: 'only an attendant clocks in' });
-    await accounts.accessFacts.recordLicenceState(cast.attendant, 'suspended');
-    expect(await accounts.authorization.bindSessionToSite(cast.attendant, 'site-in-zone-3')).toEqual({ ok: false, error: 'account or licence not live' });
+    expect(await accounts.authorization.bindSessionToSite(database, cast.attendant, 'site-in-zone-4')).toEqual({ ok: false, error: 'not assigned to this site' });
+    expect(await accounts.authorization.bindSessionToSite(database, cast.inspector, 'site-in-zone-3')).toEqual({ ok: false, error: 'only an attendant clocks in' });
+    await accounts.accessFacts.recordLicenceState(database, cast.attendant, 'suspended');
+    expect(await accounts.authorization.bindSessionToSite(database, cast.attendant, 'site-in-zone-3')).toEqual({ ok: false, error: 'account or licence not live' });
   });
 
   it('drops the binding the moment the licence stops being valid or the attendant moves site', async () => {
-    await accounts.authorization.bindSessionToSite(cast.attendant, 'site-in-zone-3');
-    await accounts.accessFacts.recordLicenceState(cast.attendant, 'suspended');
+    await accounts.authorization.bindSessionToSite(database, cast.attendant, 'site-in-zone-3');
+    await accounts.accessFacts.recordLicenceState(database, cast.attendant, 'suspended');
     expect(await accounts.authorization.boundSite(cast.attendant)).toBeUndefined();
-    await accounts.accessFacts.recordLicenceState(cast.attendant, 'valid');
-    await accounts.authorization.bindSessionToSite(cast.attendant, 'site-in-zone-3');
-    await accounts.accessFacts.recordAttendantSite(cast.attendant, 'site-in-zone-4');
+    await accounts.accessFacts.recordLicenceState(database, cast.attendant, 'valid');
+    await accounts.authorization.bindSessionToSite(database, cast.attendant, 'site-in-zone-3');
+    await accounts.accessFacts.recordAttendantSite(database, cast.attendant, 'site-in-zone-4');
     expect(await accounts.authorization.boundSite(cast.attendant)).toBeUndefined();
   });
 });
