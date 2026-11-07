@@ -36,11 +36,19 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
     if (!actor.ok) {
       return refuse(401, actor.error);
     }
-    if (!dependencies.permissions.allows(actor.value.role, operation.name)) {
+    if (!isPermitted(operation, actor.value, dependencies.permissions)) {
       return refuse(403, `role ${actor.value.role} may not call ${operation.name}`);
     }
     return dispatch(operation, request, actor.value, dependencies);
   };
+}
+
+/** An open read (P10) needs only a valid token; every other operation needs its row in the permission table. */
+function isPermitted(operation: RoleGuardedOperation, actor: Actor, permissions: PermissionTable): boolean {
+  if (operation.kind === 'read' && operation.scope === 'open') {
+    return true;
+  }
+  return permissions.allows(actor.role, operation.name);
 }
 
 function authenticate(request: HttpRequest, secret: string) {

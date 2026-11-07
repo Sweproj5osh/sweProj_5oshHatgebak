@@ -2,12 +2,19 @@ import { InMemoryAuditLogStore } from '../adapters/in-memory/in-memory-audit-log
 import { InMemoryDatabase } from '../adapters/in-memory/in-memory-database';
 import { InMemoryOutboxStore } from '../adapters/in-memory/in-memory-outbox-store';
 import { InMemorySlidingWindowRateLimiter } from '../adapters/in-memory/in-memory-rate-limiter';
+import {
+  createAccountsAndAccessControl,
+  createInMemoryAccountsStores,
+  type AccountsAndAccessControl,
+  type SiteLocator,
+} from '../modules/accounts-and-access-control/public';
 import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-store';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/audit-log/public';
 import { SystemClock, type Clock } from '../shared/clock';
 import type { EventSubscriber } from '../shared/events/event';
 import { OutboxDeliveryJob } from '../shared/events/outbox-delivery-job';
 import type { Operation } from '../shared/operation-contract';
+import type { AccessChecks } from './auth/access-checks';
 import { PermissionTable } from './auth/permission-table';
 import { createRequestHandler, type RequestHandler } from './handle-request';
 import { foundationOperations } from './operations/foundation-operations';
@@ -33,6 +40,15 @@ export function composeRegistry(dependencies: ModuleDependencies, additionalOper
   ]);
 }
 
+/**
+ * No site registry implementation exists on main yet, so the accounts module is told that no site or zone is known;
+ * every scoped request is then refused as "unknown place" until Lino's registry fills this port (see QUESTIONS.md).
+ */
+const NO_SITES_YET: SiteLocator = {
+  locateSite: async () => undefined,
+  locateZone: async () => undefined,
+};
+
 /** The composed registry over fresh in-memory dependencies, for the fitness functions that inspect declarations. */
 export function composeInMemoryRegistry(): OperationRegistry {
   const database = new InMemoryDatabase();
@@ -42,6 +58,8 @@ export function composeInMemoryRegistry(): OperationRegistry {
 export interface InMemoryApplicationOptions {
   readonly tokenSecret: string;
   readonly clock?: Clock;
+  /** Test-only: stands in for the accounts module's Authorization; the server always uses the real one. */
+  readonly accessChecks?: AccessChecks;
   /** Test-only operations registered beside the composed ones; the composed set is never replaced. */
   readonly additionalOperations?: readonly Operation[];
   readonly subscribers?: readonly EventSubscriber[];
@@ -50,6 +68,8 @@ export interface InMemoryApplicationOptions {
 export interface InMemoryApplication {
   readonly handle: RequestHandler;
   readonly database: InMemoryDatabase;
+  /** The accounts module as composed, so the operator and the tests can register people and change their status. */
+  readonly accounts: AccountsAndAccessControl;
   readonly audit: AuditTrail;
   readonly outbox: InMemoryOutboxStore;
   readonly outboxDelivery: OutboxDeliveryJob;
@@ -63,6 +83,7 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
   const database = new InMemoryDatabase();
   const outbox = new InMemoryOutboxStore(database, clock);
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
+  const accounts = createAccountsAndAccessControl({ stores: createInMemoryAccountsStores(), siteLocator: NO_SITES_YET });
   const registry = composeRegistry({ audit }, options.additionalOperations);
   const permissions = new PermissionTable(registry.all());
   const resources: UnitOfWorkResourcesFactory = {
@@ -81,12 +102,14 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
     tokenSecret: options.tokenSecret,
     database,
     resources,
+    accessChecks: options.accessChecks ?? accounts.authorization,
     responses: new InMemoryResponseStore(),
     rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
   });
   return {
     handle,
     database,
+    accounts,
     audit,
     outbox,
     outboxDelivery: new OutboxDeliveryJob(outbox, options.subscribers ?? [], clock),

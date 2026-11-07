@@ -46,6 +46,7 @@ describe('F5: every read that touches personal data is a logged read', () => {
       method: 'GET',
       path: '/bad/plates',
       allowedRoles: ['chair'],
+      scope: 'own',
       audit: { touchesPersonalData: true },
       async handle() {
         return { response: respond(200, {}) };

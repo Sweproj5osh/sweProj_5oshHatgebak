@@ -13,6 +13,7 @@ const readPlate: ReadOperation = {
   method: 'GET',
   path: '/plates',
   allowedRoles: ['inspector', 'chair'],
+  scope: 'own',
   logged: true,
   audit: { touchesPersonalData: true },
   async handle(context) {
@@ -35,6 +36,7 @@ const readOwnCars: ReadOperation = {
   method: 'GET',
   path: '/my/cars',
   allowedRoles: ['driver'],
+  scope: 'own',
   async handle(context) {
     const cars = await context.database.list<{ ownerRef: string }>(CARS_TABLE);
     return { response: respond(200, { count: cars.filter((car) => car.ownerRef === context.actor.personId).length }) };

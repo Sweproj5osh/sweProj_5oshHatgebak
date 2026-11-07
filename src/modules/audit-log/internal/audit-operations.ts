@@ -19,6 +19,7 @@ function readAuditLogByScope(audit: AuditTrail): ReadOperation {
     method: 'GET',
     path: '/audit-log',
     allowedRoles: ['attendant', 'inspector', 'member', 'chair'],
+    scope: 'own',
     async handle(context) {
       return { response: respond(200, { entries: await audit.readByScope(context.actor) }) };
     },
@@ -32,6 +33,7 @@ function verifyAuditChain(audit: AuditTrail): ReadOperation {
     method: 'GET',
     path: '/audit-log/verification',
     allowedRoles: ['chair'],
+    scope: 'own',
     async handle() {
       return { response: respond(200, { chainIntact: await audit.verifyChain() }) };
     },

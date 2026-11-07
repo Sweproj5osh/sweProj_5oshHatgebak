@@ -124,6 +124,14 @@ export interface BodyDeclaration {
 }
 
 /**
+ * Who may read what (P10). `open`: any valid token, for site configuration that nothing personal lives in. `own`: the
+ * role table applies and the handler answers from the actor's own records. `staff-scoped`: the role table applies and
+ * then Authorization decides with the same scope ladder writes use (Chair everywhere, Member in the district,
+ * Inspector in the zone, Attendant at the own site), for anything naming a person, a plate, a shift or money.
+ */
+export type ReadScope = 'open' | 'own' | 'staff-scoped';
+
+/**
  * A read. When `logged` is true the pipeline requires a request id, opens a unit of work, runs the handler and writes
  * one redacted audit entry (operation, actor, request id, the subject the handler names), then commits (P9). Modules
  * never append entries themselves.
@@ -131,6 +139,7 @@ export interface BodyDeclaration {
 export interface ReadOperation extends OperationBase {
   readonly kind: 'read';
   readonly method: 'GET';
+  readonly scope: ReadScope;
   readonly logged?: boolean;
   readonly audit?: ReadAuditDeclaration;
   handle(context: ReadContext): Promise<ReadOutcome>;
