@@ -52,7 +52,7 @@ Records: ADR-03, ADR-07, ADR-08, ADR-10, ADR-11.
 
 ---
 
-## Area 2 — Identity and registry (Teammate A)
+## Area 2 — Identity and registry (Lino (Teammate A))
 Records: ADR-02, ADR-05, ADR-06, ADR-10. Covers people, roles, scope, personal data, districts and sites, licences,
 assignments and attendance.
 
@@ -76,7 +76,7 @@ assignments and attendance.
 
 ---
 
-## Area 3 — Parking and prices (Teammate B)
+## Area 3 — Parking and prices (Karim (Teammate B))
 Records: ADR-01, ADR-02, ADR-06, ADR-08, ADR-09. Covers the committee's prices, the fee, tickets, the free-space count,
 the receipt, and fitness functions F3 and F4.
 
@@ -101,7 +101,7 @@ the receipt, and fitness functions F3 and F4.
 
 ---
 
-## Area 4 — Money and governance (Teammate C)
+## Area 4 — Money and governance (Amina (Teammate C))
 Records: ADR-02, ADR-07, ADR-08, ADR-10, ADR-12. Covers payments, cash custody, requests and approvals, the money check
 and the dashboard.
 
@@ -128,7 +128,7 @@ and the dashboard.
 
 ---
 
-## Area 5 — Apps, messages, complaints, then the assistant (Teammate D)
+## Area 5 — Apps, messages, complaints, then the assistant (Mahi (Teammate D))
 Records: ADR-04, ADR-05, ADR-07, ADR-09. Covers the Driver App, the Staff App (three modes and the web build),
 notifications, photo evidence, complaints, inspections, ratings and disputes, and in week 4 the assistant service.
 

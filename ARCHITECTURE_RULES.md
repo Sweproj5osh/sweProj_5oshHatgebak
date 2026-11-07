@@ -38,20 +38,20 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 ## 5. The fourteen modules and their owners (ADR-02)
 | Module (folder under `src/modules/`) | Public interfaces | Owner | Set |
 |---|---|---|---|
-| `accounts-and-access-control` | `Authorization`, `PersonalData` | Teammate A | must stay on |
-| `sites-and-areas` | `SiteRegistry` | Teammate A | must stay on |
-| `ticketing` | `TicketDesk`, `TicketQuery` | Teammate B | must stay on |
-| `committee-prices` | `PriceList`, `FeeCalculator` | Teammate B | must stay on |
-| `payments` | `PaymentLedger`, port `PaymentGateway` | Teammate C | must stay on |
+| `accounts-and-access-control` | `Authorization`, `PersonalData` | Lino (Teammate A) | must stay on |
+| `sites-and-areas` | `SiteRegistry` | Lino (Teammate A) | must stay on |
+| `ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
+| `committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
+| `payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
 | `audit-log` | `AuditTrail` | Zeyad | must stay on |
-| `cash-custody` | `DepositLedger` | Teammate C | may fail |
-| `licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Teammate A | may fail |
-| `approvals` | `ApprovalDesk` | Teammate C | may fail |
-| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Teammate D | may fail |
-| `money-check-dashboard` | `MoneyCheck` | Teammate C | may fail |
+| `cash-custody` | `DepositLedger` | Amina (Teammate C) | may fail |
+| `licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
+| `approvals` | `ApprovalDesk` | Amina (Teammate C) | may fail |
+| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
+| `money-check-dashboard` | `MoneyCheck` | Amina (Teammate C) | may fail |
 | `scheduler` | none (it calls others) | Zeyad | may fail |
-| `notifications` | `Notifier`, port `MessageDelivery` | Teammate D | may fail |
-| `evidence` | `EvidenceStore`, port `PhotoStorage` | Teammate D | may fail |
+| `notifications` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
+| `evidence` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |
 
 "Must stay on" means a driver cannot park without it. "May fail" means it fails gracefully and the rest keeps working.
 
