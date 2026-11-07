@@ -1,11 +1,36 @@
 /**
- * The off-site rule of task A14: a flag is raised when the latest three location points of one shift are all more than
- * 300 metres from the site. One stray reading never raises a flag; a sustained absence does. In one place for review.
+ * The off-site rule of task A14 (P11): engineering defaults until the committee rules, listed in the "still to decide"
+ * list. The server decides the flag from the distances it computed itself (Rule A, Rule I).
  */
-export const OFF_SITE_POLICY = { distanceMeters: 300, consecutivePoints: 3 } as const;
 
-/** Distances in metres from the site, oldest first, for the current attendance only. */
-export function isOffSite(distancesOldestFirst: readonly number[]): boolean {
-  const latest = distancesOldestFirst.slice(-OFF_SITE_POLICY.consecutivePoints);
-  return latest.length === OFF_SITE_POLICY.consecutivePoints && latest.every((distance) => distance > OFF_SITE_POLICY.distanceMeters);
+/** A reading farther than this from the site's centre counts as away from the site. */
+export const OFF_SITE_RADIUS_METERS = 300;
+
+/** Readings must have stayed away for at least this long, without one reading back at the site, before the flag. */
+export const OFF_SITE_MINUTES_BEFORE_FLAG = 10;
+
+/** The rule's numbers in one object, for the report and for review. */
+export const OFF_SITE_POLICY = { radiusMeters: OFF_SITE_RADIUS_METERS, minutesBeforeFlag: OFF_SITE_MINUTES_BEFORE_FLAG } as const;
+
+export interface DistanceReading {
+  readonly distanceMeters: number;
+  readonly recordedAt: string;
+}
+
+/**
+ * True when the latest readings of one shift are all beyond the radius and the oldest of that unbroken run is at least
+ * the rule's minutes old. One stray reading never raises a flag; a reading back at the site starts the count afresh.
+ */
+export function isOffSite(readingsOldestFirst: readonly DistanceReading[], now: Date): boolean {
+  const awayRun = trailingRunAway(readingsOldestFirst);
+  const oldestAway = awayRun[0];
+  if (oldestAway === undefined || awayRun.length < 2) {
+    return false;
+  }
+  return now.getTime() - new Date(oldestAway.recordedAt).getTime() >= OFF_SITE_MINUTES_BEFORE_FLAG * 60_000;
+}
+
+function trailingRunAway(readingsOldestFirst: readonly DistanceReading[]): readonly DistanceReading[] {
+  const lastAtSite = readingsOldestFirst.findLastIndex((reading) => reading.distanceMeters <= OFF_SITE_RADIUS_METERS);
+  return readingsOldestFirst.slice(lastAtSite + 1);
 }

@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LicenceId, PersonId } from '../../../shared/identifiers';
-import { createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
+import { approvalUnitOfWork, createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 
 /** Task A11: issue a licence; move it valid → suspended → revoked only when an approved request says so. */
 let world: LicensingWorld;
 let attendant: PersonId;
 let licenceId: LicenceId;
+
+/** An approved change the way Approvals applies it: inside a unit of work that is then committed. */
+async function applyApproved(licence: LicenceId, to: 'valid' | 'suspended' | 'revoked', approvalRequestId: string) {
+  const unitOfWork = approvalUnitOfWork(world);
+  const outcome = await world.licensing.licences.applyApprovedStateChange(unitOfWork, licence, to, approvalRequestId);
+  await (outcome.ok ? unitOfWork.transaction.commit() : unitOfWork.transaction.rollback());
+  return outcome;
+}
 
 beforeEach(async () => {
   world = await createLicensingWorld();
@@ -16,7 +24,7 @@ beforeEach(async () => {
 
 describe('A11 the task sheet cases', () => {
   it('refuses a direct suspension: "needs an approved request"', async () => {
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'request-never-approved')).toEqual({
+    expect(await applyApproved(licenceId, 'suspended', 'request-never-approved')).toEqual({
       ok: false,
       error: 'needs an approved request',
     });
@@ -25,7 +33,7 @@ describe('A11 the task sheet cases', () => {
 
   it('suspends through an approved request', async () => {
     world.approvals.approve('approval-1', licenceId, 'suspended');
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-1')).toEqual({ ok: true, value: undefined });
+    expect(await applyApproved(licenceId, 'suspended', 'approval-1')).toEqual({ ok: true, value: undefined });
     expect(await world.licensing.licences.statusOf(attendant)).toBe('suspended');
   });
 });
@@ -33,12 +41,12 @@ describe('A11 the task sheet cases', () => {
 describe('A11 the rest of the licence rules', () => {
   it('refuses an approval that orders another move or another licence', async () => {
     world.approvals.approve('approval-for-revocation', licenceId, 'revoked');
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-for-revocation')).toEqual({
+    expect(await applyApproved(licenceId, 'suspended', 'approval-for-revocation')).toEqual({
       ok: false,
       error: 'needs an approved request',
     });
     world.approvals.approve('approval-for-another-licence', 'licence-of-someone-else', 'suspended');
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-for-another-licence')).toEqual({
+    expect(await applyApproved(licenceId, 'suspended', 'approval-for-another-licence')).toEqual({
       ok: false,
       error: 'needs an approved request',
     });
@@ -48,17 +56,17 @@ describe('A11 the rest of the licence rules', () => {
     world.approvals.approve('approval-1', licenceId, 'suspended');
     world.approvals.approve('approval-2', licenceId, 'revoked');
     world.approvals.approve('approval-3', licenceId, 'valid');
-    valueOf(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-1'));
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'valid', 'approval-3')).toEqual({ ok: false, error: 'not a permitted change' });
-    valueOf(await world.licensing.licences.applyApprovedStateChange(licenceId, 'revoked', 'approval-2'));
-    expect(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-1')).toEqual({ ok: false, error: 'not a permitted change' });
+    valueOf(await applyApproved(licenceId, 'suspended', 'approval-1'));
+    expect(await applyApproved(licenceId, 'valid', 'approval-3')).toEqual({ ok: false, error: 'not a permitted change' });
+    valueOf(await applyApproved(licenceId, 'revoked', 'approval-2'));
+    expect(await applyApproved(licenceId, 'suspended', 'approval-1')).toEqual({ ok: false, error: 'not a permitted change' });
     expect(await world.licensing.licences.statusOf(attendant)).toBe('revoked');
   });
 
   it('blocks the attendant in access control on the very next call after the approved suspension', async () => {
     expect(await world.accounts.authorization.may(attendant, 'payments.tickCash', { siteId: world.siteOne })).toBe(true);
     world.approvals.approve('approval-1', licenceId, 'suspended');
-    valueOf(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-1'));
+    valueOf(await applyApproved(licenceId, 'suspended', 'approval-1'));
     expect(await world.accounts.authorization.may(attendant, 'payments.tickCash', { siteId: world.siteOne })).toBe(false);
     expect(await world.accounts.authorization.liveStatus(attendant)).toBe('suspended');
   });
@@ -77,8 +85,21 @@ describe('A11 the rest of the licence rules', () => {
     expect(await world.licensing.licences.issueLicence(world.memberOfDistrictOne, elsewhere)).toEqual({ ok: false, error: 'not allowed here' });
   });
 
-  it('refuses a change to an unknown licence', async () => {
-    expect(await world.licensing.licences.applyApprovedStateChange('no-such-licence', 'suspended', 'approval-1')).toEqual({ ok: false, error: 'unknown licence' });
+  it('refuses a change to an unknown licence, and answers an attendant with no licence with no state and no history (P23 #10)', async () => {
+    expect(await applyApproved('no-such-licence', 'suspended', 'approval-1')).toEqual({ ok: false, error: 'unknown licence' });
+    const unlicensed = await createPerson(world, 'attendant');
+    expect(await world.licensing.licences.statusOf(unlicensed)).toBeUndefined();
+    expect(await world.licensing.licences.history('no-such-licence')).toEqual([]);
+  });
+
+  it('keeps "revoked" final: no approved request moves a revoked licence anywhere, not even back to valid (P24)', async () => {
+    world.approvals.approve('approval-revoke', licenceId, 'revoked');
+    world.approvals.approve('approval-back', licenceId, 'valid');
+    world.approvals.approve('approval-suspend', licenceId, 'suspended');
+    valueOf(await applyApproved(licenceId, 'revoked', 'approval-revoke'));
+    expect(await applyApproved(licenceId, 'valid', 'approval-back')).toEqual({ ok: false, error: 'not a permitted change' });
+    expect(await applyApproved(licenceId, 'suspended', 'approval-suspend')).toEqual({ ok: false, error: 'not a permitted change' });
+    expect(await world.licensing.licences.statusOf(attendant)).toBe('revoked');
   });
 });
 
@@ -86,9 +107,9 @@ describe('A11 report', () => {
   it('keeps every state change with the approval that ordered it', async () => {
     world.approvals.approve('approval-1', licenceId, 'suspended');
     world.approvals.approve('approval-2', licenceId, 'revoked');
-    valueOf(await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'approval-1'));
-    valueOf(await world.licensing.licences.applyApprovedStateChange(licenceId, 'revoked', 'approval-2'));
-    await world.licensing.licences.applyApprovedStateChange(licenceId, 'suspended', 'not-approved');
+    valueOf(await applyApproved(licenceId, 'suspended', 'approval-1'));
+    valueOf(await applyApproved(licenceId, 'revoked', 'approval-2'));
+    await applyApproved(licenceId, 'suspended', 'not-approved');
 
     const history = await world.licensing.licences.history(licenceId);
     expect(history.map((change) => [change.from, change.to, change.approvalRequestId])).toEqual([

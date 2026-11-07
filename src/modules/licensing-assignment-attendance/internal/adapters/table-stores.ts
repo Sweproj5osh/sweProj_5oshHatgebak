@@ -1,4 +1,5 @@
 import type { LicenceId, PersonId, ZoneId } from '../../../../shared/identifiers';
+import type { Row, TableAccess } from '../../../../shared/unit-of-work';
 import type {
   AttendanceRow,
   AttendanceStore,
@@ -14,116 +15,156 @@ import type {
   OffSiteStore,
 } from '../ports';
 
-/** In-memory stand-ins for this module's tables, used by every test. */
-export class InMemoryAssignmentsStore implements AssignmentsStore {
-  private readonly attendants = new Map<PersonId, AttendantAssignment>();
-  private readonly inspectors = new Map<PersonId, InspectorAssignment>();
-  private readonly members = new Map<PersonId, MemberAppointment>();
+/**
+ * This module's stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database of every
+ * test and a PostgreSQL unit of work later. Table names follow `db/migrations/0002_identity_and_registry.sql`.
+ */
+export const ATTENDANT_ASSIGNMENTS_TABLE = 'licensing_assignment_attendance.attendant_assignments';
+export const INSPECTOR_ASSIGNMENTS_TABLE = 'licensing_assignment_attendance.inspector_assignments';
+export const MEMBER_APPOINTMENTS_TABLE = 'licensing_assignment_attendance.member_appointments';
+export const LICENCES_TABLE = 'licensing_assignment_attendance.licences';
+export const LICENCE_STATE_CHANGES_TABLE = 'licensing_assignment_attendance.licence_state_changes';
+export const ATTENDANCE_TABLE = 'licensing_assignment_attendance.attendance';
+export const LOCATION_READINGS_TABLE = 'licensing_assignment_attendance.location_readings';
+export const OFF_SITE_FLAGS_TABLE = 'licensing_assignment_attendance.off_site_flags';
 
-  async attendant(attendantId: PersonId): Promise<AttendantAssignment | undefined> {
-    return this.attendants.get(attendantId);
+export class TableAssignmentsStore implements AssignmentsStore {
+  attendant(tables: TableAccess, attendantId: PersonId): Promise<AttendantAssignment | undefined> {
+    return tables.read<AttendantAssignment>(ATTENDANT_ASSIGNMENTS_TABLE, attendantId);
   }
 
-  async saveAttendant(assignment: AttendantAssignment): Promise<void> {
-    this.attendants.set(assignment.attendantId, assignment);
+  saveAttendant(tables: TableAccess, assignment: AttendantAssignment): Promise<void> {
+    return upsert(tables, ATTENDANT_ASSIGNMENTS_TABLE, assignment.attendantId, assignment);
   }
 
-  async removeAttendant(attendantId: PersonId): Promise<void> {
-    this.attendants.delete(attendantId);
+  async removeAttendant(tables: TableAccess, attendantId: PersonId): Promise<void> {
+    if ((await this.attendant(tables, attendantId)) !== undefined) {
+      await tables.remove(ATTENDANT_ASSIGNMENTS_TABLE, attendantId);
+    }
   }
 
-  async inspector(inspectorId: PersonId): Promise<InspectorAssignment | undefined> {
-    return this.inspectors.get(inspectorId);
+  inspector(tables: TableAccess, inspectorId: PersonId): Promise<InspectorAssignment | undefined> {
+    return tables.read<InspectorAssignment>(INSPECTOR_ASSIGNMENTS_TABLE, inspectorId);
   }
 
-  async saveInspector(assignment: InspectorAssignment): Promise<void> {
-    this.inspectors.set(assignment.inspectorId, assignment);
+  saveInspector(tables: TableAccess, assignment: InspectorAssignment): Promise<void> {
+    return upsert(tables, INSPECTOR_ASSIGNMENTS_TABLE, assignment.inspectorId, assignment);
   }
 
-  async member(memberId: PersonId): Promise<MemberAppointment | undefined> {
-    return this.members.get(memberId);
+  member(tables: TableAccess, memberId: PersonId): Promise<MemberAppointment | undefined> {
+    return tables.read<MemberAppointment>(MEMBER_APPOINTMENTS_TABLE, memberId);
   }
 
-  async saveMember(appointment: MemberAppointment): Promise<void> {
-    this.members.set(appointment.memberId, appointment);
+  saveMember(tables: TableAccess, appointment: MemberAppointment): Promise<void> {
+    return upsert(tables, MEMBER_APPOINTMENTS_TABLE, appointment.memberId, appointment);
   }
 
-  async count(): Promise<number> {
-    return this.attendants.size + this.inspectors.size + this.members.size;
-  }
-}
-
-export class InMemoryLicencesStore implements LicencesStore {
-  private readonly licences = new Map<LicenceId, LicenceRow>();
-  private readonly changes: LicenceStateChangeRow[] = [];
-
-  async add(licence: LicenceRow): Promise<void> {
-    this.licences.set(licence.licenceId, licence);
-  }
-
-  async find(licenceId: LicenceId): Promise<LicenceRow | undefined> {
-    return this.licences.get(licenceId);
-  }
-
-  async ofAttendant(attendantId: PersonId): Promise<LicenceRow | undefined> {
-    return [...this.licences.values()].find((licence) => licence.attendantId === attendantId);
-  }
-
-  async appendChange(change: LicenceStateChangeRow): Promise<void> {
-    this.changes.push(change);
-  }
-
-  async changesOf(licenceId: LicenceId): Promise<readonly LicenceStateChangeRow[]> {
-    return this.changes.filter((change) => change.licenceId === licenceId);
+  async count(tables: TableAccess): Promise<number> {
+    const [attendants, inspectors, members] = await Promise.all([
+      tables.list(ATTENDANT_ASSIGNMENTS_TABLE),
+      tables.list(INSPECTOR_ASSIGNMENTS_TABLE),
+      tables.list(MEMBER_APPOINTMENTS_TABLE),
+    ]);
+    return attendants.length + inspectors.length + members.length;
   }
 }
 
-export class InMemoryAttendanceStore implements AttendanceStore {
-  private readonly rows: AttendanceRow[] = [];
+/** The insert order, kept in the row so a history reads oldest first whatever the storage returns. */
+interface Sequenced {
+  readonly sequence: number;
+}
 
-  async open(attendantId: PersonId): Promise<AttendanceRow | undefined> {
-    return this.rows.find((row) => row.attendantId === attendantId && row.clockedOutAt === undefined);
+export class TableLicencesStore implements LicencesStore {
+  async add(tables: TableAccess, licence: LicenceRow): Promise<void> {
+    await tables.insert(LICENCES_TABLE, licence.licenceId, licence);
   }
 
-  async add(row: AttendanceRow): Promise<void> {
-    this.rows.push(row);
+  find(tables: TableAccess, licenceId: LicenceId): Promise<LicenceRow | undefined> {
+    return tables.read<LicenceRow>(LICENCES_TABLE, licenceId);
   }
 
-  async close(attendanceId: string, clockedOutAt: string): Promise<void> {
-    const index = this.rows.findIndex((row) => row.attendanceId === attendanceId);
-    const row = this.rows[index];
+  async ofAttendant(tables: TableAccess, attendantId: PersonId): Promise<LicenceRow | undefined> {
+    return (await tables.list<LicenceRow>(LICENCES_TABLE)).find((licence) => licence.attendantId === attendantId);
+  }
+
+  async appendChange(tables: TableAccess, change: LicenceStateChangeRow): Promise<void> {
+    await appendSequenced(tables, LICENCE_STATE_CHANGES_TABLE, change);
+  }
+
+  async changesOf(tables: TableAccess, licenceId: LicenceId): Promise<readonly LicenceStateChangeRow[]> {
+    return listSequenced<LicenceStateChangeRow>(tables, LICENCE_STATE_CHANGES_TABLE, (change) => change.licenceId === licenceId);
+  }
+}
+
+export class TableAttendanceStore implements AttendanceStore {
+  async open(tables: TableAccess, attendantId: PersonId): Promise<AttendanceRow | undefined> {
+    return (await this.ofAttendant(tables, attendantId)).find((row) => row.clockedOutAt === undefined);
+  }
+
+  async latest(tables: TableAccess, attendantId: PersonId): Promise<AttendanceRow | undefined> {
+    return (await this.ofAttendant(tables, attendantId)).at(-1);
+  }
+
+  async add(tables: TableAccess, row: AttendanceRow): Promise<void> {
+    await appendSequenced(tables, ATTENDANCE_TABLE, row, row.attendanceId);
+  }
+
+  async close(tables: TableAccess, attendanceId: string, clockedOutAt: string): Promise<void> {
+    const row = await tables.read<AttendanceRow & Sequenced>(ATTENDANCE_TABLE, attendanceId);
     if (row === undefined) {
       throw new Error(`No attendance with the id ${attendanceId}`);
     }
-    this.rows[index] = { ...row, clockedOutAt };
+    await tables.replace(ATTENDANCE_TABLE, attendanceId, { ...row, clockedOutAt });
   }
 
-  async all(): Promise<readonly AttendanceRow[]> {
-    return [...this.rows];
+  all(tables: TableAccess): Promise<readonly AttendanceRow[]> {
+    return listSequenced<AttendanceRow>(tables, ATTENDANCE_TABLE, () => true);
+  }
+
+  private ofAttendant(tables: TableAccess, attendantId: PersonId): Promise<readonly AttendanceRow[]> {
+    return listSequenced<AttendanceRow>(tables, ATTENDANCE_TABLE, (row) => row.attendantId === attendantId);
   }
 }
 
-export class InMemoryOffSiteStore implements OffSiteStore {
-  private readonly readings: LocationReading[] = [];
-  private readonly flags: OffSiteFlagRow[] = [];
-
-  async addReading(reading: LocationReading): Promise<void> {
-    this.readings.push(reading);
+export class TableOffSiteStore implements OffSiteStore {
+  async addReading(tables: TableAccess, reading: LocationReading): Promise<void> {
+    await appendSequenced(tables, LOCATION_READINGS_TABLE, reading);
   }
 
-  async readingsOf(attendanceId: string): Promise<readonly LocationReading[]> {
-    return this.readings.filter((reading) => reading.attendanceId === attendanceId);
+  readingsOf(tables: TableAccess, attendanceId: string): Promise<readonly LocationReading[]> {
+    return listSequenced<LocationReading>(tables, LOCATION_READINGS_TABLE, (reading) => reading.attendanceId === attendanceId);
   }
 
-  async flagOf(attendanceId: string): Promise<OffSiteFlagRow | undefined> {
-    return this.flags.find((flag) => flag.attendanceId === attendanceId);
+  async flagOf(tables: TableAccess, attendanceId: string): Promise<OffSiteFlagRow | undefined> {
+    return (await tables.list<OffSiteFlagRow>(OFF_SITE_FLAGS_TABLE)).find((flag) => flag.attendanceId === attendanceId);
   }
 
-  async addFlag(flag: OffSiteFlagRow): Promise<void> {
-    this.flags.push(flag);
+  async addFlag(tables: TableAccess, flag: OffSiteFlagRow): Promise<void> {
+    await tables.insert(OFF_SITE_FLAGS_TABLE, flag.flagId, flag);
   }
 
-  async flagsIn(zoneId: ZoneId): Promise<readonly OffSiteFlagRow[]> {
-    return this.flags.filter((flag) => flag.zoneId === zoneId);
+  async flagsIn(tables: TableAccess, zoneId: ZoneId): Promise<readonly OffSiteFlagRow[]> {
+    return (await tables.list<OffSiteFlagRow>(OFF_SITE_FLAGS_TABLE)).filter((flag) => flag.zoneId === zoneId);
   }
+}
+
+async function upsert(tables: TableAccess, table: string, key: string, row: Row): Promise<void> {
+  if ((await tables.read(table, key)) === undefined) {
+    await tables.insert(table, key, row);
+  } else {
+    await tables.replace(table, key, row);
+  }
+}
+
+/** Appends a row with the next sequence number; the key defaults to the sequence, for insert-only tables without an id. */
+async function appendSequenced(tables: TableAccess, table: string, row: Row, key?: string): Promise<void> {
+  const sequence = (await tables.list(table)).length + 1;
+  await tables.insert(table, key ?? String(sequence), { ...row, sequence });
+}
+
+async function listSequenced<Stored extends Row>(tables: TableAccess, table: string, matches: (row: Stored) => boolean): Promise<readonly Stored[]> {
+  return (await tables.list<Stored & Sequenced>(table))
+    .filter(matches)
+    .sort((first, second) => first.sequence - second.sequence)
+    .map(({ sequence: _order, ...row }) => row as unknown as Stored);
 }

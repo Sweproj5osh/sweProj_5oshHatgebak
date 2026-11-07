@@ -5,34 +5,50 @@ import {
   respond,
   type Operation,
   type ReadOperation,
+  type TelemetryOperation,
   type WriteContext,
   type WriteOperation,
   type WriteOutcome,
 } from '../../../shared/operation-contract';
 import type { Result } from '../../../shared/result';
-import type { SiteRegistry } from '../../sites-and-areas/public';
-import type { AssignmentRefusal, ClockInRefusal, LicenceRefusal, LicensingAssignmentAttendance } from '../public';
+import type { TableAccess } from '../../../shared/unit-of-work';
+import { createAccountsStores } from '../../accounts-and-access-control/public';
+import { createSitesStores, signedSiteCodes, type SiteRegistry } from '../../sites-and-areas/public';
+import {
+  createLicensingStores,
+  type AssignmentRefusal,
+  type ClockInRefusal,
+  type ClockOutRefusal,
+  type LicenceRefusal,
+  type LicensingAssignmentAttendance,
+} from '../public';
+
+export interface LicensingOperationsDependencies {
+  readonly licensing: LicensingAssignmentAttendance;
+  readonly siteRegistry: SiteRegistry;
+  /** The secret the site codes are signed with; the clock-in and clock-out sample bodies carry a code signed the same way. */
+  readonly siteCodeSecret: string;
+}
 
 /**
- * The requests this module answers, for the composition root to register. The entry point writes the one audit entry
- * after a handler succeeds; the handler names the person the change is about, so that person can read the entry, and
- * the district, so its members can (ADR-10).
- *
- * Not registered yet: the attendant's location reading (task A14). The entry point copies the whole body into the
- * permanent audit entry, so every reading's coordinates would stay in the audit log for ever, while this module keeps
- * only the distance (question 3 for the foundation owner).
+ * The requests this module answers, for the composition root to register (P4). The entry point writes the one audit
+ * entry after a handler succeeds; the handler names the person the change is about, so that person can read the entry,
+ * and the district, so its members can (ADR-10). A location reading is a measurement, not an action (P7): it is the one
+ * telemetry operation, with no request id, no audit entry and no event; the flag it may raise stays an audited fact.
  */
-export function createLicensingOperations(module: LicensingAssignmentAttendance, registry: SiteRegistry): readonly Operation[] {
-  const { assignments } = module;
-  const districtOfSite = async (siteId: unknown) => (await registry.locateSite(String(siteId)))?.districtId;
-  const districtOfZone = async (zoneId: unknown) => (await registry.locateZone(String(zoneId)))?.districtId;
+export function licensingOperations({ licensing, siteRegistry, siteCodeSecret }: LicensingOperationsDependencies): readonly Operation[] {
+  const { assignments } = licensing;
+  const districtOfSite = async (siteId: unknown) => (await siteRegistry.locateSite(String(siteId)))?.districtId;
+  const districtOfZone = async (zoneId: unknown) => (await siteRegistry.locateZone(String(zoneId)))?.districtId;
+  const sampleCodes = signedSiteCodes(siteCodeSecret, SAMPLE.siteId);
   return [
     assignmentWrite({
       name: 'assignments.assignAttendant',
       path: '/assignments/attendants',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string', siteId: 'string', shiftId: 'string' },
-      example: { attendantId: 'person-1', siteId: 'site-1', shiftId: 'morning' },
+      example: { attendantId: SAMPLE.attendant, siteId: SAMPLE.siteId, shiftId: 'morning' },
+      fixture: seedMemberAndAttendantAtSiteOne,
       subject: 'attendantId',
       change: ({ actor, body }) => assignments.assignAttendantToSite(actor.personId, String(body['attendantId']), String(body['siteId']), String(body['shiftId'])),
       district: ({ body }) => districtOfSite(body['siteId']),
@@ -42,7 +58,8 @@ export function createLicensingOperations(module: LicensingAssignmentAttendance,
       path: '/assignments/attendants/shift',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string', shiftId: 'string' },
-      example: { attendantId: 'person-1', shiftId: 'evening' },
+      example: { attendantId: SAMPLE.attendant, shiftId: 'evening' },
+      fixture: seedAssignedAttendant,
       subject: 'attendantId',
       change: ({ actor, body }) => assignments.changeShift(actor.personId, String(body['attendantId']), String(body['shiftId'])),
       district: async ({ body }) => districtOfSite(await assignments.siteOf(String(body['attendantId']))),
@@ -52,7 +69,8 @@ export function createLicensingOperations(module: LicensingAssignmentAttendance,
       path: '/assignments/attendants/release',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string' },
-      example: { attendantId: 'person-1' },
+      example: { attendantId: SAMPLE.attendant },
+      fixture: seedAssignedAttendant,
       subject: 'attendantId',
       change: ({ actor, body }) => assignments.releaseAttendant(actor.personId, String(body['attendantId'])),
       district: async ({ body }) => districtOfSite(await assignments.siteOf(String(body['attendantId']))),
@@ -62,21 +80,31 @@ export function createLicensingOperations(module: LicensingAssignmentAttendance,
       path: '/assignments/inspectors',
       allowedRoles: ['member', 'chair'],
       fields: { inspectorId: 'string', zoneId: 'string' },
-      example: { inspectorId: 'person-2', zoneId: 'zone-1' },
+      example: { inspectorId: SAMPLE.inspector, zoneId: SAMPLE.zoneId },
+      fixture: async (database) => {
+        await seedMemberAndPlaces(database);
+        await seedPerson(database, SAMPLE.inspector, 'inspector');
+      },
       subject: 'inspectorId',
       change: ({ actor, body }) => assignments.assignInspectorToZone(actor.personId, String(body['inspectorId']), String(body['zoneId'])),
       district: ({ body }) => districtOfZone(body['zoneId']),
     }),
-    issueLicence(module, districtOfSite),
-    clockIn(module, districtOfSite),
-    clockOut(module, districtOfSite),
-    readOffSiteFlags(module),
+    issueLicence(licensing, districtOfSite),
+    readLicenceStatus(licensing),
+    clockIn(licensing, districtOfSite, sampleCodes.entryCode),
+    clockOut(licensing, districtOfSite, sampleCodes.exitCode),
+    recordLocation(licensing),
+    readOffSiteFlags(licensing),
     assignmentWrite({
       name: 'assignments.appointMember',
       path: '/assignments/members',
       allowedRoles: ['chair'],
       fields: { memberId: 'string', districtId: 'string' },
-      example: { memberId: 'person-3', districtId: 'district-1' },
+      example: { memberId: SAMPLE.member, districtId: SAMPLE.districtId },
+      fixture: async (database) => {
+        await seedPerson(database, SAMPLE.chair, 'chair');
+        await seedMemberAndPlaces(database);
+      },
       subject: 'memberId',
       change: ({ actor, body }) => assignments.appointMemberToDistrict(actor.personId, String(body['memberId']), String(body['districtId'])),
       district: async ({ body }) => String(body['districtId']),
@@ -96,7 +124,8 @@ function issueLicence(module: LicensingAssignmentAttendance, districtOfSite: (si
     path: '/licences',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { attendantId: 'string' } },
-    examples: { valid: { attendantId: 'person-1' }, invalid: { attendantId: 1 } },
+    examples: { valid: { attendantId: SAMPLE.attendant }, invalid: { attendantId: 1 } },
+    fixture: seedAssignedAttendant,
     async handle({ actor, body }) {
       const attendantId = String(body['attendantId']);
       const issued = await module.licences.issueLicence(actor.personId, attendantId);
@@ -121,8 +150,27 @@ const LICENCE_REFUSAL_STATUS: Readonly<Record<LicenceRefusal, number>> = {
   'not allowed here': 403,
 };
 
+/** GET /licences/status?attendantId=…&siteId=…: an attendant never licensed is a valid answer, with no state and no history (P23 #10). */
+function readLicenceStatus(module: LicensingAssignmentAttendance): ReadOperation {
+  return {
+    kind: 'read',
+    name: 'licences.status',
+    method: 'GET',
+    path: '/licences/status',
+    allowedRoles: ['inspector', 'member', 'chair'],
+    scope: 'staff-scoped',
+    async handle({ query }) {
+      const attendantId = query['attendantId'] ?? '';
+      const licenceId = await module.licences.licenceOf(attendantId);
+      const state = (await module.licences.statusOf(attendantId)) ?? null;
+      const history = licenceId === undefined ? [] : await module.licences.history(licenceId);
+      return { response: respond(200, { attendantId, licenceId: licenceId ?? null, state, history }) };
+    },
+  };
+}
+
 /** The attendant scans the code printed at their own site; the token says who they are, the code where they stand. */
-function clockIn(module: LicensingAssignmentAttendance, districtOfSite: (siteId: unknown) => Promise<DistrictId | undefined>): WriteOperation {
+function clockIn(module: LicensingAssignmentAttendance, districtOfSite: (siteId: unknown) => Promise<DistrictId | undefined>, sampleEntryCode: string): WriteOperation {
   return {
     kind: 'write',
     name: 'attendance.clockIn',
@@ -130,7 +178,8 @@ function clockIn(module: LicensingAssignmentAttendance, districtOfSite: (siteId:
     path: '/attendance/clock-in',
     allowedRoles: ['attendant'],
     bodySchema: { fields: { siteCode: 'string' } },
-    examples: { valid: { siteCode: 'SAYES1.entry.c2l0ZS0x.signature' }, invalid: {} },
+    examples: { valid: { siteCode: sampleEntryCode }, invalid: {} },
+    fixture: (database) => seedLicensedAttendantAtSiteOne(database, 'attendant-1'),
     async handle({ actor, body }) {
       const clockedIn = await module.attendance.clockIn(actor.personId, String(body['siteCode']));
       if (!clockedIn.ok) {
@@ -141,21 +190,51 @@ function clockIn(module: LicensingAssignmentAttendance, districtOfSite: (siteId:
   };
 }
 
-function clockOut(module: LicensingAssignmentAttendance, districtOfSite: (siteId: unknown) => Promise<DistrictId | undefined>): WriteOperation {
+function clockOut(module: LicensingAssignmentAttendance, districtOfSite: (siteId: unknown) => Promise<DistrictId | undefined>, sampleExitCode: string): WriteOperation {
   return {
     kind: 'write',
     name: 'attendance.clockOut',
     method: 'POST',
     path: '/attendance/clock-out',
     allowedRoles: ['attendant'],
-    bodySchema: { fields: {} },
-    examples: { valid: {}, invalid: { siteCode: 'not part of a clock-out' } },
-    async handle({ actor }) {
-      const clockedOut = await module.attendance.clockOut(actor.personId);
+    bodySchema: { fields: { siteCode: 'string' } },
+    examples: { valid: { siteCode: sampleExitCode }, invalid: {} },
+    async fixture(database) {
+      await seedLicensedAttendantAtSiteOne(database, 'attendant-1');
+      await createLicensingStores().attendance.add(database, {
+        attendanceId: 'attendance-sample',
+        attendantId: 'attendant-1',
+        siteId: SAMPLE.siteId,
+        shiftId: 'morning',
+        clockedInAt: '2026-11-05T08:00:00.000Z',
+      });
+    },
+    async handle({ actor, body }) {
+      const clockedOut = await module.attendance.clockOut(actor.personId, String(body['siteCode']));
       if (!clockedOut.ok) {
-        return { response: refuse(409, clockedOut.error) };
+        return { response: refuse(CLOCK_OUT_REFUSAL_STATUS[clockedOut.error], clockedOut.error) };
       }
       return attendanceWritten({ siteId: clockedOut.value, clockedIn: false }, actor.personId, await districtOfSite(clockedOut.value));
+    },
+  };
+}
+
+/**
+ * A measurement, not an action (P7): one reading per attendant per minute, written into this module's tables with no
+ * request id, no audit entry and no event. A reading that measures no shift (the attendant is not clocked in, or the
+ * coordinates are impossible) is dropped; the flag the rule may raise is recorded as an audited fact on the shift.
+ */
+function recordLocation(module: LicensingAssignmentAttendance): TelemetryOperation {
+  return {
+    kind: 'telemetry',
+    name: 'attendance.recordLocation',
+    method: 'POST',
+    path: '/attendance/location-readings',
+    allowedRoles: ['attendant'],
+    bodySchema: { fields: { latitude: 'number', longitude: 'number' } },
+    examples: { valid: { latitude: 30.0626, longitude: 31.2197 }, invalid: { latitude: 'north' } },
+    async handle({ actor, body }) {
+      await module.attendance.recordLocationPoint(actor.personId, { latitude: Number(body['latitude']), longitude: Number(body['longitude']) });
     },
   };
 }
@@ -171,7 +250,7 @@ function readOffSiteFlags(module: LicensingAssignmentAttendance): ReadOperation 
     scope: 'staff-scoped',
     async handle({ actor, query }) {
       const flags = await module.attendance.offSiteFlags(actor.personId, query['zoneId'] ?? '');
-      return flags.ok ? respond(200, { flags: flags.value }) : refuse(403, flags.error);
+      return { response: flags.ok ? respond(200, { flags: flags.value }) : refuse(403, flags.error) };
     },
   };
 }
@@ -188,6 +267,14 @@ const CLOCK_IN_REFUSAL_STATUS: Readonly<Record<ClockInRefusal, number>> = {
   'forged code': 400,
   'not assigned': 409,
   'licence not live': 403,
+  'already clocked in': 409,
+};
+
+const CLOCK_OUT_REFUSAL_STATUS: Readonly<Record<ClockOutRefusal, number>> = {
+  'not clocked in': 409,
+  'already clocked out': 409,
+  'wrong site': 403,
+  'forged code': 400,
 };
 
 interface AssignmentWriteSpec {
@@ -196,6 +283,7 @@ interface AssignmentWriteSpec {
   readonly allowedRoles: readonly Role[];
   readonly fields: BodySchema['fields'];
   readonly example: ValidBody;
+  fixture(database: TableAccess): Promise<void>;
   /** The body field naming the person the change is about. */
   readonly subject: string;
   change(context: WriteContext): Promise<Result<void, AssignmentRefusal>>;
@@ -212,6 +300,7 @@ function assignmentWrite(spec: AssignmentWriteSpec): WriteOperation {
     allowedRoles: spec.allowedRoles,
     bodySchema: { fields: spec.fields },
     examples: { valid: spec.example, invalid: {} },
+    fixture: spec.fixture,
     async handle(context) {
       const districtId = await spec.district(context);
       const changed = await spec.change(context);
@@ -243,4 +332,65 @@ const REFUSAL_STATUS: Readonly<Record<AssignmentRefusal, number>> = {
 
 function refused(refusal: AssignmentRefusal): WriteOutcome {
   return { response: refuse(REFUSAL_STATUS[refusal], refusal) };
+}
+
+/** The people and places the sample bodies of the F5 harness name, seeded by each write's fixture (P26 Q10). */
+const SAMPLE = {
+  chair: 'chair-1',
+  member: 'member-1',
+  attendant: 'person-1',
+  inspector: 'person-2',
+  districtId: 'district-1',
+  zoneId: 'zone-1',
+  siteId: 'site-1',
+} as const;
+
+const SAMPLE_OUTLINE = [
+  { latitude: 30.0624, longitude: 31.2195 },
+  { latitude: 30.0624, longitude: 31.2199 },
+  { latitude: 30.0628, longitude: 31.2199 },
+  { latitude: 30.0628, longitude: 31.2195 },
+];
+
+async function seedPerson(database: TableAccess, personId: PersonId, role: Role): Promise<void> {
+  await createAccountsStores().people.add(database, { personId, role, status: 'active', erased: false });
+}
+
+/** A member of district 1, and district 1 with zone 1 and site 1 inside it, through the owning modules' own stores. */
+async function seedMemberAndPlaces(database: TableAccess): Promise<void> {
+  const accounts = createAccountsStores();
+  await seedPerson(database, SAMPLE.member, 'member');
+  await accounts.accessFacts.update(database, SAMPLE.member, (facts) => ({ ...facts, memberDistrictId: SAMPLE.districtId }));
+  const sites = createSitesStores();
+  await sites.places.addDistrict(database, { districtId: SAMPLE.districtId, label: 'Zamalek' });
+  await sites.places.addZone(database, { zoneId: SAMPLE.zoneId, districtId: SAMPLE.districtId, label: 'Zamalek zone 1' });
+  await sites.places.addSite(database, { siteId: SAMPLE.siteId, zoneId: SAMPLE.zoneId, label: '26 July Street', outline: SAMPLE_OUTLINE });
+}
+
+async function seedMemberAndAttendantAtSiteOne(database: TableAccess): Promise<void> {
+  await seedMemberAndPlaces(database);
+  await seedPerson(database, SAMPLE.attendant, 'attendant');
+}
+
+async function seedAssignedAttendant(database: TableAccess): Promise<void> {
+  await seedMemberAndAttendantAtSiteOne(database);
+  await assignToSiteOne(database, SAMPLE.attendant);
+}
+
+async function seedLicensedAttendantAtSiteOne(database: TableAccess, attendantId: PersonId): Promise<void> {
+  await seedMemberAndPlaces(database);
+  await seedPerson(database, attendantId, 'attendant');
+  await assignToSiteOne(database, attendantId);
+  await createAccountsStores().accessFacts.update(database, attendantId, (facts) => ({ ...facts, licenceState: 'valid' }));
+}
+
+async function assignToSiteOne(database: TableAccess, attendantId: PersonId): Promise<void> {
+  await createLicensingStores().assignments.saveAttendant(database, {
+    attendantId,
+    siteId: SAMPLE.siteId,
+    shiftId: 'morning',
+    assignedBy: SAMPLE.member,
+    assignedAt: '2026-11-05T08:00:00.000Z',
+  });
+  await createAccountsStores().accessFacts.update(database, attendantId, (facts) => ({ ...facts, attendantSiteId: SAMPLE.siteId }));
 }

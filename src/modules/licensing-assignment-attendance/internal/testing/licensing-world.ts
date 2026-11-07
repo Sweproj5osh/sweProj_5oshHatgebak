@@ -1,17 +1,20 @@
+import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
 import { FixedClock } from '../../../../shared/clock';
+import type { DomainEvent, EventPublisher } from '../../../../shared/events/event';
 import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
 import type { Result } from '../../../../shared/result';
 import type { TokenIssuer } from '../../../../shared/token-issuer';
 import {
   createAccountsAndAccessControl,
-  createInMemoryAccountsStores,
+  createAccountsStores,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
 } from '../../../accounts-and-access-control/public';
-import { createInMemorySitesStores, createSiteLocator, createSiteRegistry, type SiteRegistry } from '../../../sites-and-areas/public';
+import { createSiteLocator, createSiteRegistry, createSitesStores, type SiteRegistry } from '../../../sites-and-areas/public';
 import {
-  createInMemoryLicensingStores,
   createLicensingAssignmentAttendance,
+  createLicensingStores,
+  type ApprovalUnitOfWork,
   type ApprovalVerifier,
   type LicenceState,
   type LicensingAssignmentAttendance,
@@ -32,17 +35,27 @@ export class FakeApprovals implements ApprovalVerifier {
   }
 }
 
+/** Remembers what a module published, standing in for the outbox bound to the approving request's unit of work. */
+export class RecordingEventPublisher implements EventPublisher {
+  readonly published: DomainEvent[] = [];
+
+  publish(event: DomainEvent): void {
+    this.published.push(event);
+  }
+}
+
 export const TEST_SITE_CODE_SECRET = 'site-code-secret-for-tests';
 
 /** Nobody signs in through this world, so the token minter is a stand-in; this file never imports the entry point (F2). */
 const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
 
 /**
- * Access control, the site registry and this module wired over in-memory stores the way the composition root wires
- * them, with two districts, each holding one zone and one site, and a member appointed to district one.
+ * Access control, the site registry and this module wired over one in-memory database the way the composition root
+ * wires them, with two districts, each holding one zone and one site, and a member appointed to district one.
  */
 export interface LicensingWorld {
   readonly clock: FixedClock;
+  readonly database: InMemoryDatabase;
   readonly accounts: AccountsAndAccessControl;
   readonly registry: SiteRegistry;
   readonly licensing: LicensingAssignmentAttendance;
@@ -61,15 +74,19 @@ export interface LicensingWorld {
 
 export async function createLicensingWorld(): Promise<LicensingWorld> {
   const clock = new FixedClock(new Date('2026-11-05T08:00:00Z'));
-  const sitesStores = createInMemorySitesStores();
+  const database = new InMemoryDatabase();
+  const sitesStores = createSitesStores();
   const accounts = createAccountsAndAccessControl({
-    stores: createInMemoryAccountsStores(),
-    siteLocator: createSiteLocator(sitesStores),
+    database,
+    stores: createAccountsStores(),
+    siteLocator: createSiteLocator(database, sitesStores),
     signInCodeSender: new RecordingSignInCodeSender(),
     tokenIssuer: NO_TOKENS_NEEDED,
+    signInCodeSecret: 'sign-in-code-secret-for-tests',
     clock,
   });
   const registry = createSiteRegistry({
+    database,
     stores: sitesStores,
     authorization: accounts.authorization,
     siteCodeSecret: TEST_SITE_CODE_SECRET,
@@ -77,9 +94,10 @@ export async function createLicensingWorld(): Promise<LicensingWorld> {
     prices: { firstHourFee: async () => 0 },
     clock,
   });
-  const stores = createInMemoryLicensingStores();
+  const stores = createLicensingStores();
   const approvals = new FakeApprovals();
   const licensing = createLicensingAssignmentAttendance({
+    database,
     stores,
     authorization: accounts.authorization,
     accessFacts: accounts.accessFacts,
@@ -95,10 +113,15 @@ export async function createLicensingWorld(): Promise<LicensingWorld> {
   const siteOne = valueOf(await registry.createSite(chair, zoneOne, '26 July Street', squareAround(30.0626, 31.2197), 12));
   const siteOneBis = valueOf(await registry.createSite(chair, zoneOne, 'Brazil Street', squareAround(30.0650, 31.2210), 8));
   const siteTwo = valueOf(await registry.createSite(chair, zoneTwo, 'Tahrir Street', squareAround(30.0385, 31.2118), 20));
-  const world = { clock, accounts, registry, licensing, stores, approvals, chair, districtOne, districtTwo, zoneOne, zoneTwo, siteOne, siteOneBis, siteTwo };
+  const world = { clock, database, accounts, registry, licensing, stores, approvals, chair, districtOne, districtTwo, zoneOne, zoneTwo, siteOne, siteOneBis, siteTwo };
   const memberOfDistrictOne = await createPerson({ ...world, memberOfDistrictOne: chair }, 'member');
   valueOf(await licensing.assignments.appointMemberToDistrict(chair, memberOfDistrictOne, districtOne));
   return { ...world, memberOfDistrictOne };
+}
+
+/** A unit of work for an approved licence change in these tests: the world's own database and a recording publisher. */
+export function approvalUnitOfWork(world: LicensingWorld): ApprovalUnitOfWork & { readonly events: RecordingEventPublisher } {
+  return { transaction: world.database.begin(), events: new RecordingEventPublisher() };
 }
 
 let nextPhoneSuffix = 1;

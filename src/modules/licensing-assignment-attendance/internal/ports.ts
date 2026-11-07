@@ -1,9 +1,11 @@
 import type { DistrictId, LicenceId, PersonId, SiteId, ZoneId } from '../../../shared/identifiers';
+import type { TableAccess } from '../../../shared/unit-of-work';
 import type { LicenceStateChange } from '../public';
 
 /**
- * Storage ports owned by this module. The in-memory adapters in `adapters/` implement them for every test; the
- * PostgreSQL adapters will implement the same ports over the tables in `db/migrations/0002_identity_and_registry.sql`.
+ * Storage ports owned by this module. Every method takes the tables it works on (ADR-13): the committed tables for a
+ * read outside a request, the request's unit of work for a write. The adapters in `adapters/` work over any
+ * TableAccess, over the tables of `db/migrations/0002_identity_and_registry.sql`.
  */
 
 /** One row of `licensing_assignment_attendance.attendant_assignments`: an attendant's one fixed site and shift. */
@@ -31,14 +33,14 @@ export interface MemberAppointment {
 }
 
 export interface AssignmentsStore {
-  attendant(attendantId: PersonId): Promise<AttendantAssignment | undefined>;
-  saveAttendant(assignment: AttendantAssignment): Promise<void>;
-  removeAttendant(attendantId: PersonId): Promise<void>;
-  inspector(inspectorId: PersonId): Promise<InspectorAssignment | undefined>;
-  saveInspector(assignment: InspectorAssignment): Promise<void>;
-  member(memberId: PersonId): Promise<MemberAppointment | undefined>;
-  saveMember(appointment: MemberAppointment): Promise<void>;
-  count(): Promise<number>;
+  attendant(tables: TableAccess, attendantId: PersonId): Promise<AttendantAssignment | undefined>;
+  saveAttendant(tables: TableAccess, assignment: AttendantAssignment): Promise<void>;
+  removeAttendant(tables: TableAccess, attendantId: PersonId): Promise<void>;
+  inspector(tables: TableAccess, inspectorId: PersonId): Promise<InspectorAssignment | undefined>;
+  saveInspector(tables: TableAccess, assignment: InspectorAssignment): Promise<void>;
+  member(tables: TableAccess, memberId: PersonId): Promise<MemberAppointment | undefined>;
+  saveMember(tables: TableAccess, appointment: MemberAppointment): Promise<void>;
+  count(tables: TableAccess): Promise<number>;
 }
 
 /** One row of `licensing_assignment_attendance.licences`. The current state is the last change's target state. */
@@ -53,11 +55,12 @@ export interface LicenceRow {
 export type LicenceStateChangeRow = LicenceStateChange;
 
 export interface LicencesStore {
-  add(licence: LicenceRow): Promise<void>;
-  find(licenceId: LicenceId): Promise<LicenceRow | undefined>;
-  ofAttendant(attendantId: PersonId): Promise<LicenceRow | undefined>;
-  appendChange(change: LicenceStateChangeRow): Promise<void>;
-  changesOf(licenceId: LicenceId): Promise<readonly LicenceStateChangeRow[]>;
+  add(tables: TableAccess, licence: LicenceRow): Promise<void>;
+  find(tables: TableAccess, licenceId: LicenceId): Promise<LicenceRow | undefined>;
+  ofAttendant(tables: TableAccess, attendantId: PersonId): Promise<LicenceRow | undefined>;
+  appendChange(tables: TableAccess, change: LicenceStateChangeRow): Promise<void>;
+  /** Oldest first; empty for a licence that does not exist. */
+  changesOf(tables: TableAccess, licenceId: LicenceId): Promise<readonly LicenceStateChangeRow[]>;
 }
 
 /** One row of `licensing_assignment_attendance.attendance`: one clock-in, closed by its clock-out. */
@@ -72,10 +75,12 @@ export interface AttendanceRow {
 }
 
 export interface AttendanceStore {
-  open(attendantId: PersonId): Promise<AttendanceRow | undefined>;
-  add(row: AttendanceRow): Promise<void>;
-  close(attendanceId: string, clockedOutAt: string): Promise<void>;
-  all(): Promise<readonly AttendanceRow[]>;
+  open(tables: TableAccess, attendantId: PersonId): Promise<AttendanceRow | undefined>;
+  /** The attendant's most recent clock-in, open or closed; undefined when they never clocked in. */
+  latest(tables: TableAccess, attendantId: PersonId): Promise<AttendanceRow | undefined>;
+  add(tables: TableAccess, row: AttendanceRow): Promise<void>;
+  close(tables: TableAccess, attendanceId: string, clockedOutAt: string): Promise<void>;
+  all(tables: TableAccess): Promise<readonly AttendanceRow[]>;
 }
 
 /**
@@ -98,9 +103,10 @@ export interface OffSiteFlagRow {
 }
 
 export interface OffSiteStore {
-  addReading(reading: LocationReading): Promise<void>;
-  readingsOf(attendanceId: string): Promise<readonly LocationReading[]>;
-  flagOf(attendanceId: string): Promise<OffSiteFlagRow | undefined>;
-  addFlag(flag: OffSiteFlagRow): Promise<void>;
-  flagsIn(zoneId: ZoneId): Promise<readonly OffSiteFlagRow[]>;
+  addReading(tables: TableAccess, reading: LocationReading): Promise<void>;
+  /** Oldest first. */
+  readingsOf(tables: TableAccess, attendanceId: string): Promise<readonly LocationReading[]>;
+  flagOf(tables: TableAccess, attendanceId: string): Promise<OffSiteFlagRow | undefined>;
+  addFlag(tables: TableAccess, flag: OffSiteFlagRow): Promise<void>;
+  flagsIn(tables: TableAccess, zoneId: ZoneId): Promise<readonly OffSiteFlagRow[]>;
 }

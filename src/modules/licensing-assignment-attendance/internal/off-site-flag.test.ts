@@ -62,6 +62,15 @@ describe('A14 the task sheet cases', () => {
 });
 
 describe('A14 the rest of the off-site rule', () => {
+  it('needs the far readings to span the rule\'s minutes: two readings a minute apart raise nothing, the one after ten minutes does', async () => {
+    world.clock.advanceByMilliseconds(60_000);
+    valueOf(await world.licensing.attendance.recordLocationPoint(attendant, metresNorthOfSite(600)));
+    world.clock.advanceByMilliseconds(60_000);
+    expect(valueOf(await world.licensing.attendance.recordLocationPoint(attendant, metresNorthOfSite(600))).flagRaised).toBe(false);
+    world.clock.advanceByMilliseconds(OFF_SITE_POLICY.minutesBeforeFlag * 60_000);
+    expect(valueOf(await world.licensing.attendance.recordLocationPoint(attendant, metresNorthOfSite(600))).flagRaised).toBe(true);
+  });
+
   it('raises no flag for an attendant at the site, or for far readings broken by one at the site', async () => {
     for (let point = 0; point < 10; point += 1) {
       await report(20, false);
@@ -74,13 +83,13 @@ describe('A14 the rest of the off-site rule', () => {
 
   it('keeps only the distance of each reading, never the coordinates', async () => {
     await report(600, true);
-    const shift = (await world.stores.attendance.all())[0];
-    const readings = await world.stores.offSite.readingsOf(shift?.attendanceId ?? '');
+    const shift = (await world.stores.attendance.all(world.database))[0];
+    const readings = await world.stores.offSite.readingsOf(world.database, shift?.attendanceId ?? '');
     expect(readings).toEqual([{ attendanceId: shift?.attendanceId, distanceMeters: 600, recordedAt: '2026-11-05T08:05:00.000Z' }]);
   });
 
   it('refuses a reading outside a shift, and the flag list to an inspector of another zone', async () => {
-    valueOf(await world.licensing.attendance.clockOut(attendant));
+    valueOf(await world.licensing.attendance.clockOut(attendant, (await world.registry.issueEntryAndExitCodes(world.siteOne)).exitCode));
     expect(await world.licensing.attendance.recordLocationPoint(attendant, metresNorthOfSite(600))).toEqual({ ok: false, error: 'not clocked in' });
     const inspectorOfZoneTwo = await createPerson(world, 'inspector');
     valueOf(await world.licensing.assignments.assignInspectorToZone(world.chair, inspectorOfZoneTwo, world.zoneTwo));
@@ -90,7 +99,7 @@ describe('A14 the rest of the off-site rule', () => {
   it('starts counting afresh in a new shift', async () => {
     await report(600, true);
     await report(600, true);
-    valueOf(await world.licensing.attendance.clockOut(attendant));
+    valueOf(await world.licensing.attendance.clockOut(attendant, (await world.registry.issueEntryAndExitCodes(world.siteOne)).exitCode));
     valueOf(await world.licensing.attendance.clockIn(attendant, (await world.registry.issueEntryAndExitCodes(world.siteOne)).entryCode));
     expect(await report(600, true)).toBe(false);
     expect(await flagsInZoneOne()).toEqual([]);
@@ -102,7 +111,7 @@ describe('A14 report', () => {
     expect(falseFlags).toBe(0);
     console.log(
       `A14 report: flags raised ${flagsRaised}; false flags in test ${falseFlags} ` +
-        `(rule: ${OFF_SITE_POLICY.consecutivePoints} readings in a row more than ${OFF_SITE_POLICY.distanceMeters} m from the site)`,
+        `(rule: readings more than ${OFF_SITE_POLICY.radiusMeters} m from the site, unbroken, for at least ${OFF_SITE_POLICY.minutesBeforeFlag} minutes; engineering defaults, P11)`,
     );
   });
 });

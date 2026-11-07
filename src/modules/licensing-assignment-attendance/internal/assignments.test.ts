@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PersonId } from '../../../shared/identifiers';
-import { createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
+import { approvalUnitOfWork, createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 
 /** Task A12: an attendant at one fixed site and a changeable shift; an inspector to a zone; members by the Chair only. */
 let world: LicensingWorld;
@@ -44,7 +44,7 @@ describe('A12 the task sheet cases', () => {
 describe('A12 the rest of the assignments', () => {
   it('records the site in access control, so the attendant may act there and nowhere else', async () => {
     valueOf(await world.licensing.assignments.assignAttendantToSite(world.memberOfDistrictOne, attendant, world.siteOne, 'morning'));
-    await world.accounts.accessFacts.recordLicenceState(attendant, 'valid');
+    await world.accounts.accessFacts.recordLicenceState(world.database, attendant, 'valid');
     expect(await world.accounts.authorization.may(attendant, 'payments.tickCash', { siteId: world.siteOne })).toBe(true);
     expect(await world.accounts.authorization.may(attendant, 'payments.tickCash', { siteId: world.siteOneBis })).toBe(false);
   });
@@ -102,7 +102,7 @@ describe('A12 report', () => {
     const inspector = await createPerson(world, 'inspector');
     valueOf(await world.licensing.assignments.assignAttendantToSite(world.memberOfDistrictOne, attendant, world.siteOne, 'morning'));
     valueOf(await world.licensing.assignments.assignInspectorToZone(world.memberOfDistrictOne, inspector, world.zoneOne));
-    const count = await world.stores.assignments.count();
+    const count = await world.stores.assignments.count(world.database);
     expect(count).toBe(3);
     console.log(`A12 report: assignments in test ${count} (one member appointment, one attendant, one inspector)`);
   });
