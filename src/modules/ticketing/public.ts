@@ -13,6 +13,7 @@ import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
 import { createTicketClosingService } from './internal/ticket-closing';
+import { createTicketPaymentStatusService } from './internal/ticket-payment-status';
 import { createTicketOpeningService } from './internal/ticket-opening';
 
 export { InMemoryTicketStore } from './internal/in-memory-ticket-store';
@@ -119,6 +120,17 @@ export type TicketClosing = Pick<TicketDesk, 'closeTicket'>;
 /** Task B8: close a ticket by the exit scan, freeze the exit time, and ask the fee calculator for the fee. */
 export function createTicketClosing(dependencies: TicketClosingDependencies): TicketClosing {
   return createTicketClosingService(dependencies);
+}
+
+export type TicketPaymentStatus = Pick<TicketDesk, 'changePaymentStatus'>;
+
+/**
+ * Task B9: the payment status of a closed ticket, changed only along the allowed paths. No request reaches this from
+ * outside: the entry point registers no operation for it, and the caller (payments, or the approved waiver) is trusted
+ * to be authorised, because the method is not told who is asking.
+ */
+export function createTicketPaymentStatus(dependencies: { readonly store: TicketStore }): TicketPaymentStatus {
+  return createTicketPaymentStatusService(dependencies.store);
 }
 
 export interface TicketingOperationDependencies {

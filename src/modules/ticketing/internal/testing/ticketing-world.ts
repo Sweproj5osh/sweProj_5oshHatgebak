@@ -2,7 +2,7 @@ import { createFeeCalculator, createPriceList, type PriceVersion } from '../../.
 import { FixedClock } from '../../../../shared/clock';
 import type { SiteId } from '../../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../../shared/result';
-import { createTicketClosing, createTicketOpening, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
+import { createTicketClosing, createTicketOpening, createTicketPaymentStatus, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
 
 /** A site registry stand-in: codes are "entry-<site>" and "exit-<site>", and each site is open or closed by hand. */
 export class FakeSites implements TicketingSites {
@@ -82,7 +82,8 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const residents = options.residents ?? [];
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
   const closing = createTicketClosing({ sites, store, clock, prices, fees });
-  return { sites, store, clock, opening, closing, prices };
+  const payments = createTicketPaymentStatus({ store });
+  return { sites, store, clock, opening, closing, payments, prices };
 }
 
 let requestCounter = 0;

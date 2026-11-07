@@ -2,7 +2,8 @@ import { SerialQueue } from '../../../shared/serial-queue';
 import type { SiteId, TicketId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { Ticket } from '../public';
-import type { CloseRequest, OpenRequest, StoreRefusal, TicketStore } from './ticket-store';
+import { ALLOWED_PAYMENT_CHANGES } from './ticket-payment-status';
+import type { CloseRequest, OpenRequest, PaymentStatusRefusal, PaymentStatusRequest, StoreRefusal, TicketStore } from './ticket-store';
 
 export class InMemoryTicketStore implements TicketStore {
   private readonly queue = new SerialQueue();
@@ -54,6 +55,30 @@ export class InMemoryTicketStore implements TicketStore {
       this.tickets = this.tickets.map((ticket) => (ticket.ticketId === request.ticketId ? closed : ticket));
       this.byRequestKey.set(request.requestKey, request.ticketId);
       return succeed(closed);
+    });
+  }
+
+  changePaymentStatus(request: PaymentStatusRequest): Promise<Result<Ticket, PaymentStatusRefusal>> {
+    return this.queue.run(async () => {
+      const earlier = await this.findByRequestKey(request.requestKey);
+      if (earlier !== undefined) {
+        return succeed(earlier);
+      }
+      const current = this.tickets.find((ticket) => ticket.ticketId === request.ticketId);
+      if (current === undefined) {
+        return fail('unknown ticket');
+      }
+      if (current.state !== 'closed') {
+        return fail('ticket not closed');
+      }
+      const allowed = ALLOWED_PAYMENT_CHANGES[current.paymentStatus] ?? [];
+      if (!allowed.includes(request.to)) {
+        return fail('status change not allowed');
+      }
+      const changed: Ticket = { ...current, paymentStatus: request.to };
+      this.tickets = this.tickets.map((ticket) => (ticket.ticketId === request.ticketId ? changed : ticket));
+      this.byRequestKey.set(request.requestKey, request.ticketId);
+      return succeed(changed);
     });
   }
 

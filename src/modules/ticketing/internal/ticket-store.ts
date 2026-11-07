@@ -1,6 +1,6 @@
 import type { SiteId, TicketId } from '../../../shared/identifiers';
 import type { Result } from '../../../shared/result';
-import type { Ticket } from '../public';
+import type { PaymentStatus, Ticket } from '../public';
 
 export type StoreRefusal = 'car already parked' | 'site full';
 
@@ -28,6 +28,16 @@ export interface TicketStore {
    * returns the ticket it closed; a ticket that is not open is refused.
    */
   closeIfOpen(request: CloseRequest): Promise<Result<Ticket, 'no open ticket'>>;
+  /** Applies an already-approved payment status change in one indivisible step; a repeated request key answers the same ticket. */
+  changePaymentStatus(request: PaymentStatusRequest): Promise<Result<Ticket, PaymentStatusRefusal>>;
+}
+
+export type PaymentStatusRefusal = 'unknown ticket' | 'ticket not closed' | 'status change not allowed';
+
+export interface PaymentStatusRequest {
+  readonly requestKey: string;
+  readonly ticketId: TicketId;
+  readonly to: PaymentStatus;
 }
 
 export interface CloseRequest {
