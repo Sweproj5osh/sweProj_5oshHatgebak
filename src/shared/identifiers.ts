@@ -15,6 +15,9 @@ export type Role = 'driver' | 'attendant' | 'inspector' | 'member' | 'chair';
 
 export const ALL_ROLES: readonly Role[] = ['driver', 'attendant', 'inspector', 'member', 'chair'];
 
+/** The two committee roles: the only ones whose operations may take a calendar time (P6, fitness function F11). */
+export const COMMITTEE_ROLES: readonly Role[] = ['member', 'chair'];
+
 export function isRole(candidate: unknown): candidate is Role {
   return typeof candidate === 'string' && (ALL_ROLES as readonly string[]).includes(candidate);
 }

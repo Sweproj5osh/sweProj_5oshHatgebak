@@ -1,19 +1,20 @@
+import { LOCAL_DATE_TIME_KIND } from '../shared/body-schema';
+import { COMMITTEE_ROLES } from '../shared/identifiers';
 import { looksLikeTimestampKey } from '../shared/timestamp-fields';
 import { fieldNamesOf, loadComposedOperations, type DeclaredOperation } from './support/composed-operations';
 import { defineFitnessFunction } from './support/fitness-result';
 import { runWhenInvokedDirectly } from './support/run-as-script';
 
-/** F11: no declared write schema in the composed registry has a field whose name looks like a timestamp (ADR-08, Rule I). */
+/**
+ * F11 (ADR-08, Rule I, P6): no declared body schema in the composed registry has a field whose name looks like a
+ * timestamp, and a `localDateTime` field appears only on operations whose roles are all committee roles.
+ */
 export const f11WriteSchemasCarryNoTimestamp = defineFitnessFunction(
   'F11',
-  'no write schema field is a timestamp',
+  'no write schema field is a timestamp; localDateTime only on committee operations',
   async (repositoryRoot) => {
     const writes = (await loadComposedOperations(repositoryRoot)).filter(declaresABody);
-    const violations = writes.flatMap((write) =>
-      fieldNamesOf(write)
-        .filter(looksLikeTimestampKey)
-        .map((field) => `${write.name} declares the field "${field}", which looks like a timestamp`),
-    );
+    const violations = writes.flatMap((write) => [...timestampKeyViolations(write), ...calendarOutsideCommitteeViolations(write)]);
     const checked = writes.reduce((count, write) => count + fieldNamesOf(write).length, 0);
     return { violations, checked };
   },
@@ -21,6 +22,29 @@ export const f11WriteSchemasCarryNoTimestamp = defineFitnessFunction(
 
 function declaresABody(operation: DeclaredOperation): boolean {
   return operation.bodySchema !== undefined;
+}
+
+function timestampKeyViolations(write: DeclaredOperation): string[] {
+  return fieldNamesOf(write)
+    .filter(looksLikeTimestampKey)
+    .map((field) => `${write.name} declares the field "${field}", which looks like a timestamp`);
+}
+
+function calendarOutsideCommitteeViolations(write: DeclaredOperation): string[] {
+  if (isCommitteeOnly(write)) {
+    return [];
+  }
+  return Object.entries(write.bodySchema?.fields ?? {})
+    .filter(([, kind]) => kind === LOCAL_DATE_TIME_KIND)
+    .map(
+      ([field]) =>
+        `${write.name} declares the ${LOCAL_DATE_TIME_KIND} field "${field}", but only committee operations (roles ${COMMITTEE_ROLES.join(', ')}) may take a calendar time`,
+    );
+}
+
+function isCommitteeOnly(write: DeclaredOperation): boolean {
+  const roles = write.allowedRoles ?? [];
+  return roles.length > 0 && roles.every((role) => (COMMITTEE_ROLES as readonly string[]).includes(role));
 }
 
 runWhenInvokedDirectly(import.meta.url, f11WriteSchemasCarryNoTimestamp);
