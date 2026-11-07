@@ -92,9 +92,22 @@ export class AssignmentsService implements Assignments {
     if (!(await this.dependencies.authorization.may(actor, 'assignments.assignInspector', { zoneId }))) {
       return fail('not allowed here');
     }
+    if (!(await this.mayTakeInspectorFromCurrentZone(actor, inspectorId, zoneId))) {
+      return fail('not allowed here');
+    }
     await this.dependencies.assignments.saveInspector(this.database, { inspectorId, zoneId, assignedBy: actor, assignedAt: this.now() });
     await this.dependencies.accessFacts.recordInspectorZone(this.database, inspectorId, zoneId);
     return succeed(undefined);
+  }
+
+  /** Moving an inspector needs scope over the zone they leave as well as the zone they join (a Member may not pull an
+   * inspector out of another district); a first assignment has no zone to leave. */
+  private async mayTakeInspectorFromCurrentZone(actor: PersonId, inspectorId: PersonId, zoneId: ZoneId): Promise<boolean> {
+    const current = await this.dependencies.assignments.inspector(this.database, inspectorId);
+    if (current === undefined || current.zoneId === zoneId) {
+      return true;
+    }
+    return this.dependencies.authorization.may(actor, 'assignments.assignInspector', { zoneId: current.zoneId });
   }
 
   async appointMemberToDistrict(actor: PersonId, memberId: PersonId, districtId: DistrictId): Promise<Result<void, AssignmentRefusal>> {
