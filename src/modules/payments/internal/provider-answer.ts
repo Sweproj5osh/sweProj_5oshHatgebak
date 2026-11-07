@@ -26,6 +26,11 @@ export async function askProvider(call: () => Promise<ChargeResult>, timeoutMill
   }
 }
 
+/** The provider's answer about a charge it already holds, timed like a charge; the reference is the one asked about. */
+export async function askProviderStatus(call: () => Promise<ChargeOutcome>, providerReference: string, timeoutMilliseconds: number): Promise<ProviderAnswer> {
+  return askProvider(async () => ({ outcome: await call(), providerReference }), timeoutMilliseconds);
+}
+
 /** The adapter's result checked at run time: a real adapter may let the provider's own words through. */
 function toAnswer(result: ChargeResult): ProviderAnswer {
   if (!isKnownOutcome(result.outcome)) {

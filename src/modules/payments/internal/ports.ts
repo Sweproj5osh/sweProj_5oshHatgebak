@@ -30,5 +30,7 @@ export interface PaymentStore {
   forTicket(ticketId: TicketId): Promise<readonly StoredPayment[]>;
   /** The row a request id already created, if any: a repeat must find it before the provider is called (C3). */
   byRequestId(requestId: RequestId): Promise<StoredPayment | undefined>;
+  /** The attempts still waiting for the provider's final answer, for reconciliation (P18). */
+  pending(): Promise<readonly StoredPayment[]>;
 }
 

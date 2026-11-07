@@ -29,6 +29,10 @@ export class TableAccessPaymentStore implements PaymentStore {
     return (await this.all()).find((payment) => payment.requestId === requestId);
   }
 
+  async pending(): Promise<readonly StoredPayment[]> {
+    return (await this.all()).filter((payment) => payment.state === 'pending');
+  }
+
   private all(): Promise<readonly StoredPayment[]> {
     return this.tables.list<StoredPayment>(PAYMENTS_TABLE);
   }

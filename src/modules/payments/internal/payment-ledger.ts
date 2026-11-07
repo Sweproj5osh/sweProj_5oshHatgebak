@@ -8,7 +8,7 @@ import { fail, succeed, type Result } from '../../../shared/result';
 import type { PaymentGateway, PaymentLedger, PaymentRecord, PayRefusal } from '../public';
 import type { InFlightAttempts } from './in-flight-attempts';
 import type { PaymentStore, StoredPayment } from './ports';
-import { askProvider, type ProviderAnswer } from './provider-answer';
+import { askProvider, askProviderStatus, type ProviderAnswer } from './provider-answer';
 
 /** The provider gets this long to answer before the attempt stays pending and the driver is told to pay later (P18, C4). */
 export const PROVIDER_TIMEOUT_MILLISECONDS = 8_000;
@@ -87,8 +87,18 @@ export class PaymentLedgerService implements PaymentLedger {
     throw new Error('Corrections are built in task C7');
   }
 
+  /**
+   * Reconciliation (P18, task C5): every pending attempt is asked about again and the provider's final answer, however
+   * late, is recorded on the attempt; a late "paid" marks the ticket paid inside this unit of work. Returns how many
+   * attempts reached a final state.
+   */
   async settlePendingPayments(): Promise<number> {
-    throw new Error('Settling pending payments is built in task C5');
+    let settled = 0;
+    for (const attempt of await this.store.pending()) {
+      const final = await this.settle(attempt);
+      settled += final ? 1 : 0;
+    }
+    return settled;
   }
 
   async cashDueForShift(_attendantId: PersonId, _siteId: SiteId, _shiftId: string): Promise<number> {
@@ -148,6 +158,36 @@ export class PaymentLedgerService implements PaymentLedger {
     };
     await this.store.add(attempt);
     return attempt;
+  }
+
+  /** True when the attempt left the pending state. A charge the provider never acknowledged is asked again by its key. */
+  private async settle(attempt: StoredPayment): Promise<boolean> {
+    const answer = await this.askAgain(attempt);
+    this.dependencies.inFlight.release(attempt.ticketId);
+    switch (answer.kind) {
+      case 'paid':
+        await this.recordPaid(attempt, answer.providerReference);
+        return true;
+      case 'declined':
+        await this.replaceAttempt({ ...attempt, state: 'failed', providerReference: answer.providerReference, settledAt: this.dependencies.clock.now().toISOString() });
+        return true;
+      case 'pending':
+        await this.replaceAttempt({ ...attempt, providerReference: answer.providerReference });
+        return false;
+      case 'no answer':
+        await this.replaceAttempt({ ...attempt, rawProviderOutcome: answer.rawOutcome });
+        return false;
+    }
+  }
+
+  /** By reference when the provider gave one; otherwise by the idempotency key, which the provider answers from its record (ADR-08). */
+  private askAgain(attempt: StoredPayment): Promise<ProviderAnswer> {
+    const { gateway } = this.dependencies;
+    const reference = attempt.providerReference;
+    if (reference === undefined) {
+      return askProvider(() => gateway.charge(attempt.amount, attempt.requestId), PROVIDER_TIMEOUT_MILLISECONDS);
+    }
+    return askProviderStatus(() => gateway.status(reference), reference, PROVIDER_TIMEOUT_MILLISECONDS);
   }
 
   private async recordAnswer(attempt: StoredPayment, answer: ProviderAnswer): Promise<Result<PaymentRecord, PayRefusal>> {

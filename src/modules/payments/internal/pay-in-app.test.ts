@@ -129,7 +129,7 @@ function setUp(overrides: { readonly gateway?: PaymentGateway } = {}) {
     application.handle(writeRequest(PAY_PATH, 'driver', requestId, { ticketId }));
   const paymentRows = () => application.database.list<StoredPayment>(PAYMENTS_TABLE);
   const auditRows = () => application.audit.readByScope({ personId: 'chair-1', role: 'chair' });
-  return { tickets, gateway, application, pay, paymentRows, auditRows };
+  return { tickets, gateway, application, payments, pay, paymentRows, auditRows };
 }
 
 function paymentIn(response: { body: unknown }): PaymentRecord {
@@ -146,6 +146,7 @@ function messageIn(response: { body: unknown }): string {
 
 let payLatencyMilliseconds = Number.NaN;
 let timeoutHonouredMilliseconds = Number.NaN;
+let pendingSettledPerRun = Number.NaN;
 
 describe('C2 paying in the app', () => {
   it('pays a closed ticket: paid with a provider reference, ticket shows paid, one row, one audit entry, one event', async () => {
@@ -210,6 +211,66 @@ describe('C2 paying in the app', () => {
     expect(await paymentRows()).toHaveLength(1);
     expect(gateway.chargeCallCount()).toBe(1);
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+  });
+
+  describe('a late answer is recorded at reconciliation (P18, item 7)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Reconciliation runs in its own unit of work, as the scheduler's job will; here the test opens it. */
+    async function settleOnce(application: ReturnType<typeof setUp>['application'], payments: ReturnType<typeof setUp>['payments']): Promise<number> {
+      const transaction = application.database.begin();
+      const settled = await payments.ledgerBoundTo(transaction, application.outbox.publisherBoundTo(transaction.tables)).settlePendingPayments();
+      await transaction.commit();
+      return settled;
+    }
+
+    it('a slow provider that says paid after the timer: the attempt row written before the timer is marked paid and the ticket is paid', async () => {
+      const { tickets, gateway, application, payments, pay, paymentRows } = setUp();
+      tickets.seed(closedTicket('ticket-1', 19));
+      const paying = pay('request-pay-0016', 'ticket-1');
+      await vi.advanceTimersByTimeAsync(PROVIDER_TIMEOUT_MILLISECONDS);
+      expect((await paying).status).toBe(202);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      const settled = await settleOnce(application, payments);
+
+      expect(settled).toBe(1);
+      expect((await paymentRows())[0]).toMatchObject({ state: 'paid', requestId: 'request-pay-0016', providerReference: expect.stringMatching(/^fake-/) });
+      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
+      expect(application.outbox.allEvents().map((event) => event.topic)).toEqual([TICKET_PAID_TOPIC]);
+      expect(gateway.chargeCallCount('request-pay-0016')).toBe(2);
+      pendingSettledPerRun = settled;
+    });
+
+    it('a pending answer the provider later declines: the attempt fails, the ticket stays unpaid and may be paid again', async () => {
+      const { tickets, gateway, application, payments, pay, paymentRows } = setUp();
+      tickets.seed(closedTicket('ticket-1', 13));
+      const pending = paymentIn(await pay('request-pay-0017', 'ticket-1'));
+      gateway.settle(pending.providerReference ?? '', 'declined');
+
+      expect(await settleOnce(application, payments)).toBe(1);
+
+      expect((await paymentRows())[0]).toMatchObject({ state: 'failed', settledAt: '2026-11-06T10:05:00.000Z' });
+      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      tickets.seed(closedTicket('ticket-1', 11));
+      expect((await pay('request-pay-0018', 'ticket-1')).status).toBe(201);
+      expect(await paymentRows()).toHaveLength(2);
+    });
+
+    it('a provider still pending settles nothing and leaves the attempt pending', async () => {
+      const { tickets, application, payments, pay, paymentRows } = setUp();
+      tickets.seed(closedTicket('ticket-1', 13));
+      await pay('request-pay-0019', 'ticket-1');
+
+      expect(await settleOnce(application, payments)).toBe(0);
+      expect((await paymentRows())[0]?.state).toBe('pending');
+    });
   });
 
   describe('Rule B: a provider answer outside paid, declined and pending is an adapter error', () => {
@@ -385,6 +446,7 @@ describe('C2 paying in the app', () => {
 
   afterAll(() => {
     console.log(`C2 report: pay latency ${payLatencyMilliseconds.toFixed(1)} ms (one pay through the entry point on the in-memory stack)`);
+    console.log(`C5 report (by-product of P18 item 7): pending settled per run ${pendingSettledPerRun}`);
     console.log(`C4 report: timeout honoured at ${(timeoutHonouredMilliseconds / 1000).toFixed(3)} s (the ledger's timer, measured with fake timers)`);
   });
 });
