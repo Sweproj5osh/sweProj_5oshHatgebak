@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DriverMapClient } from './driver-map-client';
-import { InMemoryDriverMapApi } from './in-memory-driver-map-api';
+import { InMemoryDriverMapApi } from '../../test-support/in-memory-driver-map-api';
 
 describe('D2 driver map client', () => {
   it('shows nearby sites in distance order with a free-space band', async () => {

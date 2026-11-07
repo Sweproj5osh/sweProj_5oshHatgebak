@@ -9,7 +9,7 @@ import { HttpTicketScanApi } from './http-ticket-scan-api';
 import {
   createStandInDriverTicketOperations,
   createStandInTicketDeskState,
-} from './stand-in-driver-ticket-operations';
+} from '../../test-support/stand-in-driver-ticket-operations';
 
 function buildStack(drops: AnswerDrops = { remaining: 0 }) {
   const ticketState = createStandInTicketDeskState();

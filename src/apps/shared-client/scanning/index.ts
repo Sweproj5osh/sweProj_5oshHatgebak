@@ -9,7 +9,6 @@ export {
   DRIVER_OPEN_TICKET_PATH,
 } from './driver-ticket-routes';
 export { HttpTicketScanApi } from './http-ticket-scan-api';
-export { InMemoryTicketScanApi } from './in-memory-ticket-scan-api';
 export {
   TicketScanRefusedError,
   type TicketScanApi,

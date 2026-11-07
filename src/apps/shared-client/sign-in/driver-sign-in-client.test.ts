@@ -4,7 +4,7 @@ import type { TokenIssuer } from '../../../shared/token-issuer';
 import { ServerTransportError } from '../server-call';
 import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from './driver-auth-api';
 import { DriverSignInClient } from './driver-sign-in-client';
-import { InMemoryDriverAuthApi } from './in-memory-driver-auth-api';
+import { InMemoryDriverAuthApi } from '../../test-support/in-memory-driver-auth-api';
 
 const PHONE = '01012345678';
 const RIGHT_CODE = `driver-code-${PHONE}`;

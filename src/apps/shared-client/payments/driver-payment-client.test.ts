@@ -3,7 +3,7 @@ import type { RequestId } from '../../../shared/request-id';
 import { ServerTransportError } from '../server-call';
 import { DriverPaymentClient } from './driver-payment-client';
 import { DriverPaymentRefusedError, type DriverPaymentApi } from './driver-payment-api';
-import { InMemoryDriverPaymentApi } from './in-memory-driver-payment-api';
+import { InMemoryDriverPaymentApi } from '../../test-support/in-memory-driver-payment-api';
 
 const TICKET_ID = 'ticket-7';
 

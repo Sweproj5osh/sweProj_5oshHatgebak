@@ -2,10 +2,10 @@
  * In-memory stand-in for driver sign-in and cars, for client tests that need no server.
  * Tests and local prototypes only; it is not the accounts module and copies only the answers the client tests need.
  */
-import type { PersonId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
-import type { TokenIssuer } from '../../../shared/token-issuer';
-import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from './driver-auth-api';
+import type { PersonId } from '../../shared/identifiers';
+import type { RequestId } from '../../shared/request-id';
+import type { TokenIssuer } from '../../shared/token-issuer';
+import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from '../shared-client/sign-in/driver-auth-api';
 
 export interface InMemoryDriverAuthApiOptions {
   /** Mints the token a signed-in driver carries; tests pass the entry point's issuer or an opaque stand-in. */

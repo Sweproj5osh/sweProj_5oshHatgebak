@@ -3,7 +3,7 @@ import type { RequestId } from '../../../shared/request-id';
 import { ServerTransportError } from '../server-call';
 import { AttendantModeClient } from './attendant-mode-client';
 import { AttendantModeRefusedError, type AttendantModeApi } from './attendant-mode-api';
-import { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
+import { InMemoryAttendantModeApi } from '../../test-support/in-memory-attendant-mode-api';
 
 const SITE_ID = 'site-12';
 const RIGHT_CODE = `attendant-${SITE_ID}`;

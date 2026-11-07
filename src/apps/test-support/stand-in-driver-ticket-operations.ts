@@ -3,14 +3,14 @@
  * This is not the ticketing module: it only exists so the Driver App can exercise the entry point's
  * request-id and audit pipeline. Replace by composing B's operations when they land.
  */
-import type { SiteId, TicketId } from '../../../shared/identifiers';
-import { refuse, respond, type WriteOperation } from '../../../shared/operation-contract';
+import type { SiteId, TicketId } from '../../shared/identifiers';
+import { refuse, respond, type WriteOperation } from '../../shared/operation-contract';
 import {
   DRIVER_CLOSE_TICKET_OPERATION,
   DRIVER_CLOSE_TICKET_PATH,
   DRIVER_OPEN_TICKET_OPERATION,
   DRIVER_OPEN_TICKET_PATH,
-} from './driver-ticket-routes';
+} from '../shared-client/scanning/driver-ticket-routes';
 
 export interface StandInTicketDeskState {
   readonly openByDriver: Map<string, { readonly ticketId: TicketId; readonly siteId: SiteId }>;

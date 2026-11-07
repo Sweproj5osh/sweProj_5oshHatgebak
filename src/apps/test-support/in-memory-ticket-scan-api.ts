@@ -6,8 +6,8 @@
  * The codes are `entry-<site>` and `exit-<site>`; the site a code belongs to is read from the code, as the real
  * server reads it from the signed code.
  */
-import type { RequestId } from '../../../shared/request-id';
-import { ServerTransportError } from '../server-call';
+import type { RequestId } from '../../shared/request-id';
+import { ServerTransportError } from '../shared-client/server-call';
 import {
   TicketScanRefusedError,
   type CloseTicketScanInput,
@@ -15,7 +15,7 @@ import {
   type OpenTicketScanInput,
   type OpenedTicketScan,
   type TicketScanApi,
-} from './ticket-scan-api';
+} from '../shared-client/scanning/ticket-scan-api';
 
 export class InMemoryTicketScanApi implements TicketScanApi {
   private readonly openResponses = new Map<RequestId, OpenedTicketScan>();

@@ -2,13 +2,13 @@
  * In-memory stand-in for the map API while the main system is not yet plugged in.
  * The app only receives the current distance-sorted results and free-space bands from the server.
  */
-import { ServerTransportError } from '../server-call';
+import { ServerTransportError } from '../shared-client/server-call';
 import {
   type DriverMapApi,
   type GeoPoint,
   type NearbySiteResult,
   type SiteMapEntry,
-} from './driver-map-api';
+} from '../shared-client/map/driver-map-api';
 
 export class InMemoryDriverMapApi implements DriverMapApi {
   private readonly sites: Map<string, SiteMapEntry>;

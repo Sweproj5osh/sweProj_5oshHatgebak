@@ -2,14 +2,14 @@
  * In-memory stand-in for the payment API while the real payment module is not attached.
  * It keeps the same request id for a repeated write and refuses invalid or incomplete payments.
  */
-import type { RequestId } from '../../../shared/request-id';
-import { ServerTransportError } from '../server-call';
+import type { RequestId } from '../../shared/request-id';
+import { ServerTransportError } from '../shared-client/server-call';
 import {
   DriverPaymentRefusedError,
   type DriverPayResult,
   type DriverPaymentApi,
   type DriverReceipt,
-} from './driver-payment-api';
+} from '../shared-client/payments/driver-payment-api';
 
 interface SavedTicket extends DriverReceipt {
   readonly paid: boolean;

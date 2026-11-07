@@ -1,5 +1,5 @@
-import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { PersonId, SiteId, TicketId } from '../../shared/identifiers';
+import type { RequestId } from '../../shared/request-id';
 import {
   AttendantModeRefusedError,
   type AssistedTicketInput,
@@ -8,7 +8,7 @@ import {
   type AttendantModeApi,
   type MarkPaidResult,
   type TicketSummary,
-} from './attendant-mode-api';
+} from '../shared-client/attendant-mode/attendant-mode-api';
 
 /** In-memory stand-in for the Staff App attendant-mode calls until the server routes are registered. */
 export class InMemoryAttendantModeApi implements AttendantModeApi {

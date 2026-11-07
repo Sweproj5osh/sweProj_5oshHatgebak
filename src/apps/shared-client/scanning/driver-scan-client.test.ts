@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DriverScanClient } from './driver-scan-client';
-import { InMemoryTicketScanApi } from './in-memory-ticket-scan-api';
+import { InMemoryTicketScanApi } from '../../test-support/in-memory-ticket-scan-api';
 
 function clientWith(api: InMemoryTicketScanApi, requestIds: string[]): DriverScanClient {
   let index = 0;

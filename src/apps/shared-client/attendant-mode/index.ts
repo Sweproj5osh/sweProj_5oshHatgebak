@@ -24,5 +24,4 @@ export {
   type MarkPaidSuccess,
   type TicketSummary,
 } from './attendant-mode-api';
-export { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
 export { HttpAttendantModeApi } from './http-attendant-mode-api';
