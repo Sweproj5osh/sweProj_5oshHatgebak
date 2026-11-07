@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { isRole, type DistrictId, type PersonId, type Role } from '../../shared/identifiers';
+import { isRole, type Role } from '../../shared/identifiers';
+import type { TokenIdentity } from '../../shared/token-issuer';
 import { fail, succeed, type Result } from '../../shared/result';
 
 /**
@@ -19,13 +20,7 @@ const ONE_DAY = 24 * ONE_HOUR;
 export const STAFF_TOKEN_LIFETIME_MILLISECONDS = 14 * ONE_HOUR;
 export const DRIVER_TOKEN_LIFETIME_MILLISECONDS = 30 * ONE_DAY;
 
-/** Who the token is for; the server sets every claim at sign-in, nothing comes from a request body. */
-export interface TokenIdentity {
-  readonly personId: PersonId;
-  readonly role: Role;
-  /** The district a committee member belongs to; absent for every other role. */
-  readonly districtId?: DistrictId;
-}
+export type { TokenIdentity } from '../../shared/token-issuer';
 
 export interface TokenClaims extends TokenIdentity {
   /** ISO-8601 instant after which the token is refused. */
