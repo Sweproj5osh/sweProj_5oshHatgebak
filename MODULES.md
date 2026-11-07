@@ -7,20 +7,20 @@ alone, and no must-stay-on module imports a may-fail one (fitness function F8, R
 
 | Module folder | Public interface names (in `public.ts`) | Owner | Set |
 |---|---|---|---|
-| `sites-and-areas` | `SiteRegistry` | Teammate A | must stay on |
-| `ticketing` | `TicketDesk`, `TicketQuery` | Teammate B | must stay on |
-| `committee-prices` | `PriceList`, `FeeCalculator` (pure: imports nothing outside its folder, F1) | Teammate B | must stay on |
-| `payments` | `PaymentLedger`; port `PaymentGateway` | Teammate C | must stay on |
-| `accounts-and-access-control` | `Authorization`, `PersonalData` | Teammate A | must stay on |
+| `sites-and-areas` | `SiteRegistry` | Lino (Teammate A) | must stay on |
+| `ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
+| `committee-prices` | `PriceList`, `FeeCalculator` (pure: imports nothing outside its folder, F1) | Karim (Teammate B) | must stay on |
+| `payments` | `PaymentLedger`; port `PaymentGateway` | Amina (Teammate C) | must stay on |
+| `accounts-and-access-control` | `Authorization`, `PersonalData` | Lino (Teammate A) | must stay on |
 | `audit-log` | `AuditTrail`; port `AuditLogStore`; factory `createHashChainedAuditTrail`. Appends are serialized across server copies: the PostgreSQL adapter takes `pg_advisory_xact_lock(<constant>)` in the write's transaction before reading the last entry and inserting the next | Zeyad | must stay on |
-| `cash-custody` | `DepositLedger` | Teammate C | may fail |
-| `licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Teammate A | may fail |
-| `approvals` | `ApprovalDesk` | Teammate C | may fail |
-| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Teammate D | may fail |
-| `money-check-dashboard` | `MoneyCheck` | Teammate C | may fail |
+| `cash-custody` | `DepositLedger` | Amina (Teammate C) | may fail |
+| `licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
+| `approvals` | `ApprovalDesk` | Amina (Teammate C) | may fail |
+| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
+| `money-check-dashboard` | `MoneyCheck` | Amina (Teammate C) | may fail |
 | `scheduler` | `Scheduler` (job registry for owners; provides nothing to other modules) | Zeyad | may fail |
-| `notifications` | `Notifier`; port `MessageDelivery` | Teammate D | may fail |
-| `evidence` | `EvidenceStore`; port `PhotoStorage` | Teammate D | may fail |
+| `notifications` | `Notifier`; port `MessageDelivery` | Mahi (Teammate D) | may fail |
+| `evidence` | `EvidenceStore`; port `PhotoStorage` | Mahi (Teammate D) | may fail |
 
 ## Foundation folders (Zeyad)
 | Folder | Holds |

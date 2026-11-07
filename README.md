@@ -21,10 +21,10 @@ modules, public interfaces, owners and sets is in [MODULES.md](MODULES.md).
 | Owner | Modules |
 |---|---|
 | Zeyad (Area 1) | `audit-log`, `scheduler`, plus the foundation: `src/entrypoint`, `src/shared`, `src/adapters`, `src/fitness`, `db/` |
-| Teammate A (Area 2) | `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
-| Teammate B (Area 3) | `committee-prices`, `ticketing` |
-| Teammate C (Area 4) | `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
-| Teammate D (Area 5) | `notifications`, `evidence`, `complaints-inspections-ratings` |
+| Lino (Teammate A) (Area 2) | `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
+| Karim (Teammate B) (Area 3) | `committee-prices`, `ticketing` |
+| Amina (Teammate C) (Area 4) | `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
+| Mahi (Teammate D) (Area 5) | `notifications`, `evidence`, `complaints-inspections-ratings` |
 
 ## Running things
 ```bash
