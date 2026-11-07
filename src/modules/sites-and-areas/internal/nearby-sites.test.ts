@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SiteId, ZoneId } from '../../../shared/identifiers';
 import { distanceInMeters } from './domain/nearby';
+import { bandFor, FEW_AT_OR_BELOW_SHARE_OF_CAPACITY, FEW_AT_OR_BELOW_SPACES, FULL_AT_OR_BELOW_SPACES } from './free-space-bands';
 import { createRegistryWorld, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';
 
 /** Task A10: sites within a radius, with price and free-space band (free, few, full, unknown), nearest first. */
@@ -60,6 +61,11 @@ describe('A10 the rest of nearby sites', () => {
     world.firstHourFees.set(siteId, 10);
     valueOf(await world.registry.setWeeklyHours(world.chair, siteId, [{ weekday: 4, opensMinute: 0, closesMinute: 60 }]));
     expect(valueOf(await world.registry.nearbySites(DRIVER, 1_000))[0]?.open).toBe(false);
+  });
+
+  it('computes the band on the server from named cut-offs: full at 0, few at 2 or fewer or a fifth of the capacity, free above (P11)', () => {
+    expect([FULL_AT_OR_BELOW_SPACES, FEW_AT_OR_BELOW_SPACES, FEW_AT_OR_BELOW_SHARE_OF_CAPACITY]).toEqual([0, 2, 1 / 5]);
+    expect([bandFor(0, 50), bandFor(2, 5), bandFor(10, 50), bandFor(3, 5), bandFor(11, 50), bandFor(undefined, 50)]).toEqual(['full', 'few', 'few', 'free', 'free', 'unknown']);
   });
 
   it('puts the band edges where the policy says: "few" at most 2 spaces or a fifth of the capacity', async () => {

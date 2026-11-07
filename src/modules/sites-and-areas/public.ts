@@ -5,8 +5,9 @@
 import type { Clock } from '../../shared/clock';
 import type { DistrictId, PersonId, SiteId, ZoneId } from '../../shared/identifiers';
 import type { Result } from '../../shared/result';
+import type { TableAccess } from '../../shared/unit-of-work';
 import type { Authorization, SiteLocator } from '../accounts-and-access-control/public';
-import { InMemoryCapacityStore, InMemoryPlacesStore, InMemorySiteCalendarStore } from './internal/adapters/in-memory-stores';
+import { TableCapacityStore, TablePlacesStore, TableSiteCalendarStore } from './internal/adapters/table-stores';
 import { SiteCodeSigner } from './internal/domain/site-code-signer';
 import { PlacesLocator } from './internal/places-locator';
 import type { CapacityStore, PlacesStore, SiteCalendarStore } from './internal/ports';
@@ -69,11 +70,14 @@ export interface SiteCodes {
   verifyExitCode(code: string, siteId: SiteId): Promise<Result<SiteId, SiteCodeRefusal>>;
 }
 
+/**
+ * "not allowed here" answers both a place outside the actor's scope and a place that does not exist: the permission is
+ * checked first, so a refusal never says whether the place exists (P23 #7). Only a district, which the scope check
+ * does not resolve, has its own "unknown district".
+ */
 export type PlaceRefusal =
   | 'not allowed here'
   | 'unknown district'
-  | 'unknown zone'
-  | 'unknown site'
   | 'invalid label'
   | 'invalid outline'
   | 'invalid capacity'
@@ -132,7 +136,10 @@ export interface SiteRegistry extends SiteCodes, SiteLocator {
   changeCapacity(actor: PersonId, siteId: SiteId, capacity: number, reason: string): Promise<Result<void, PlaceRefusal>>;
   /** Every capacity the site has had, oldest first. */
   capacityHistory(siteId: SiteId): Promise<readonly CapacityChange[]>;
-  /** Replaces the weekly opening hours; a site with none declared is open around the clock (task A9). */
+  /**
+   * Replaces the weekly opening hours (task A9). A site with none declared is never open; "always open" is an explicit
+   * 00:00–24:00 period on every weekday (P23 #12).
+   */
   setWeeklyHours(actor: PersonId, siteId: SiteId, periods: readonly OpeningPeriod[]): Promise<Result<void, PlaceRefusal>>;
   /** Declares a closure or a free period, from one local minute until another, with a mandatory reason. */
   declareSpecialEvent(
@@ -145,6 +152,8 @@ export interface SiteRegistry extends SiteCodes, SiteLocator {
   ): Promise<Result<string, PlaceRefusal>>;
   /** Ticketing asks with the server clock's moment; an unknown site is closed. */
   isOpenAt(siteId: SiteId, moment: Date): Promise<boolean>;
+  /** The fee calculator asks through the composition root (P28 #27): inside a declared free period, and open. */
+  isFreeAt(siteId: SiteId, moment: Date): Promise<boolean>;
   /** undefined for an unknown site. */
   statusAt(siteId: SiteId, moment: Date): Promise<SiteStatus | undefined>;
   /** Metres from the site's centre to a point; undefined for an unknown site. */
@@ -161,12 +170,29 @@ export interface SiteRegistry extends SiteCodes, SiteLocator {
 /** The environment variable holding the secret that signs site codes (a name only; the value never enters the code). */
 export const SITE_CODE_SECRET_VARIABLE = 'SITE_CODE_SECRET';
 
-/** The free-space bands: "full" at none, "few" at most 2 spaces or a fifth of the capacity, "free" above. */
-export { FREE_SPACE_BAND_POLICY } from './internal/domain/nearby';
+/** The free-space band cut-offs (P11): "full" at none, "few" at most 2 spaces or a fifth of the capacity, "free" above. */
+export { FREE_SPACE_BAND_POLICY } from './internal/free-space-bands';
 
 export function createSiteCodes(secret: string): SiteCodes {
   return new SiteCodesService(new SiteCodeSigner(secret));
 }
+
+/** The two codes printed at a site, signed without looking the site up: for the sample bodies of other modules' operations. */
+export function signedSiteCodes(secret: string, siteId: SiteId): { readonly entryCode: string; readonly exitCode: string } {
+  const signer = new SiteCodeSigner(secret);
+  return { entryCode: signer.sign(siteId, 'entry'), exitCode: signer.sign(siteId, 'exit') };
+}
+
+/** The environment variable's value, checked the way the token secret is: set and long enough. */
+export function readSiteCodeSecret(environment: NodeJS.ProcessEnv): string {
+  const secret = environment[SITE_CODE_SECRET_VARIABLE];
+  if (secret === undefined || secret.length < MINIMUM_SITE_CODE_SECRET_LENGTH) {
+    throw new Error(`${SITE_CODE_SECRET_VARIABLE} must be set to at least ${MINIMUM_SITE_CODE_SECRET_LENGTH} characters`);
+  }
+  return secret;
+}
+
+const MINIMUM_SITE_CODE_SECRET_LENGTH = 16;
 
 export interface SitesAndAreasStores {
   readonly places: PlacesStore;
@@ -175,6 +201,8 @@ export interface SitesAndAreasStores {
 }
 
 export interface SitesAndAreasDependencies {
+  /** The committed tables (ADR-13): reads outside a request, and the writes that do not arrive with a unit of work yet. */
+  readonly database: TableAccess;
   readonly stores: SitesAndAreasStores;
   readonly authorization: Authorization;
   readonly siteCodeSecret: string;
@@ -185,8 +213,9 @@ export interface SitesAndAreasDependencies {
 
 /** The composition root builds the registry through this one function; nothing else constructs its internals. */
 export function createSiteRegistry(dependencies: SitesAndAreasDependencies): SiteRegistry {
-  const { stores, authorization, siteCodeSecret, freeSpaces, prices, clock } = dependencies;
+  const { database, stores, authorization, siteCodeSecret, freeSpaces, prices, clock } = dependencies;
   return new SiteRegistryService({
+    database,
     places: stores.places,
     capacity: stores.capacity,
     calendar: stores.calendar,
@@ -199,15 +228,17 @@ export function createSiteRegistry(dependencies: SitesAndAreasDependencies): Sit
 }
 
 /**
- * The SiteLocator port access control needs, read straight from this module's stores. It exists so access control can
- * be built first, then handed to the registry, without either module importing the other in a circle.
+ * The SiteLocator port access control needs, read straight from this module's tables (P27 Q3). It exists so access
+ * control can be built first, then handed to the registry, without either module importing the other in a circle.
  */
-export function createSiteLocator(stores: SitesAndAreasStores): SiteLocator {
-  return new PlacesLocator(stores.places);
+export function createSiteLocator(database: TableAccess, stores: SitesAndAreasStores): SiteLocator {
+  return new PlacesLocator(database, stores.places);
 }
 
-export function createInMemorySitesStores(): SitesAndAreasStores {
-  return { places: new InMemoryPlacesStore(), capacity: new InMemoryCapacityStore(), calendar: new InMemorySiteCalendarStore() };
+/** The stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database and PostgreSQL later. */
+export function createSitesStores(): SitesAndAreasStores {
+  return { places: new TablePlacesStore(), capacity: new TableCapacityStore(), calendar: new TableSiteCalendarStore() };
 }
 
-export { createSitesOperations } from './internal/operations';
+/** The operations this module registers with the entry point; the composition root calls this once (P4). */
+export { sitesOperations as operations, type SitesOperationsDependencies } from './internal/operations';

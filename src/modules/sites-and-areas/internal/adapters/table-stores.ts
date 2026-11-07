@@ -1,90 +1,112 @@
 import type { DistrictId, SiteId, ZoneId } from '../../../../shared/identifiers';
+import type { Row, TableAccess } from '../../../../shared/unit-of-work';
 import type { GeoPoint, OpeningPeriod } from '../../public';
 import type { District, Site, Zone } from '../domain/places';
 import type { CapacityChangeRow, CapacityStore, PlacesStore, SiteCalendarStore, SpecialEventRow } from '../ports';
 
-/** In-memory stand-ins for this module's tables, used by every test. */
-export class InMemoryPlacesStore implements PlacesStore {
-  private readonly districts = new Map<DistrictId, District>();
-  private readonly zones = new Map<ZoneId, Zone>();
-  private readonly sites = new Map<SiteId, Site>();
+/**
+ * This module's stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database of every
+ * test and a PostgreSQL unit of work later. Table names follow `db/migrations/0002_identity_and_registry.sql`.
+ */
+export const DISTRICTS_TABLE = 'sites_and_areas.districts';
+export const ZONES_TABLE = 'sites_and_areas.zones';
+export const SITES_TABLE = 'sites_and_areas.sites';
+export const CAPACITY_CHANGES_TABLE = 'sites_and_areas.capacity_changes';
+export const OPENING_HOURS_TABLE = 'sites_and_areas.opening_hours';
+export const SPECIAL_EVENTS_TABLE = 'sites_and_areas.special_events';
 
-  async addDistrict(district: District): Promise<void> {
-    this.districts.set(district.districtId, district);
+export class TablePlacesStore implements PlacesStore {
+  async addDistrict(tables: TableAccess, district: District): Promise<void> {
+    await tables.insert(DISTRICTS_TABLE, district.districtId, district);
   }
 
-  async district(districtId: DistrictId): Promise<District | undefined> {
-    return this.districts.get(districtId);
+  district(tables: TableAccess, districtId: DistrictId): Promise<District | undefined> {
+    return tables.read<District>(DISTRICTS_TABLE, districtId);
   }
 
-  async relabelDistrict(districtId: DistrictId, label: string): Promise<void> {
-    this.districts.set(districtId, { ...existing(this.districts, districtId, 'district'), label });
+  async relabelDistrict(tables: TableAccess, districtId: DistrictId, label: string): Promise<void> {
+    await tables.replace(DISTRICTS_TABLE, districtId, { ...(await existing(tables, DISTRICTS_TABLE, districtId, 'district')), label });
   }
 
-  async addZone(zone: Zone): Promise<void> {
-    this.zones.set(zone.zoneId, zone);
+  async addZone(tables: TableAccess, zone: Zone): Promise<void> {
+    await tables.insert(ZONES_TABLE, zone.zoneId, zone);
   }
 
-  async zone(zoneId: ZoneId): Promise<Zone | undefined> {
-    return this.zones.get(zoneId);
+  zone(tables: TableAccess, zoneId: ZoneId): Promise<Zone | undefined> {
+    return tables.read<Zone>(ZONES_TABLE, zoneId);
   }
 
-  async relabelZone(zoneId: ZoneId, label: string): Promise<void> {
-    this.zones.set(zoneId, { ...existing(this.zones, zoneId, 'zone'), label });
+  async relabelZone(tables: TableAccess, zoneId: ZoneId, label: string): Promise<void> {
+    await tables.replace(ZONES_TABLE, zoneId, { ...(await existing(tables, ZONES_TABLE, zoneId, 'zone')), label });
   }
 
-  async addSite(site: Site): Promise<void> {
-    this.sites.set(site.siteId, site);
+  async addSite(tables: TableAccess, site: Site): Promise<void> {
+    await tables.insert(SITES_TABLE, site.siteId, site);
   }
 
-  async site(siteId: SiteId): Promise<Site | undefined> {
-    return this.sites.get(siteId);
+  site(tables: TableAccess, siteId: SiteId): Promise<Site | undefined> {
+    return tables.read<Site>(SITES_TABLE, siteId);
   }
 
-  async replaceOutline(siteId: SiteId, outline: readonly GeoPoint[]): Promise<void> {
-    this.sites.set(siteId, { ...existing(this.sites, siteId, 'site'), outline });
+  async replaceOutline(tables: TableAccess, siteId: SiteId, outline: readonly GeoPoint[]): Promise<void> {
+    await tables.replace(SITES_TABLE, siteId, { ...(await existing(tables, SITES_TABLE, siteId, 'site')), outline });
   }
 
-  async allSites(): Promise<readonly Site[]> {
-    return [...this.sites.values()];
-  }
-}
-
-export class InMemoryCapacityStore implements CapacityStore {
-  private readonly changes: CapacityChangeRow[] = [];
-
-  async append(change: CapacityChangeRow): Promise<void> {
-    this.changes.push(change);
-  }
-
-  async historyOf(siteId: SiteId): Promise<readonly CapacityChangeRow[]> {
-    return this.changes.filter((change) => change.siteId === siteId);
+  allSites(tables: TableAccess): Promise<readonly Site[]> {
+    return tables.list<Site>(SITES_TABLE);
   }
 }
 
-export class InMemorySiteCalendarStore implements SiteCalendarStore {
-  private readonly hours = new Map<SiteId, readonly OpeningPeriod[]>();
-  private readonly events: SpecialEventRow[] = [];
+/** The insert order, kept in the row so the history reads oldest first whatever the storage returns. */
+interface StoredCapacityChange extends CapacityChangeRow {
+  readonly sequence: number;
+}
 
-  async weeklyHours(siteId: SiteId): Promise<readonly OpeningPeriod[] | undefined> {
-    return this.hours.get(siteId);
+export class TableCapacityStore implements CapacityStore {
+  async append(tables: TableAccess, change: CapacityChangeRow): Promise<void> {
+    const sequence = (await tables.list<StoredCapacityChange>(CAPACITY_CHANGES_TABLE)).length + 1;
+    await tables.insert(CAPACITY_CHANGES_TABLE, `${change.siteId}/${sequence}`, { ...change, sequence });
   }
 
-  async replaceWeeklyHours(siteId: SiteId, periods: readonly OpeningPeriod[]): Promise<void> {
-    this.hours.set(siteId, periods);
-  }
-
-  async addEvent(event: SpecialEventRow): Promise<void> {
-    this.events.push(event);
-  }
-
-  async eventsOf(siteId: SiteId): Promise<readonly SpecialEventRow[]> {
-    return this.events.filter((event) => event.siteId === siteId);
+  async historyOf(tables: TableAccess, siteId: SiteId): Promise<readonly CapacityChangeRow[]> {
+    return (await tables.list<StoredCapacityChange>(CAPACITY_CHANGES_TABLE))
+      .filter((change) => change.siteId === siteId)
+      .sort((first, second) => first.sequence - second.sequence)
+      .map(({ sequence: _order, ...change }) => change);
   }
 }
 
-function existing<Row>(rows: ReadonlyMap<string, Row>, id: string, kind: string): Row {
-  const row = rows.get(id);
+/** The weekly hours of one site as one row: the PostgreSQL adapter spreads them over one row per period. */
+interface StoredWeeklyHours {
+  readonly siteId: SiteId;
+  readonly periods: readonly OpeningPeriod[];
+}
+
+export class TableSiteCalendarStore implements SiteCalendarStore {
+  async weeklyHours(tables: TableAccess, siteId: SiteId): Promise<readonly OpeningPeriod[]> {
+    return (await tables.read<StoredWeeklyHours>(OPENING_HOURS_TABLE, siteId))?.periods ?? [];
+  }
+
+  async replaceWeeklyHours(tables: TableAccess, siteId: SiteId, periods: readonly OpeningPeriod[]): Promise<void> {
+    const row: StoredWeeklyHours = { siteId, periods };
+    if ((await tables.read(OPENING_HOURS_TABLE, siteId)) === undefined) {
+      await tables.insert(OPENING_HOURS_TABLE, siteId, row);
+    } else {
+      await tables.replace(OPENING_HOURS_TABLE, siteId, row);
+    }
+  }
+
+  async addEvent(tables: TableAccess, event: SpecialEventRow): Promise<void> {
+    await tables.insert(SPECIAL_EVENTS_TABLE, event.eventId, event);
+  }
+
+  async eventsOf(tables: TableAccess, siteId: SiteId): Promise<readonly SpecialEventRow[]> {
+    return (await tables.list<SpecialEventRow>(SPECIAL_EVENTS_TABLE)).filter((event) => event.siteId === siteId);
+  }
+}
+
+async function existing<Stored extends Row>(tables: TableAccess, table: string, id: string, kind: string): Promise<Stored> {
+  const row = await tables.read<Stored>(table, id);
   if (row === undefined) {
     throw new Error(`No ${kind} with the id ${id}`);
   }

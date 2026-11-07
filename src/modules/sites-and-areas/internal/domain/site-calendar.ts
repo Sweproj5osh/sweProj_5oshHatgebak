@@ -5,6 +5,9 @@ import type { LocalDateTime, OpeningPeriod, SiteStatus, SpecialEventKind } from 
  * Whether a site is open at a moment (task A9): declared closures first, then the weekly opening hours, then declared
  * free periods. Hours and events are in Cairo's local time, the time printed on the street signs; the moment asked
  * about is an instant from the server clock, converted here. Pure: no storage, no clock.
+ *
+ * A site with no hours declared is never open; "always open" is an explicit 00:00–24:00 period on every weekday, so a
+ * site is open only because the committee said so (P23 #12).
  */
 export const SITE_TIME_ZONE = 'Africa/Cairo';
 const MINUTES_PER_DAY = 24 * 60;
@@ -19,16 +22,24 @@ export interface SpecialEvent {
   readonly reason: string;
 }
 
-/** No weekly hours declared means the site is open around the clock. */
-export function statusAt(moment: Date, weeklyHours: readonly OpeningPeriod[] | undefined, events: readonly SpecialEvent[]): SiteStatus {
+export const NO_HOURS_DECLARED = 'no opening hours declared';
+export const OUTSIDE_OPENING_HOURS = 'outside opening hours';
+
+/** The weekly hours that mean "always open": midnight to midnight on each of the seven weekdays. */
+export const ALWAYS_OPEN: readonly OpeningPeriod[] = WEEKDAYS.map((_day, weekday) => ({ weekday, opensMinute: 0, closesMinute: MINUTES_PER_DAY }));
+
+export function statusAt(moment: Date, weeklyHours: readonly OpeningPeriod[], events: readonly SpecialEvent[]): SiteStatus {
   const local = toCairoLocal(moment);
   const covering = (kind: SpecialEventKind) => events.find((event) => event.kind === kind && covers(event, local));
   const closure = covering('closure');
   if (closure !== undefined) {
     return { open: false, free: false, reason: `closed: ${closure.reason}` };
   }
-  if (weeklyHours !== undefined && !withinHours(weeklyHours, local)) {
-    return { open: false, free: false, reason: 'outside opening hours' };
+  if (weeklyHours.length === 0) {
+    return { open: false, free: false, reason: NO_HOURS_DECLARED };
+  }
+  if (!withinHours(weeklyHours, local)) {
+    return { open: false, free: false, reason: OUTSIDE_OPENING_HOURS };
   }
   const freePeriod = covering('free period');
   return freePeriod === undefined
@@ -57,8 +68,8 @@ export function validEventPeriod(from: LocalDateTime, until: LocalDateTime): Res
 }
 
 /**
- * Reads "daily 08:00-23:00" or "sun-thu 08:00-22:00; fri 13:00-23:00" into periods. The request-body schema has no list
- * type, and its server-clock rule rejects anything shaped like a date, so the hours travel as this text.
+ * Reads "daily 08:00-23:00" or "sun-thu 08:00-22:00; fri 13:00-23:00" into periods; "daily 00:00-24:00" is "always
+ * open". The hours travel as this text because the body schema's lists hold scalars and points, not periods.
  */
 export function parseWeeklyHours(text: string): Result<readonly OpeningPeriod[], 'invalid hours'> {
   const periods: OpeningPeriod[] = [];

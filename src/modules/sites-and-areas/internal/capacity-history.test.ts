@@ -12,7 +12,7 @@ beforeEach(async () => {
   world = await createRegistryWorld();
   districtOne = valueOf(await world.registry.createDistrict(world.chair, 'Zamalek'));
   memberOfDistrictOne = await createStaff(world, 'member');
-  await world.accounts.accessFacts.recordMemberDistrict(memberOfDistrictOne, districtOne);
+  await world.accounts.accessFacts.recordMemberDistrict(world.database, memberOfDistrictOne, districtOne);
   const zone = valueOf(await world.registry.createZone(world.chair, districtOne, 'Zamalek zone 1'));
   siteId = valueOf(await world.registry.createSite(world.chair, zone, '26 July Street', squareAround(30.0626, 31.2197), 5));
 });
@@ -38,9 +38,9 @@ describe('A8 the task sheet cases', () => {
 describe('A8 the rest of capacity changes', () => {
   it('refuses a member of another district, an unknown site and an impossible capacity', async () => {
     const memberElsewhere = await createStaff(world, 'member');
-    await world.accounts.accessFacts.recordMemberDistrict(memberElsewhere, 'district-elsewhere');
+    await world.accounts.accessFacts.recordMemberDistrict(world.database, memberElsewhere, 'district-elsewhere');
     expect(await world.registry.changeCapacity(memberElsewhere, siteId, 8, 'reason')).toEqual({ ok: false, error: 'not allowed here' });
-    expect(await world.registry.changeCapacity(world.chair, 'no-such-site', 8, 'reason')).toEqual({ ok: false, error: 'unknown site' });
+    expect(await world.registry.changeCapacity(world.chair, 'no-such-site', 8, 'reason')).toEqual({ ok: false, error: 'not allowed here' });
     expect(await world.registry.changeCapacity(world.chair, siteId, -1, 'reason')).toEqual({ ok: false, error: 'invalid capacity' });
   });
 });

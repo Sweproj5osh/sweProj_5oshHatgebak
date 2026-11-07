@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../shared/clock';
 import type { DistrictId, PersonId, SiteId, ZoneId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
+import type { TableAccess } from '../../../shared/unit-of-work';
 import type { Authorization, Scope } from '../../accounts-and-access-control/public';
 import type {
   CapacityChange,
@@ -19,14 +20,17 @@ import type {
   SiteStatus,
   SpecialEventKind,
 } from '../public';
-import { bandFor, distanceInMeters, isRealPoint, MAXIMUM_RADIUS_METERS } from './domain/nearby';
+import { distanceInMeters, isRealPoint, MAXIMUM_RADIUS_METERS } from './domain/nearby';
 import { centreOf, validCapacity, validLabel, validOutline, validReason } from './domain/places';
 import { statusAt, validEventPeriod, validWeeklyHours } from './domain/site-calendar';
+import { bandFor } from './free-space-bands';
 import { PlacesLocator } from './places-locator';
 import type { CapacityStore, PlacesStore, SiteCalendarStore } from './ports';
 import type { SiteCodesService } from './site-codes-service';
 
 export interface SiteRegistryDependencies {
+  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  readonly database: TableAccess;
   readonly places: PlacesStore;
   readonly capacity: CapacityStore;
   readonly calendar: SiteCalendarStore;
@@ -41,72 +45,71 @@ const INITIAL_CAPACITY_REASON = 'capacity when the site was created';
 
 /**
  * Districts, zones and sites (task A6). Only the Chair creates a district; only a member of that district, or the
- * Chair, creates or edits anything inside it. The audit entry for each change is written by the entry point's
- * pipeline when the change arrives as a request.
+ * Chair, creates or edits anything inside it. The permission is checked before anything else is looked up, so a
+ * place that does not exist and a place outside the actor's scope get the same answer, "not allowed here" (P23 #7).
+ * The audit entry for each change is written by the entry point's pipeline when the change arrives as a request.
  */
 export class SiteRegistryService implements SiteRegistry {
   private readonly locator: PlacesLocator;
 
   constructor(private readonly dependencies: SiteRegistryDependencies) {
-    this.locator = new PlacesLocator(dependencies.places);
+    this.locator = new PlacesLocator(dependencies.database, dependencies.places);
   }
 
   async createDistrict(actor: PersonId, label: string): Promise<Result<DistrictId, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.createDistrict', {}))) {
+      return fail('not allowed here');
+    }
     const checkedLabel = validLabel(label);
     if (!checkedLabel.ok) {
       return checkedLabel;
     }
-    if (!(await this.permitted(actor, 'sites.createDistrict', {}))) {
-      return fail('not allowed here');
-    }
     const districtId = `district-${randomUUID()}`;
-    await this.dependencies.places.addDistrict({ districtId, label: checkedLabel.value });
+    await this.dependencies.places.addDistrict(this.database, { districtId, label: checkedLabel.value });
     return succeed(districtId);
   }
 
   async relabelDistrict(actor: PersonId, districtId: DistrictId, label: string): Promise<Result<void, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.relabelDistrict', { districtId }))) {
+      return fail('not allowed here');
+    }
+    if ((await this.dependencies.places.district(this.database, districtId)) === undefined) {
+      return fail('unknown district');
+    }
     const checkedLabel = validLabel(label);
     if (!checkedLabel.ok) {
       return checkedLabel;
     }
-    if ((await this.dependencies.places.district(districtId)) === undefined) {
-      return fail('unknown district');
-    }
-    if (!(await this.permitted(actor, 'sites.relabelDistrict', { districtId }))) {
-      return fail('not allowed here');
-    }
-    await this.dependencies.places.relabelDistrict(districtId, checkedLabel.value);
+    await this.dependencies.places.relabelDistrict(this.database, districtId, checkedLabel.value);
     return succeed(undefined);
   }
 
   async createZone(actor: PersonId, districtId: DistrictId, label: string): Promise<Result<ZoneId, PlaceRefusal>> {
-    const checkedLabel = validLabel(label);
-    if (!checkedLabel.ok) {
-      return checkedLabel;
-    }
-    if ((await this.dependencies.places.district(districtId)) === undefined) {
-      return fail('unknown district');
-    }
     if (!(await this.permitted(actor, 'sites.createZone', { districtId }))) {
       return fail('not allowed here');
     }
-    const zoneId = `zone-${randomUUID()}`;
-    await this.dependencies.places.addZone({ zoneId, districtId, label: checkedLabel.value });
-    return succeed(zoneId);
-  }
-
-  async relabelZone(actor: PersonId, zoneId: ZoneId, label: string): Promise<Result<void, PlaceRefusal>> {
+    if ((await this.dependencies.places.district(this.database, districtId)) === undefined) {
+      return fail('unknown district');
+    }
     const checkedLabel = validLabel(label);
     if (!checkedLabel.ok) {
       return checkedLabel;
     }
-    if ((await this.dependencies.places.zone(zoneId)) === undefined) {
-      return fail('unknown zone');
-    }
+    const zoneId = `zone-${randomUUID()}`;
+    await this.dependencies.places.addZone(this.database, { zoneId, districtId, label: checkedLabel.value });
+    return succeed(zoneId);
+  }
+
+  /** The scope check resolves the zone through the locator, so an unknown zone is "not allowed here" for everyone. */
+  async relabelZone(actor: PersonId, zoneId: ZoneId, label: string): Promise<Result<void, PlaceRefusal>> {
     if (!(await this.permitted(actor, 'sites.relabelZone', { zoneId }))) {
       return fail('not allowed here');
     }
-    await this.dependencies.places.relabelZone(zoneId, checkedLabel.value);
+    const checkedLabel = validLabel(label);
+    if (!checkedLabel.ok) {
+      return checkedLabel;
+    }
+    await this.dependencies.places.relabelZone(this.database, zoneId, checkedLabel.value);
     return succeed(undefined);
   }
 
@@ -117,44 +120,41 @@ export class SiteRegistryService implements SiteRegistry {
     outline: readonly GeoPoint[],
     capacity: number,
   ): Promise<Result<SiteId, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.createSite', { zoneId }))) {
+      return fail('not allowed here');
+    }
     const checked = validSiteFields(label, outline, capacity);
     if (!checked.ok) {
       return checked;
     }
-    if ((await this.dependencies.places.zone(zoneId)) === undefined) {
-      return fail('unknown zone');
-    }
-    if (!(await this.permitted(actor, 'sites.createSite', { zoneId }))) {
-      return fail('not allowed here');
-    }
     const siteId = `site-${randomUUID()}`;
-    await this.dependencies.places.addSite({ siteId, zoneId, label: checked.value.label, outline: checked.value.outline });
-    await this.dependencies.capacity.append({
+    await this.dependencies.places.addSite(this.database, { siteId, zoneId, label: checked.value.label, outline: checked.value.outline });
+    await this.dependencies.capacity.append(this.database, {
       siteId,
       capacity: checked.value.capacity,
       reason: INITIAL_CAPACITY_REASON,
       changedBy: actor,
-      changedAt: this.dependencies.clock.now().toISOString(),
+      changedAt: this.now(),
     });
     return succeed(siteId);
   }
 
   async replaceSiteOutline(actor: PersonId, siteId: SiteId, outline: readonly GeoPoint[]): Promise<Result<void, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.replaceOutline', { siteId }))) {
+      return fail('not allowed here');
+    }
     const checkedOutline = validOutline(outline);
     if (!checkedOutline.ok) {
       return checkedOutline;
     }
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
-      return fail('unknown site');
-    }
-    if (!(await this.permitted(actor, 'sites.replaceOutline', { siteId }))) {
-      return fail('not allowed here');
-    }
-    await this.dependencies.places.replaceOutline(siteId, checkedOutline.value);
+    await this.dependencies.places.replaceOutline(this.database, siteId, checkedOutline.value);
     return succeed(undefined);
   }
 
   async changeCapacity(actor: PersonId, siteId: SiteId, capacity: number, reason: string): Promise<Result<void, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.changeCapacity', { siteId }))) {
+      return fail('not allowed here');
+    }
     const checkedReason = validReason(reason);
     if (!checkedReason.ok) {
       return checkedReason;
@@ -163,39 +163,30 @@ export class SiteRegistryService implements SiteRegistry {
     if (!checkedCapacity.ok) {
       return checkedCapacity;
     }
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
-      return fail('unknown site');
-    }
-    if (!(await this.permitted(actor, 'sites.changeCapacity', { siteId }))) {
-      return fail('not allowed here');
-    }
-    await this.dependencies.capacity.append({
+    await this.dependencies.capacity.append(this.database, {
       siteId,
       capacity: checkedCapacity.value,
       reason: checkedReason.value,
       changedBy: actor,
-      changedAt: this.dependencies.clock.now().toISOString(),
+      changedAt: this.now(),
     });
     return succeed(undefined);
   }
 
   async capacityHistory(siteId: SiteId): Promise<readonly CapacityChange[]> {
-    const history = await this.dependencies.capacity.historyOf(siteId);
+    const history = await this.dependencies.capacity.historyOf(this.database, siteId);
     return history.map(({ capacity, reason, changedBy, changedAt }) => ({ capacity, reason, changedBy, changedAt }));
   }
 
   async setWeeklyHours(actor: PersonId, siteId: SiteId, periods: readonly OpeningPeriod[]): Promise<Result<void, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.setWeeklyHours', { siteId }))) {
+      return fail('not allowed here');
+    }
     const checkedHours = validWeeklyHours(periods);
     if (!checkedHours.ok) {
       return checkedHours;
     }
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
-      return fail('unknown site');
-    }
-    if (!(await this.permitted(actor, 'sites.setWeeklyHours', { siteId }))) {
-      return fail('not allowed here');
-    }
-    await this.dependencies.calendar.replaceWeeklyHours(siteId, checkedHours.value);
+    await this.dependencies.calendar.replaceWeeklyHours(this.database, siteId, checkedHours.value);
     return succeed(undefined);
   }
 
@@ -207,6 +198,9 @@ export class SiteRegistryService implements SiteRegistry {
     until: LocalDateTime,
     reason: string,
   ): Promise<Result<string, PlaceRefusal>> {
+    if (!(await this.permitted(actor, 'sites.declareSpecialEvent', { siteId }))) {
+      return fail('not allowed here');
+    }
     const checkedReason = validReason(reason);
     if (!checkedReason.ok) {
       return checkedReason;
@@ -215,14 +209,8 @@ export class SiteRegistryService implements SiteRegistry {
     if (!checkedPeriod.ok) {
       return checkedPeriod;
     }
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
-      return fail('unknown site');
-    }
-    if (!(await this.permitted(actor, 'sites.declareSpecialEvent', { siteId }))) {
-      return fail('not allowed here');
-    }
     const eventId = `event-${randomUUID()}`;
-    await this.dependencies.calendar.addEvent({
+    await this.dependencies.calendar.addEvent(this.database, {
       eventId,
       siteId,
       kind,
@@ -230,7 +218,7 @@ export class SiteRegistryService implements SiteRegistry {
       until,
       reason: checkedReason.value,
       declaredBy: actor,
-      declaredAt: this.dependencies.clock.now().toISOString(),
+      declaredAt: this.now(),
     });
     return succeed(eventId);
   }
@@ -239,16 +227,23 @@ export class SiteRegistryService implements SiteRegistry {
     return (await this.statusAt(siteId, moment))?.open ?? false;
   }
 
+  async isFreeAt(siteId: SiteId, moment: Date): Promise<boolean> {
+    return (await this.statusAt(siteId, moment))?.free ?? false;
+  }
+
   async statusAt(siteId: SiteId, moment: Date): Promise<SiteStatus | undefined> {
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
+    if ((await this.dependencies.places.site(this.database, siteId)) === undefined) {
       return undefined;
     }
-    const [weeklyHours, events] = await Promise.all([this.dependencies.calendar.weeklyHours(siteId), this.dependencies.calendar.eventsOf(siteId)]);
+    const [weeklyHours, events] = await Promise.all([
+      this.dependencies.calendar.weeklyHours(this.database, siteId),
+      this.dependencies.calendar.eventsOf(this.database, siteId),
+    ]);
     return statusAt(moment, weeklyHours, events);
   }
 
   async distanceFromSite(siteId: SiteId, point: GeoPoint): Promise<number | undefined> {
-    const site = await this.dependencies.places.site(siteId);
+    const site = await this.dependencies.places.site(this.database, siteId);
     return site === undefined || !isRealPoint(point) ? undefined : distanceInMeters(centreOf(site.outline), point);
   }
 
@@ -260,7 +255,7 @@ export class SiteRegistryService implements SiteRegistry {
       return fail('invalid radius');
     }
     const moment = this.dependencies.clock.now();
-    const withinRadius = (await this.dependencies.places.allSites())
+    const withinRadius = (await this.dependencies.places.allSites(this.database))
       .map((site) => ({ site, centre: centreOf(site.outline) }))
       .map((candidate) => ({ ...candidate, distanceMeters: Math.round(distanceInMeters(from, candidate.centre)) }))
       .filter((candidate) => candidate.distanceMeters <= radiusMeters)
@@ -280,12 +275,12 @@ export class SiteRegistryService implements SiteRegistry {
   }
 
   async districtExists(districtId: DistrictId): Promise<boolean> {
-    return (await this.dependencies.places.district(districtId)) !== undefined;
+    return (await this.dependencies.places.district(this.database, districtId)) !== undefined;
   }
 
   async siteDetails(siteId: SiteId): Promise<SiteDetails | undefined> {
-    const site = await this.dependencies.places.site(siteId);
-    const zone = site === undefined ? undefined : await this.dependencies.places.zone(site.zoneId);
+    const site = await this.dependencies.places.site(this.database, siteId);
+    const zone = site === undefined ? undefined : await this.dependencies.places.zone(this.database, site.zoneId);
     const capacity = await this.capacityOf(siteId);
     if (site === undefined || zone === undefined || capacity === undefined) {
       return undefined;
@@ -294,7 +289,7 @@ export class SiteRegistryService implements SiteRegistry {
   }
 
   async capacityOf(siteId: SiteId): Promise<number | undefined> {
-    const history = await this.dependencies.capacity.historyOf(siteId);
+    const history = await this.dependencies.capacity.historyOf(this.database, siteId);
     return history[history.length - 1]?.capacity;
   }
 
@@ -307,7 +302,7 @@ export class SiteRegistryService implements SiteRegistry {
   }
 
   async issueEntryAndExitCodes(siteId: SiteId): Promise<{ entryCode: string; exitCode: string }> {
-    if ((await this.dependencies.places.site(siteId)) === undefined) {
+    if ((await this.dependencies.places.site(this.database, siteId)) === undefined) {
       throw new Error(`Cannot issue codes for the unknown site ${siteId}`);
     }
     return this.dependencies.codes.issueEntryAndExitCodes(siteId);
@@ -319,6 +314,14 @@ export class SiteRegistryService implements SiteRegistry {
 
   verifyExitCode(code: string, siteId: SiteId): Promise<Result<SiteId, SiteCodeRefusal>> {
     return this.dependencies.codes.verifyExitCode(code, siteId);
+  }
+
+  private get database(): TableAccess {
+    return this.dependencies.database;
+  }
+
+  private now(): string {
+    return this.dependencies.clock.now().toISOString();
   }
 
   private permitted(actor: PersonId, operation: string, scope: Scope): Promise<boolean> {

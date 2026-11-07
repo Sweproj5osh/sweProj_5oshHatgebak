@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DistrictId, PersonId, SiteId } from '../../../shared/identifiers';
-import { parseWeeklyHours } from './domain/site-calendar';
+import { ALWAYS_OPEN, NO_HOURS_DECLARED, parseWeeklyHours } from './domain/site-calendar';
 import { createRegistryWorld, createStaff, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';
 
 /**
@@ -18,7 +18,7 @@ beforeEach(async () => {
   world = await createRegistryWorld();
   districtOne = valueOf(await world.registry.createDistrict(world.chair, 'Zamalek'));
   memberOfDistrictOne = await createStaff(world, 'member');
-  await world.accounts.accessFacts.recordMemberDistrict(memberOfDistrictOne, districtOne);
+  await world.accounts.accessFacts.recordMemberDistrict(world.database, memberOfDistrictOne, districtOne);
   const zone = valueOf(await world.registry.createZone(world.chair, districtOne, 'Zamalek zone 1'));
   siteId = valueOf(await world.registry.createSite(world.chair, zone, '26 July Street', squareAround(30.0626, 31.2197), 12));
   valueOf(await world.registry.setWeeklyHours(memberOfDistrictOne, siteId, valueOf(parseWeeklyHours('daily 08:00-23:00'))));
@@ -58,12 +58,24 @@ describe('A9 the rest of the hours', () => {
     expect(await world.registry.statusAt(siteId, new Date('2026-11-21T03:00:00Z'))).toEqual({ open: false, free: false, reason: 'outside opening hours' });
   });
 
-  it('keeps a site with no declared hours open around the clock, and an unknown site closed', async () => {
+  it('keeps a site with no declared hours closed ("never open"), opens one with an explicit 00:00-24:00 row around the clock, and keeps an unknown site closed (P23 #12)', async () => {
     const zone = valueOf(await world.registry.createZone(world.chair, districtOne, 'Zamalek zone 2'));
-    const allHours = valueOf(await world.registry.createSite(world.chair, zone, 'Brazil Street', squareAround(30.065, 31.221), 8));
-    expect(await world.registry.isOpenAt(allHours, new Date('2026-11-20T01:00:00Z'))).toBe(true);
+    const newSite = valueOf(await world.registry.createSite(world.chair, zone, 'Brazil Street', squareAround(30.065, 31.221), 8));
+    expect(await world.registry.statusAt(newSite, new Date('2026-11-20T01:00:00Z'))).toEqual({ open: false, free: false, reason: NO_HOURS_DECLARED });
+    valueOf(await world.registry.setWeeklyHours(world.chair, newSite, valueOf(parseWeeklyHours('daily 00:00-24:00'))));
+    expect(valueOf(parseWeeklyHours('daily 00:00-24:00'))).toEqual(ALWAYS_OPEN);
+    for (const hour of [0, 6, 12, 23]) {
+      expect(await world.registry.isOpenAt(newSite, new Date(Date.UTC(2026, 10, 20, hour)))).toBe(true);
+    }
     expect(await world.registry.isOpenAt('no-such-site', new Date('2026-11-20T10:00:00Z'))).toBe(false);
     expect(await world.registry.statusAt('no-such-site', new Date('2026-11-20T10:00:00Z'))).toBeUndefined();
+  });
+
+  it('answers isFreeAt for the fee calculator: free only inside a declared free period while open (P28 #27)', async () => {
+    valueOf(await world.registry.declareSpecialEvent(memberOfDistrictOne, siteId, 'free period', local(2026, 11, 21, 10), local(2026, 11, 21, 14), 'National day'));
+    expect(await world.registry.isFreeAt(siteId, new Date('2026-11-21T09:00:00Z'))).toBe(true);
+    expect(await world.registry.isFreeAt(siteId, new Date('2026-11-21T13:00:00Z'))).toBe(false);
+    expect(await world.registry.isFreeAt('no-such-site', new Date('2026-11-21T09:00:00Z'))).toBe(false);
   });
 
   it('refuses a period that ends before it starts or names a day that does not exist, an empty reason and another district', async () => {
@@ -72,7 +84,7 @@ describe('A9 the rest of the hours', () => {
     expect(await declare(memberOfDistrictOne, siteId, 'closure', local(2026, 11, 31, 18), local(2026, 12, 1, 0), 'match')).toEqual({ ok: false, error: 'invalid period' });
     expect(await declare(memberOfDistrictOne, siteId, 'closure', local(2026, 11, 20, 18), local(2026, 11, 20, 23), ' ')).toEqual({ ok: false, error: 'reason required' });
     const memberElsewhere = await createStaff(world, 'member');
-    await world.accounts.accessFacts.recordMemberDistrict(memberElsewhere, 'district-elsewhere');
+    await world.accounts.accessFacts.recordMemberDistrict(world.database, memberElsewhere, 'district-elsewhere');
     expect(await declare(memberElsewhere, siteId, 'closure', local(2026, 11, 20, 18), local(2026, 11, 20, 23), 'match')).toEqual({ ok: false, error: 'not allowed here' });
     expect(await world.registry.setWeeklyHours(memberElsewhere, siteId, [])).toEqual({ ok: false, error: 'not allowed here' });
   });

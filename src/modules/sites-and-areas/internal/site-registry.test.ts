@@ -22,7 +22,7 @@ beforeEach(async () => {
   districtOne = valueOf(await world.registry.createDistrict(world.chair, 'Zamalek'));
   districtTwo = valueOf(await world.registry.createDistrict(world.chair, 'Dokki'));
   memberOfDistrictOne = await createStaff(world, 'member');
-  await world.accounts.accessFacts.recordMemberDistrict(memberOfDistrictOne, districtOne);
+  await world.accounts.accessFacts.recordMemberDistrict(world.database, memberOfDistrictOne, districtOne);
 });
 
 describe('A6 the task sheet case', () => {
@@ -32,8 +32,8 @@ describe('A6 the task sheet case', () => {
       error: 'not allowed here',
     });
     expect(await world.registry.relabelDistrict(memberOfDistrictOne, districtOne, 'Zamalek North')).toEqual({ ok: true, value: undefined });
-    expect((await world.sitesStores.places.district(districtOne))?.label).toBe('Zamalek North');
-    expect((await world.sitesStores.places.district(districtTwo))?.label).toBe('Dokki');
+    expect((await world.sitesStores.places.district(world.database, districtOne))?.label).toBe('Zamalek North');
+    expect((await world.sitesStores.places.district(world.database, districtTwo))?.label).toBe('Dokki');
   });
 });
 
@@ -64,7 +64,7 @@ describe('A6 districts, zones and sites', () => {
     sitesCreated += 1;
     expect(await world.registry.siteDetails(siteId)).toEqual({ siteId, zoneId: zone, districtId: districtOne, label: '26 July Street', outline, capacity: 12 });
     expect(await world.registry.locateSite(siteId)).toEqual({ zoneId: zone, districtId: districtOne });
-    expect(await world.sitesStores.capacity.historyOf(siteId)).toEqual([
+    expect(await world.sitesStores.capacity.historyOf(world.database, siteId)).toEqual([
       { siteId, capacity: 12, reason: 'capacity when the site was created', changedBy: world.chair, changedAt: '2026-11-05T08:00:00.000Z' },
     ]);
   });
@@ -74,20 +74,32 @@ describe('A6 districts, zones and sites', () => {
     const siteId = valueOf(await world.registry.createSite(world.chair, zone, '26 July Street', squareAround(30.0626, 31.2197), 12));
     sitesCreated += 1;
     const memberOfDistrictTwo = await createStaff(world, 'member');
-    await world.accounts.accessFacts.recordMemberDistrict(memberOfDistrictTwo, districtTwo);
+    await world.accounts.accessFacts.recordMemberDistrict(world.database, memberOfDistrictTwo, districtTwo);
     const newOutline = squareAround(30.063, 31.22);
     expect(countRefusal(await world.registry.replaceSiteOutline(memberOfDistrictTwo, siteId, newOutline))).toEqual({ ok: false, error: 'not allowed here' });
     expect((await world.registry.replaceSiteOutline(memberOfDistrictOne, siteId, newOutline)).ok).toBe(true);
     expect((await world.registry.siteDetails(siteId))?.outline).toEqual(newOutline);
   });
 
-  it('refuses unknown places, an empty label, an outline of fewer than three real points and a capacity that is not a positive whole number', async () => {
+  it('answers an unknown zone or site "not allowed here", the same as a place outside the scope, even for the Chair (P23 #7)', async () => {
+    const outline = squareAround(30.0626, 31.2197);
+    expect(countRefusal(await world.registry.createSite(world.chair, 'no-such-zone', 'Site', outline, 5))).toEqual({ ok: false, error: 'not allowed here' });
+    expect(countRefusal(await world.registry.replaceSiteOutline(world.chair, 'no-such-site', outline))).toEqual({ ok: false, error: 'not allowed here' });
+    expect(countRefusal(await world.registry.changeCapacity(memberOfDistrictOne, 'no-such-site', 8, 'reason'))).toEqual({ ok: false, error: 'not allowed here' });
+  });
+
+  it('checks the permission before anything else: a member outside the district learns nothing about the label it sent', async () => {
+    const memberOfDistrictTwo = await createStaff(world, 'member');
+    await world.accounts.accessFacts.recordMemberDistrict(world.database, memberOfDistrictTwo, districtTwo);
+    expect(countRefusal(await world.registry.createZone(memberOfDistrictTwo, districtOne, '   '))).toEqual({ ok: false, error: 'not allowed here' });
+    expect(countRefusal(await world.registry.createZone(memberOfDistrictOne, districtOne, '   '))).toEqual({ ok: false, error: 'invalid label' });
+  });
+
+  it('refuses an unknown district, an empty label, an outline of fewer than three real points and a capacity that is not a positive whole number', async () => {
     const zone = valueOf(await world.registry.createZone(world.chair, districtOne, 'Zamalek zone 1'));
     const outline = squareAround(30.0626, 31.2197);
     const cases = [
       [await world.registry.createZone(world.chair, 'no-such-district', 'Zone'), 'unknown district'],
-      [await world.registry.createSite(world.chair, 'no-such-zone', 'Site', outline, 5), 'unknown zone'],
-      [await world.registry.replaceSiteOutline(world.chair, 'no-such-site', outline), 'unknown site'],
       [await world.registry.createDistrict(world.chair, '   '), 'invalid label'],
       [await world.registry.createSite(world.chair, zone, 'Site', outline.slice(0, 2), 5), 'invalid outline'],
       [await world.registry.createSite(world.chair, zone, 'Site', [{ latitude: 91, longitude: 0 }, ...outline], 5), 'invalid outline'],
