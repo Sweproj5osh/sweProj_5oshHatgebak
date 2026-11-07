@@ -3,7 +3,7 @@
  * Open and close by scan, assisted tickets, one open ticket per car, no ticket when full, exit time frozen by the
  * server. Needs SiteRegistry, FeeCalculator, AuditTrail (Q12a: not Authorization or LicenceStatus).
  */
-import type { Operation } from '../../entrypoint/operations/operation';
+import type { Operation } from '../../shared/operation-contract';
 import type { FeeCalculator, PriceList } from '../committee-prices/public';
 import type { Clock } from '../../shared/clock';
 import type { PersonId, SiteId, TicketId } from '../../shared/identifiers';

@@ -1,5 +1,4 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, WriteOperation } from '../../../entrypoint/operations/operation';
+import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
 import type { OpenRefusal, TicketOpening } from '../public';
 
 export const STATUS_FOR_OPEN_REFUSAL: Readonly<Record<OpenRefusal, number>> = {

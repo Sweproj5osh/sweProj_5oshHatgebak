@@ -1,5 +1,4 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, ReadContext, ReadOperation } from '../../../entrypoint/operations/operation';
+import { refuse, respond, type Operation, type ReadContext, type ReadOperation } from '../../../shared/operation-contract';
 import type { TicketReading } from '../public';
 import { TicketReadRefusal, type TicketReadReason } from './ticket-reading';
 
