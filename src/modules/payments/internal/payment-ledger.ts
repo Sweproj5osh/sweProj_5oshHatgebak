@@ -5,6 +5,7 @@ import type { EventPublisher } from '../../../shared/events/event';
 import type { PaymentId, PersonId, SiteId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../shared/result';
+import type { Transaction } from '../../../shared/unit-of-work';
 import type { PaymentGateway, PaymentLedger, PaymentRecord, PayRefusal } from '../public';
 import type { InFlightAttempts } from './in-flight-attempts';
 import type { PaymentStore, StoredPayment } from './ports';
@@ -56,6 +57,8 @@ export class PaymentLedgerService implements PaymentLedger {
     private readonly dependencies: PaymentLedgerDependencies,
     private readonly store: PaymentStore,
     private readonly events: EventPublisher,
+    /** The write's unit of work, handed to Ticketing so the ticket's status commits with the payment row (P1, ADR-13). */
+    private readonly transaction: Transaction,
   ) {}
 
   async payInApp(requestId: RequestId, ticketId: TicketId, payer: PersonId): Promise<Result<PaymentRecord, PayRefusal>> {
@@ -118,7 +121,7 @@ export class PaymentLedgerService implements PaymentLedger {
 
   /** The fee this payer owes on the ticket now, or why nothing may be charged: the ticket's own state first, then the attempts already recorded against it (P18). */
   private async feeDueFor(ticketId: TicketId, payer: PersonId): Promise<Result<number, PayRefusal>> {
-    const ticket = await this.dependencies.ticketQuery.ticketStatus(ticketId);
+    const ticket = await this.dependencies.ticketQuery.ticketStatus(this.transaction, ticketId);
     if (ticket.driverRef !== payer) {
       return fail('not your ticket');
     }
@@ -225,8 +228,7 @@ export class PaymentLedgerService implements PaymentLedger {
    * a second charge (ADR-08).
    */
   private async markTicketPaid(requestId: RequestId, ticketId: TicketId): Promise<void> {
-    // TODO(P1): pass the unit of work first once Karim's changePaymentStatus(unitOfWork, requestId, ticketId, to) lands.
-    const marked = await this.dependencies.ticketDesk.changePaymentStatus(requestId, ticketId, 'paid');
+    const marked = await this.dependencies.ticketDesk.changePaymentStatus(this.transaction, requestId, ticketId, 'paid');
     if (!marked.ok) {
       throw new Error(`Ticket ${ticketId} was charged but could not be marked paid: ${marked.error}`);
     }

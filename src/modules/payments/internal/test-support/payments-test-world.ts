@@ -2,6 +2,7 @@ import { FixedClock } from '../../../../shared/clock';
 import type { PersonId, TicketId } from '../../../../shared/identifiers';
 import type { RequestId } from '../../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../../shared/result';
+import type { TableAccess, Transaction } from '../../../../shared/unit-of-work';
 import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../../ticketing/public';
 import { createFakePaymentGateway, createPayments, type FakePaymentGateway, type PaymentGateway, type Payments } from '../../public';
 
@@ -23,7 +24,12 @@ export class FakeTickets implements Pick<TicketDesk, 'changePaymentStatus'>, Pic
     this.tickets.set(ticket.ticketId, ticket);
   }
 
-  async ticketStatus(ticketId: TicketId): Promise<Ticket> {
+  ticketStatus(_tables: TableAccess, ticketId: TicketId): Promise<Ticket> {
+    return this.statusOf(ticketId);
+  }
+
+  /** What the stand-in holds for a ticket, for a test's own assertions. */
+  async statusOf(ticketId: TicketId): Promise<Ticket> {
     const ticket = this.tickets.get(ticketId);
     if (ticket === undefined) {
       throw new Error(`No ticket ${ticketId}`);
@@ -31,7 +37,7 @@ export class FakeTickets implements Pick<TicketDesk, 'changePaymentStatus'>, Pic
     return ticket;
   }
 
-  async changePaymentStatus(_requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>> {
+  async changePaymentStatus(_unitOfWork: Transaction, _requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>> {
     const ticket = this.tickets.get(ticketId);
     if (ticket === undefined) {
       return fail('no such ticket');

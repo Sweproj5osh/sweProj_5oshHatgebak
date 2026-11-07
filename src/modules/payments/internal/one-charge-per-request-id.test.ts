@@ -146,7 +146,7 @@ describe('C3 one charge per request id', () => {
     expect([first.status, second.status].sort()).toEqual([201, 409]);
     expect(await application.database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
     expect(gateway.chargeCallCount()).toBe(1);
-    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
+    expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('paid');
   });
 
   it('a declined attempt releases the ticket, so the driver may try again under a new request id', async () => {

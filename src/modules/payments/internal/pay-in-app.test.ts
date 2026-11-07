@@ -63,7 +63,7 @@ describe('C2 paying in the app', () => {
     const payment = paymentIn(response);
     expect(payment).toMatchObject({ ticketId: 'ticket-1', amount: 11, method: 'app', state: 'paid' });
     expect(payment.providerReference).toMatch(/^fake-/);
-    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
+    expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('paid');
 
     expect(await paymentRows()).toHaveLength(1);
     expect((await paymentRows())[0]).toMatchObject({
@@ -95,7 +95,7 @@ describe('C2 paying in the app', () => {
     expect(response.status).toBe(202);
     expect(paymentIn(response).state).toBe('pending');
     expect(messageIn(response)).toBe(PAY_LATER_OR_PAY_CASH);
-    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+    expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
     expect(await paymentRows()).toHaveLength(1);
     expect((await paymentRows())[0]).toMatchObject({ state: 'pending', providerReference: expect.stringMatching(/^fake-/) });
     expect(application.outbox.allEvents()).toHaveLength(0);
@@ -112,7 +112,7 @@ describe('C2 paying in the app', () => {
     expect(errorIn(second)).toBe('payment pending, try again shortly');
     expect(await paymentRows()).toHaveLength(1);
     expect(gateway.chargeCallCount()).toBe(1);
-    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+    expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
   });
 
   describe('a late answer is recorded at reconciliation (P18, item 7)', () => {
@@ -144,7 +144,7 @@ describe('C2 paying in the app', () => {
 
       expect(settled).toBe(1);
       expect((await paymentRows())[0]).toMatchObject({ state: 'paid', requestId: 'request-pay-0016', providerReference: expect.stringMatching(/^fake-/) });
-      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
+      expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('paid');
       expect(application.outbox.allEvents().map((event) => event.topic)).toEqual([TICKET_PAID_TOPIC]);
       expect(gateway.chargeCallCount('request-pay-0016')).toBe(2);
       pendingSettledPerRun = settled;
@@ -159,7 +159,7 @@ describe('C2 paying in the app', () => {
       expect(await settleOnce(application, payments)).toBe(1);
 
       expect((await paymentRows())[0]).toMatchObject({ state: 'failed', settledAt: '2026-11-06T10:05:00.000Z' });
-      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
       tickets.seed(closedTicket('ticket-1', 11));
       expect((await pay('request-pay-0018', 'ticket-1')).status).toBe(201);
       expect(await paymentRows()).toHaveLength(2);
@@ -201,7 +201,7 @@ describe('C2 paying in the app', () => {
       expect(paymentIn(response).state).toBe('pending');
       expect((await paymentRows())[0]).toMatchObject({ state: 'pending', rawProviderOutcome: 'authorized' });
       expect(JSON.stringify(await auditRows())).not.toContain('authorized');
-      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
       expect(application.outbox.allEvents()).toHaveLength(0);
     });
 
@@ -243,7 +243,7 @@ describe('C2 paying in the app', () => {
       expect(response.status).toBe(202);
       expect(messageIn(response)).toBe(PAY_LATER_OR_PAY_CASH);
       expect(paymentIn(response).state).toBe('pending');
-      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
       expect((await paymentRows())[0]).toMatchObject({ state: 'pending', requestId: 'request-pay-0013', rawProviderOutcome: 'timed out' });
       expect((await paymentRows())[0]?.providerReference).toBeUndefined();
       expect(gateway.chargeCallCount()).toBe(1);
@@ -258,7 +258,7 @@ describe('C2 paying in the app', () => {
 
     expect(response.status).toBe(402);
     expect(errorIn(response)).toBe('declined');
-    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+    expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
     expect(await paymentRows()).toHaveLength(0);
     expect(await auditRows()).toHaveLength(0);
     expect(application.outbox.allEvents()).toHaveLength(0);
