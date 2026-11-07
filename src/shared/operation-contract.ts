@@ -49,6 +49,17 @@ export interface WriteContext {
   readonly events: EventPublisher;
 }
 
+/**
+ * What the one audit entry may never carry (P2, ADR-14): `omit` drops a body field; `replace` drops a body field and
+ * writes, under the given name, the reference the handler returned in `AuditDetail.references`. For example
+ * `{ replace: { plate: 'carRef' } }` drops `plate` and writes `carRef` in its place. Fitness function F12 fails any
+ * schema with a personal field that neither rule covers.
+ */
+export interface AuditRedaction {
+  readonly omit?: readonly string[];
+  readonly replace?: Readonly<Record<string, string>>;
+}
+
 /** What the handler adds to the one audit entry the pipeline writes. */
 export interface AuditDetail {
   readonly reason?: string;
@@ -57,6 +68,8 @@ export interface AuditDetail {
   readonly districtId?: DistrictId;
   /** People the action is about (for example the attendant whose licence changed); they read entries naming them. */
   readonly subjectPersonIds?: readonly PersonId[];
+  /** The references that stand in for redacted body fields, by the name the operation's `audit.replace` rule gives. */
+  readonly references?: Readonly<Record<string, string>>;
 }
 
 export interface WriteOutcome {
@@ -80,6 +93,7 @@ export interface WriteOperation extends OperationBase {
   readonly kind: 'write';
   readonly method: Exclude<HttpMethod, 'GET'>;
   readonly bodySchema: BodySchema;
+  readonly audit?: AuditRedaction;
   /** Sample bodies for the audit-coverage harness (F5): one that passes validation, one that does not. */
   readonly examples: { readonly valid: ValidBody; readonly invalid: unknown };
   /** Seeds whatever rows `examples.valid` needs to succeed; the F5 harness runs it before the sample request. */

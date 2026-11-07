@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { allFitnessFunctions } from './all-fitness-functions';
 import { f10PersonalDataColumnsStayInTheirSchema } from './f10-personal-data-columns-stay-in-their-schema';
 import { f11WriteSchemasCarryNoTimestamp } from './f11-write-schemas-carry-no-timestamp';
+import { f12PersonalFieldsHaveARedactionRule, namesPersonalData } from './f12-personal-fields-have-a-redaction-rule';
 import { f1CommitteePricesIsPure } from './f1-committee-prices-is-pure';
 import { f2CrossModuleImportsUsePublicInterfaces } from './f2-cross-module-imports-use-public-interfaces';
 import { f8MustStayOnNeverImportsMayFail } from './f8-must-stay-on-never-imports-may-fail';
@@ -13,7 +14,7 @@ const repositoryRoot = process.cwd();
 const fixture = (name: string) => path.join(repositoryRoot, FIXTURES_FOLDER, name);
 
 describe('fitness functions pass on this repository', () => {
-  it('all five are green and report how much they checked', async () => {
+  it('all of them are green and report how much they checked', async () => {
     const started = performance.now();
     const results = await Promise.all(allFitnessFunctions.map((fitnessFunction) => fitnessFunction(repositoryRoot)));
     const milliseconds = (performance.now() - started).toFixed(0);
@@ -64,6 +65,15 @@ describe('each fitness function fails on its planted violation', () => {
     expect(result.passed).toBe(false);
     expect(result.violations[0]).toContain('"closedAt"');
   });
+
+  it('F12 catches personal fields without a redaction rule, including compound names, and accepts covered ones', async () => {
+    const result = await f12PersonalFieldsHaveARedactionRule(fixture('f12-violation'));
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual([
+      'bad.addCar declares the personal field "plate" with no audit.omit or audit.replace rule covering it',
+      'bad.createPerson declares the personal field "displayName" with no audit.omit or audit.replace rule covering it',
+    ]);
+  });
 });
 
 describe('SQL column scanner', () => {
@@ -83,4 +93,14 @@ describe('SQL column scanner', () => {
   it('defaults to the public schema when the table is not qualified', () => {
     expect(columnsDeclaredIn('CREATE TABLE things (id int);')).toEqual([{ schema: 'public', table: 'things', column: 'id' }]);
   });
+});
+
+describe('F12 personal-field detection', () => {
+  it.each(['plate', 'phoneNumber', 'displayName', 'owner_phone', 'ownerPhoneDigits', 'Latitude', 'newPassword'])('flags %s', (field) =>
+    expect(namesPersonalData(field)).toBe(true),
+  );
+
+  it.each(['siteId', 'reason', 'entryCode', 'capacity', 'colour'])('leaves %s alone', (field) =>
+    expect(namesPersonalData(field)).toBe(false),
+  );
 });

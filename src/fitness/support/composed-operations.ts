@@ -10,6 +10,7 @@ export interface DeclaredOperation {
   readonly name: string;
   readonly allowedRoles?: readonly string[];
   readonly bodySchema?: { readonly fields: Readonly<Record<string, unknown>> };
+  readonly audit?: { readonly omit?: readonly string[]; readonly replace?: Readonly<Record<string, string>> };
 }
 
 interface RegistryLike {

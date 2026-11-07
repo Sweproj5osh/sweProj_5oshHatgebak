@@ -6,6 +6,7 @@ import type { PermissionTable } from './auth/permission-table';
 import { verifyToken } from './auth/token';
 import { validateBody } from '../shared/body-schema';
 import { refuse, type HttpResponse, type Operation, type ReadOperation, type WriteOperation, type WriteOutcome } from '../shared/operation-contract';
+import { redactForAudit } from './audit-redaction';
 import type { HttpRequest } from './http';
 import type { OperationRegistry } from './operations/registry';
 import { responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
@@ -139,13 +140,14 @@ async function settle(
 }
 
 function auditEntryFor(operation: WriteOperation, input: WriteInput, outcome: WriteOutcome): AuditEntry {
+  const { references, ...detail } = outcome.audit ?? {};
   return {
     personId: input.actor.personId,
     role: input.actor.role,
     operation: operation.name,
-    input: input.body,
+    input: redactForAudit(operation.name, input.body, operation.audit, references),
     requestId: input.requestId,
-    ...outcome.audit,
+    ...detail,
   };
 }
 
