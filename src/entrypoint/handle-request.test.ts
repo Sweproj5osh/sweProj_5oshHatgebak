@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
 import { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
-import { respond, type WriteOperation } from '../shared/operation-contract';
+import { requiresARole, respond, type WriteOperation } from '../shared/operation-contract';
 import { readRequest, TEST_ADDRESS, testApplication, tokenFor, writeRequest } from './test-helpers';
 
 function application() {
@@ -75,9 +75,9 @@ describe('entry point: token and permission table (Z4)', () => {
     expect(response.status).toBe(401);
   });
 
-  it('holds one row per registered operation in the permission table', () => {
+  it('holds one row per registered operation in the permission table, and none for the public ones (ADR-15)', () => {
     const { permissions, registry } = application();
-    expect(permissions.operationCount()).toBe(registry.all().length);
+    expect(permissions.operationCount()).toBe(registry.all().filter(requiresARole).length);
     console.log(`Z4 report: permission table holds ${permissions.operationCount()} operations`);
   });
 

@@ -20,6 +20,14 @@ export function composeInMemoryRegistry() {
         audit: { omit: ['phoneNumber'] },
       },
       {
+        kind: 'telemetry',
+        name: 'good.recordLocation',
+        method: 'POST',
+        path: '/good/locations',
+        allowedRoles: ['attendant'],
+        bodySchema: { fields: { latitude: 'number', longitude: 'number' } },
+      },
+      {
         kind: 'write',
         name: 'good.addCar',
         method: 'POST',

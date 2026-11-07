@@ -27,9 +27,19 @@ CREATE TABLE IF NOT EXISTS personal_data.cars (
   UNIQUE (owner_ref, plate)
 );
 
+-- "Car X is registered at site Y" (task A16, P28 #31): an address, so personal data; written by a Member of the site's
+-- district, read by the fee calculator through the composition root. Removed with the car by erasure.
+CREATE TABLE IF NOT EXISTS personal_data.residency (
+  car_ref       text NOT NULL REFERENCES personal_data.cars (car_ref),
+  site_id       text NOT NULL,
+  registered_by text NOT NULL,
+  registered_at timestamptz NOT NULL,
+  PRIMARY KEY (car_ref, site_id)
+);
+
 -- Erasure deletes personal rows, so the application role may delete in personal_data but nowhere in audit_log.
 GRANT SELECT, INSERT, UPDATE ON accounts_and_access_control.people TO sayes_application;
-GRANT SELECT, INSERT, DELETE ON personal_data.person_details, personal_data.cars TO sayes_application;
+GRANT SELECT, INSERT, DELETE ON personal_data.person_details, personal_data.cars, personal_data.residency TO sayes_application;
 
 -- What access control knows about each person's licence and posts (task A3). Written by the licensing module inside
 -- its own transaction, so that permission answers never wait on that may-fail module (Rule D). bound_site_id is the
@@ -44,3 +54,185 @@ CREATE TABLE IF NOT EXISTS accounts_and_access_control.access_facts (
 );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON accounts_and_access_control.access_facts TO sayes_application;
+
+-- The one outstanding sign-in code of each phone (task A1), kept only as an HMAC keyed with a server secret (P23). The
+-- row is keyed by the phone so the wrong-code count and the lock-out survive a new code request; a phone is personal
+-- data, so the table lives in personal_data (Rule F, fitness function F10). Times come from the server clock.
+CREATE TABLE IF NOT EXISTS personal_data.sign_in_challenges (
+  phone           text PRIMARY KEY,
+  person_ref      text NOT NULL REFERENCES accounts_and_access_control.people (person_id),
+  code_hash       char(64) NOT NULL,
+  expires_at      timestamptz NOT NULL,
+  failed_attempts integer NOT NULL DEFAULT 0,
+  locked_until    timestamptz
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON personal_data.sign_in_challenges TO sayes_application;
+
+-- Districts, zones and sites (task A6). "label" rather than "name": names are personal data (fitness function F10).
+CREATE TABLE IF NOT EXISTS sites_and_areas.districts (
+  district_id text PRIMARY KEY,
+  label       text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sites_and_areas.zones (
+  zone_id     text PRIMARY KEY,
+  district_id text NOT NULL REFERENCES sites_and_areas.districts (district_id),
+  label       text NOT NULL
+);
+
+-- The outline is a JSON array of { latitude, longitude } points. Capacity lives in capacity_changes, never here.
+CREATE TABLE IF NOT EXISTS sites_and_areas.sites (
+  site_id text PRIMARY KEY,
+  zone_id text NOT NULL REFERENCES sites_and_areas.zones (zone_id),
+  label   text NOT NULL,
+  outline jsonb NOT NULL
+);
+
+-- Every capacity a site has ever had, with the reason and the server time (task A8). Insert-only: the latest row is
+-- the current capacity.
+CREATE TABLE IF NOT EXISTS sites_and_areas.capacity_changes (
+  change_id  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  site_id    text NOT NULL REFERENCES sites_and_areas.sites (site_id),
+  capacity   integer NOT NULL CHECK (capacity BETWEEN 1 AND 10000),
+  reason     text NOT NULL CHECK (length(trim(reason)) > 0),
+  changed_by text NOT NULL,
+  changed_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS capacity_changes_site_idx ON sites_and_areas.capacity_changes (site_id, change_id);
+
+-- Weekly opening hours and declared closures and free periods (task A9), in Cairo's local time, the time on the street
+-- signs. A site with no opening_hours rows is never open; "always open" is an explicit 0–1440 row on each of the seven
+-- weekdays (P23 #12). Special events are insert-only.
+CREATE TABLE IF NOT EXISTS sites_and_areas.opening_hours (
+  site_id        text NOT NULL REFERENCES sites_and_areas.sites (site_id),
+  weekday        smallint NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  opens_minute   smallint NOT NULL CHECK (opens_minute BETWEEN 0 AND 1439),
+  closes_minute  smallint NOT NULL CHECK (closes_minute BETWEEN 1 AND 1440),
+  CHECK (opens_minute < closes_minute)
+);
+
+CREATE INDEX IF NOT EXISTS opening_hours_site_idx ON sites_and_areas.opening_hours (site_id);
+
+CREATE TABLE IF NOT EXISTS sites_and_areas.special_events (
+  event_id     text PRIMARY KEY,
+  site_id      text NOT NULL REFERENCES sites_and_areas.sites (site_id),
+  kind         text NOT NULL CHECK (kind IN ('closure', 'free period')),
+  starts_local timestamp without time zone NOT NULL,
+  ends_local   timestamp without time zone NOT NULL,
+  reason       text NOT NULL CHECK (length(trim(reason)) > 0),
+  declared_by  text NOT NULL,
+  declared_at  timestamptz NOT NULL,
+  CHECK (starts_local < ends_local)
+);
+
+CREATE INDEX IF NOT EXISTS special_events_site_idx ON sites_and_areas.special_events (site_id, starts_local);
+
+GRANT SELECT, INSERT, DELETE ON sites_and_areas.opening_hours TO sayes_application;
+GRANT SELECT, INSERT ON sites_and_areas.special_events TO sayes_application;
+
+GRANT SELECT, INSERT, UPDATE ON sites_and_areas.districts, sites_and_areas.zones, sites_and_areas.sites TO sayes_application;
+GRANT SELECT, INSERT ON sites_and_areas.capacity_changes TO sayes_application;
+
+-- Who works where (task A12): an attendant at one fixed site with a changeable shift, an inspector over one zone, a
+-- member over one district. The primary keys enforce one site per attendant, one zone per inspector and one district
+-- per member. Each change is mirrored into accounts_and_access_control.access_facts in the same transaction.
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.attendant_assignments (
+  attendant_id text PRIMARY KEY,
+  site_id      text NOT NULL,
+  shift_id     text NOT NULL,
+  assigned_by  text NOT NULL,
+  assigned_at  timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.inspector_assignments (
+  inspector_id text PRIMARY KEY,
+  zone_id      text NOT NULL,
+  assigned_by  text NOT NULL,
+  assigned_at  timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.member_appointments (
+  member_id    text PRIMARY KEY,
+  district_id  text NOT NULL,
+  appointed_by text NOT NULL,
+  appointed_at timestamptz NOT NULL
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+  licensing_assignment_attendance.attendant_assignments,
+  licensing_assignment_attendance.inspector_assignments,
+  licensing_assignment_attendance.member_appointments
+TO sayes_application;
+
+-- Attendant licences (task A11). One licence per attendant. The state is never stored on the licence: it is the
+-- target of the latest row in licence_state_changes, an insert-only history where every move after the issue names
+-- the approved request that ordered it.
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.licences (
+  licence_id   text PRIMARY KEY,
+  attendant_id text NOT NULL UNIQUE,
+  issued_by    text NOT NULL,
+  issued_at    timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.licence_state_changes (
+  licence_id          text NOT NULL REFERENCES licensing_assignment_attendance.licences (licence_id),
+  from_state          text CHECK (from_state IN ('valid', 'suspended')),
+  to_state            text NOT NULL CHECK (to_state IN ('valid', 'suspended', 'revoked')),
+  approval_request_id text,
+  changed_at          timestamptz NOT NULL,
+  CHECK ((from_state IS NULL AND approval_request_id IS NULL) OR (from_state IS NOT NULL AND approval_request_id IS NOT NULL))
+);
+
+GRANT SELECT, INSERT ON licensing_assignment_attendance.licences, licensing_assignment_attendance.licence_state_changes TO sayes_application;
+
+-- Attendance (task A13): one row per clock-in, closed by its clock-out, both by scanning the own site's code. Both times
+-- come from the server clock; the partial unique index keeps one open shift per attendant (P23 #16).
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.attendance (
+  attendance_id  text PRIMARY KEY,
+  attendant_id   text NOT NULL,
+  site_id        text NOT NULL,
+  shift_id       text NOT NULL,
+  clocked_in_at  timestamptz NOT NULL,
+  clocked_out_at timestamptz,
+  CHECK (clocked_out_at IS NULL OR clocked_out_at >= clocked_in_at)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS attendance_one_open_per_attendant ON licensing_assignment_attendance.attendance (attendant_id)
+  WHERE clocked_out_at IS NULL;
+
+GRANT SELECT, INSERT, UPDATE ON licensing_assignment_attendance.attendance TO sayes_application;
+
+-- Off-site readings and flags (task A14). A reading keeps only its distance from the site, never the coordinates
+-- (personal data is collected minimally, Law 151 of 2020). At most one flag per attendance.
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.location_readings (
+  attendance_id   text NOT NULL REFERENCES licensing_assignment_attendance.attendance (attendance_id),
+  distance_meters integer NOT NULL CHECK (distance_meters >= 0),
+  recorded_at     timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS location_readings_attendance_idx ON licensing_assignment_attendance.location_readings (attendance_id, recorded_at);
+
+CREATE TABLE IF NOT EXISTS licensing_assignment_attendance.off_site_flags (
+  flag_id       text PRIMARY KEY,
+  attendance_id text NOT NULL UNIQUE REFERENCES licensing_assignment_attendance.attendance (attendance_id),
+  attendant_id  text NOT NULL,
+  site_id       text NOT NULL,
+  zone_id       text NOT NULL,
+  raised_at     timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS off_site_flags_zone_idx ON licensing_assignment_attendance.off_site_flags (zone_id, raised_at);
+
+GRANT SELECT, INSERT ON licensing_assignment_attendance.location_readings, licensing_assignment_attendance.off_site_flags TO sayes_application;
+
+-- The committee's second sign-in step (task A15): a salted scrypt hash (asynchronous scrypt, passwords of at most 256
+-- bytes, P23) of each member's and the Chair's password.
+CREATE TABLE IF NOT EXISTS accounts_and_access_control.committee_passwords (
+  person_id     text PRIMARY KEY REFERENCES accounts_and_access_control.people (person_id),
+  password_salt char(32) NOT NULL,
+  password_hash char(128) NOT NULL
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON accounts_and_access_control.committee_passwords TO sayes_application;

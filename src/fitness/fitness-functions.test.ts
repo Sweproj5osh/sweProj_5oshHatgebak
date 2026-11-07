@@ -75,7 +75,7 @@ describe('each fitness function fails on its planted violation', () => {
     ]);
   });
 
-  it('F12 catches personal fields without a redaction rule, including compound names, and accepts covered ones', async () => {
+  it('F12 catches personal fields without a redaction rule, including compound names, accepts covered ones, and skips telemetry (P7)', async () => {
     const result = await f12PersonalFieldsHaveARedactionRule(fixture('f12-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations).toEqual([
