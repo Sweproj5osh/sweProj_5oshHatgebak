@@ -14,12 +14,15 @@ import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
 import { createAssistedTicketOperations } from './internal/assisted-ticket-operations';
 import { createTicketClosingService } from './internal/ticket-closing';
+import { createReadOperations } from './internal/reading-operations';
 import { createTicketCountsService } from './internal/ticket-counts';
+import { createTicketReadingService } from './internal/ticket-reading';
 import { createTicketPaymentStatusService } from './internal/ticket-payment-status';
 import { createTicketOpeningService } from './internal/ticket-opening';
 
 export { InMemoryTicketStore } from './internal/in-memory-ticket-store';
 export type { TicketStore } from './internal/ticket-store';
+export { PLATE_UNAVAILABLE, TicketReadRefusal } from './internal/ticket-reading';
 
 /** The reference of one car in the personal-data store. A ticket holds this, never the plate. */
 export type CarReference = string;
@@ -156,6 +159,33 @@ export function createTicketCounts(dependencies: { readonly sites: Pick<Ticketin
   return createTicketCountsService(dependencies);
 }
 
+/**
+ * The identity area's logged plate lookup (task A4). The reader, the purpose and the site are written to the audit
+ * trail by that area, which also decides who may see a plate; ticketing never holds one.
+ */
+export interface PlateLookup {
+  readPlate(request: {
+    readonly carRef: CarReference;
+    readonly reader: PersonId;
+    readonly purpose: 'receipt';
+    readonly siteId: SiteId;
+  }): Promise<Result<string, 'refused' | 'not resolvable'>>;
+}
+
+export interface TicketReadingDependencies {
+  readonly store: TicketStore;
+  readonly plates: PlateLookup;
+  /** The hours on a receipt are the hours the fee was charged for, from the same calculator. */
+  readonly fees: Pick<FeeCalculator, 'startedHours'>;
+}
+
+export type TicketReading = Pick<TicketQuery, 'ticketStatus' | 'ticketHistory' | 'receipt'>;
+
+/** Tasks B12 and B13: a driver's tickets, one ticket's state, and the receipt with the plate from the logged join. */
+export function createTicketReading(dependencies: TicketReadingDependencies): TicketReading {
+  return createTicketReadingService(dependencies);
+}
+
 export type TicketPaymentStatus = Pick<TicketDesk, 'changePaymentStatus'>;
 
 /**
@@ -171,6 +201,8 @@ export interface TicketingOperationDependencies {
   readonly opening: TicketOpening;
   readonly closing: TicketClosing;
   readonly store: TicketStore;
+  /** Without it the read requests are not registered. */
+  readonly reading?: TicketReading;
 }
 
 /** The requests this module answers, for the composition root to register. */
@@ -179,5 +211,6 @@ export function createTicketingOperations(dependencies: TicketingOperationDepend
     createOpenTicketOperation(dependencies.opening),
     createCloseTicketOperation(dependencies.closing, dependencies.store),
     ...createAssistedTicketOperations(dependencies.opening, dependencies.closing),
+    ...(dependencies.reading === undefined ? [] : createReadOperations(dependencies.reading)),
   ];
 }

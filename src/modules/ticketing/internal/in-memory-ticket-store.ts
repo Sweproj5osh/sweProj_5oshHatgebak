@@ -1,5 +1,5 @@
 import { SerialQueue } from '../../../shared/serial-queue';
-import type { SiteId, TicketId } from '../../../shared/identifiers';
+import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { Ticket } from '../public';
 import { ALLOWED_PAYMENT_CHANGES } from './ticket-payment-status';
@@ -42,6 +42,14 @@ export class InMemoryTicketStore implements TicketStore {
       const openedAt = new Date(ticket.openedAt);
       return ticket.assisted && ticket.siteId === siteId && openedAt.getUTCFullYear() === year && openedAt.getUTCMonth() + 1 === month;
     }).length;
+  }
+
+  async listByDriver(driverRef: PersonId): Promise<readonly Ticket[]> {
+    return this.tickets
+      .map((ticket, index) => ({ ticket, index }))
+      .filter(({ ticket }) => ticket.driverRef === driverRef)
+      .sort((a, b) => b.ticket.openedAt.localeCompare(a.ticket.openedAt) || b.index - a.index)
+      .map(({ ticket }) => ticket);
   }
 
   async findById(ticketId: TicketId): Promise<Ticket | undefined> {

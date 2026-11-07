@@ -13,12 +13,16 @@ const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
  */
 export function createFeeCalculator(options: FeeCalculatorOptions = {}): FeeCalculator {
   const calculator: FeeCalculator = {
-    computeFee(entry: Date, exit: Date, version: PriceVersion): Money {
+    startedHours(entry: Date, exit: Date): number {
       const stayInMilliseconds = exit.getTime() - entry.getTime();
-      if (!(stayInMilliseconds > 0)) {
+      return stayInMilliseconds > 0 ? Math.ceil(stayInMilliseconds / MILLISECONDS_PER_HOUR) : 0;
+    },
+
+    computeFee(entry: Date, exit: Date, version: PriceVersion): Money {
+      const startedHours = calculator.startedHours(entry, exit);
+      if (startedHours === 0) {
         return 0;
       }
-      const startedHours = Math.ceil(stayInMilliseconds / MILLISECONDS_PER_HOUR);
       const uncappedFee = version.firstHourFee + (startedHours - 1) * version.eachLaterHourFee;
       const cappedFee = Math.min(uncappedFee, version.dailyCap);
       return Number.isFinite(cappedFee) ? Math.max(0, cappedFee) : 0;

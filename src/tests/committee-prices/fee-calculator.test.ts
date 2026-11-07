@@ -162,3 +162,27 @@ describe('B2 the cap guarantee (fitness function F4)', () => {
     expect(violations).toBe(0);
   });
 });
+
+describe('started hours, the number of hours a stay is charged for', () => {
+  it('counts every started hour: 30 minutes is 1, exactly 2 hours is 2, 2 hours 10 minutes is 3', () => {
+    expect(calculator.startedHours(at(10), at(10, 30))).toBe(1);
+    expect(calculator.startedHours(at(10), at(12))).toBe(2);
+    expect(calculator.startedHours(at(10), at(12, 10))).toBe(3);
+  });
+
+  it('gives 0 for a stay of zero length, an exit before the entry and an invalid date', () => {
+    expect(calculator.startedHours(at(10), at(10))).toBe(0);
+    expect(calculator.startedHours(at(12), at(10))).toBe(0);
+    expect(calculator.startedHours(new Date('nonsense'), at(10))).toBe(0);
+  });
+
+  it('is the hours the fee is charged for: the fee is the first hour plus each later started hour, up to the cap', () => {
+    const version = priceVersion();
+    for (const minutes of [1, 59, 60, 61, 125, 600, 1800]) {
+      const exit = new Date(at(10).getTime() + minutes * 60 * 1000);
+      const hours = calculator.startedHours(at(10), exit);
+      const expected = Math.min(version.firstHourFee + (hours - 1) * version.eachLaterHourFee, version.dailyCap);
+      expect(calculator.computeFee(at(10), exit, version)).toBe(expected);
+    }
+  });
+});

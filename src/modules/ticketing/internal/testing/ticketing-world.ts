@@ -4,6 +4,40 @@ import type { SiteId } from '../../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../../shared/result';
 import { createTicketClosing, createTicketOpening, createTicketPaymentStatus, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
 
+export interface PlateRequest {
+  readonly carRef: string;
+  readonly reader: string;
+  readonly purpose: 'receipt';
+  readonly siteId: string;
+}
+
+/** The identity area's logged plate lookup, recording every request it is asked. */
+export class FakePlates {
+  readonly requests: PlateRequest[] = [];
+  private readonly plates = new Map<string, string>();
+  private readonly refusedReaders = new Set<string>();
+
+  withPlate(carRef: string, plate: string): this {
+    this.plates.set(carRef, plate);
+    return this;
+  }
+
+  refuse(reader: string): this {
+    this.refusedReaders.add(reader);
+    return this;
+  }
+
+  async readPlate(request: PlateRequest): Promise<Result<string, 'refused' | 'not resolvable'>> {
+    await Promise.resolve();
+    this.requests.push(request);
+    if (this.refusedReaders.has(request.reader)) {
+      return fail('refused');
+    }
+    const plate = this.plates.get(request.carRef);
+    return plate === undefined ? fail('not resolvable') : succeed(plate);
+  }
+}
+
 /** Who works where: an attendant is assigned to at most one site. */
 export class FakeAssignments {
   private readonly sites = new Map<string, string>();
@@ -99,7 +133,7 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
   const closing = createTicketClosing({ sites, store, clock, prices, fees, assignments });
   const payments = createTicketPaymentStatus({ store });
-  return { sites, store, clock, opening, closing, payments, prices, assignments };
+  return { sites, store, clock, opening, closing, payments, prices, assignments, fees };
 }
 
 let requestCounter = 0;

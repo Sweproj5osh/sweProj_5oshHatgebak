@@ -64,6 +64,8 @@ export interface FeeCalculatorOptions {
 export interface FeeCalculator {
   computeFee(entry: Date, exit: Date, version: PriceVersion): Money;
   computeResidentFee(): Money;
+  /** The hours a stay is charged for: every started hour, and 0 for an empty, reversed or invalid stay. */
+  startedHours(entry: Date, exit: Date): number;
   /** The fee for one car at the site of the price version: 0 for a resident, the normal fee for everyone else. */
   computeFeeForCar(car: CarAtSite, entry: Date, exit: Date, version: PriceVersion): Promise<Money>;
 }
