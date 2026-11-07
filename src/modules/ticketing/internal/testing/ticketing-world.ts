@@ -4,6 +4,21 @@ import type { SiteId } from '../../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../../shared/result';
 import { createTicketClosing, createTicketOpening, createTicketPaymentStatus, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
 
+/** Who works where: an attendant is assigned to at most one site. */
+export class FakeAssignments {
+  private readonly sites = new Map<string, string>();
+
+  assign(attendantId: string, siteId: string): this {
+    this.sites.set(attendantId, siteId);
+    return this;
+  }
+
+  async isAssignedTo(attendantId: string, siteId: string): Promise<boolean> {
+    await Promise.resolve();
+    return this.sites.get(attendantId) === siteId;
+  }
+}
+
 /** A site registry stand-in: codes are "entry-<site>" and "exit-<site>", and each site is open or closed by hand. */
 export class FakeSites implements TicketingSites {
   private readonly closed = new Set<SiteId>();
@@ -74,19 +89,24 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const store = new InMemoryTicketStore();
   const clock = new FixedClock(START);
   let counter = 0;
-  const opening = createTicketOpening({ sites, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
+  const assignments = new FakeAssignments().assign('attendant-1', 'site-1').assign('attendant-2', 'site-2');
+  const opening = createTicketOpening({ sites, store, clock, assignments, newTicketId: () => `ticket-${(counter += 1)}` });
   const prices = createPriceList({ isApproved: () => true });
   if (options.withPrice !== false) {
     await prices.applyApprovedVersion(PRICE, 'approval-1');
   }
   const residents = options.residents ?? [];
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
-  const closing = createTicketClosing({ sites, store, clock, prices, fees });
+  const closing = createTicketClosing({ sites, store, clock, prices, fees, assignments });
   const payments = createTicketPaymentStatus({ store });
-  return { sites, store, clock, opening, closing, payments, prices };
+  return { sites, store, clock, opening, closing, payments, prices, assignments };
 }
 
 let requestCounter = 0;
+
+export function assistedCommand(overrides: Partial<OpenTicketCommand> = {}): OpenTicketCommand {
+  return openCommand({ driverRef: 'walk-in-driver', ...overrides });
+}
 
 export function openCommand(overrides: Partial<OpenTicketCommand> = {}): OpenTicketCommand {
   requestCounter += 1;

@@ -22,6 +22,8 @@ export interface TicketStore {
   openIfPossible(request: OpenRequest): Promise<Result<Ticket, StoreRefusal>>;
   /** Free spaces are capacity minus this count, computed from the tickets and never stored (task B11). */
   countOpen(siteId: SiteId): Promise<number>;
+  /** Assisted tickets opened at a site in a month (UTC), open or closed. */
+  countAssisted(siteId: SiteId, year: number, month: number): Promise<number>;
   findById(ticketId: TicketId): Promise<Ticket | undefined>;
   /**
    * Closes an open ticket with the frozen exit time and the fee, in one indivisible step. A request key already used

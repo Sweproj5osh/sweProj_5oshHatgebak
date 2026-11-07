@@ -2,12 +2,13 @@ import { refuse, respond } from '../../../entrypoint/http';
 import type { Operation, WriteOperation } from '../../../entrypoint/operations/operation';
 import type { OpenRefusal, TicketOpening } from '../public';
 
-const STATUS_FOR_REFUSAL: Readonly<Record<OpenRefusal, number>> = {
+export const STATUS_FOR_OPEN_REFUSAL: Readonly<Record<OpenRefusal, number>> = {
   'forged code': 403,
   'wrong site': 403,
   'site closed': 409,
   'car already parked': 409,
   'site full': 409,
+  'attendant not assigned to this site': 403,
 };
 
 /**
@@ -33,7 +34,7 @@ export function createOpenTicketOperation(opening: TicketOpening): Operation {
         entryCode: String(body['entryCode']),
       });
       if (!opened.ok) {
-        return { response: refuse(STATUS_FOR_REFUSAL[opened.error], opened.error) };
+        return { response: refuse(STATUS_FOR_OPEN_REFUSAL[opened.error], opened.error) };
       }
       return { response: respond(201, { ticket: opened.value }) };
     },

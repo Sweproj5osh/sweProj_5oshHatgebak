@@ -37,6 +37,13 @@ export class InMemoryTicketStore implements TicketStore {
     return this.openCount(siteId);
   }
 
+  async countAssisted(siteId: SiteId, year: number, month: number): Promise<number> {
+    return this.tickets.filter((ticket) => {
+      const openedAt = new Date(ticket.openedAt);
+      return ticket.assisted && ticket.siteId === siteId && openedAt.getUTCFullYear() === year && openedAt.getUTCMonth() + 1 === month;
+    }).length;
+  }
+
   async findById(ticketId: TicketId): Promise<Ticket | undefined> {
     return this.tickets.find((ticket) => ticket.ticketId === ticketId);
   }

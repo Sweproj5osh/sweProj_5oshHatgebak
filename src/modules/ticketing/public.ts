@@ -12,7 +12,9 @@ import type { Result } from '../../shared/result';
 import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
+import { createAssistedTicketOperations } from './internal/assisted-ticket-operations';
 import { createTicketClosingService } from './internal/ticket-closing';
+import { createTicketCountsService } from './internal/ticket-counts';
 import { createTicketPaymentStatusService } from './internal/ticket-payment-status';
 import { createTicketOpeningService } from './internal/ticket-opening';
 
@@ -38,8 +40,16 @@ export interface Ticket {
   readonly assisted: boolean;
 }
 
-export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site';
-export type CloseRefusal = 'no open ticket' | 'forged code' | 'wrong site' | 'exit before entry' | 'no price known';
+export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site' | 'attendant not assigned to this site';
+export type CloseRefusal =
+  | 'no open ticket'
+  | 'forged code'
+  | 'wrong site'
+  | 'exit before entry'
+  | 'no price known'
+  | 'not an assisted ticket'
+  | 'attendant not assigned to this site'
+  | 'car does not match';
 
 export interface OpenTicketCommand {
   readonly requestId: RequestId;
@@ -90,15 +100,25 @@ export interface TicketingSites {
   capacityOf(siteId: SiteId): Promise<number | undefined>;
 }
 
+/**
+ * Who works where. Ticketing may not import the permission module, so it asks this one question and the composition
+ * root answers it from Teammate A's assignments.
+ */
+export interface AttendantAssignments {
+  isAssignedTo(attendantId: PersonId, siteId: SiteId): Promise<boolean>;
+}
+
 export interface TicketOpeningDependencies {
   readonly sites: TicketingSites;
+  /** Without it no attendant may open a ticket. */
+  readonly assignments?: AttendantAssignments;
   readonly store: TicketStore;
   readonly clock: Clock;
   /** Only tests replace this. */
   readonly newTicketId?: () => TicketId;
 }
 
-export type TicketOpening = Pick<TicketDesk, 'openTicket'>;
+export type TicketOpening = Pick<TicketDesk, 'openTicket' | 'openAssistedTicket'>;
 
 /** Tasks B5 to B7: open a ticket by scan, never above capacity, and the same request id answers the same ticket. */
 export function createTicketOpening(dependencies: TicketOpeningDependencies): TicketOpening {
@@ -107,6 +127,8 @@ export function createTicketOpening(dependencies: TicketOpeningDependencies): Ti
 
 export interface TicketClosingDependencies {
   readonly sites: Pick<TicketingSites, 'verifyExitCode'>;
+  /** Without it no attendant may close a ticket. */
+  readonly assignments?: AttendantAssignments;
   readonly store: TicketStore;
   readonly clock: Clock;
   /** The price in force at the moment the ticket opened (FR4.3). */
@@ -115,11 +137,23 @@ export interface TicketClosingDependencies {
   readonly fees: Pick<FeeCalculator, 'computeFeeForCar'>;
 }
 
-export type TicketClosing = Pick<TicketDesk, 'closeTicket'>;
+/** Closing an assisted ticket also names the attendant and the car seen at the exit, which must match the ticket's. */
+export interface AssistedClosing {
+  closeAssistedTicket(requestId: RequestId, ticketId: TicketId, exitCode: string, attendantId: PersonId, carRef: CarReference): Promise<Result<Ticket, CloseRefusal>>;
+}
+
+export type TicketClosing = Pick<TicketDesk, 'closeTicket'> & AssistedClosing;
 
 /** Task B8: close a ticket by the exit scan, freeze the exit time, and ask the fee calculator for the fee. */
 export function createTicketClosing(dependencies: TicketClosingDependencies): TicketClosing {
   return createTicketClosingService(dependencies);
+}
+
+export type TicketCounts = Pick<TicketQuery, 'freeSpaces' | 'assistedTicketCount'>;
+
+/** Tasks B10 and B11: free spaces and assisted tickets, both counted from the tickets themselves. */
+export function createTicketCounts(dependencies: { readonly sites: Pick<TicketingSites, 'capacityOf'>; readonly store: TicketStore }): TicketCounts {
+  return createTicketCountsService(dependencies);
 }
 
 export type TicketPaymentStatus = Pick<TicketDesk, 'changePaymentStatus'>;
@@ -141,5 +175,9 @@ export interface TicketingOperationDependencies {
 
 /** The requests this module answers, for the composition root to register. */
 export function createTicketingOperations(dependencies: TicketingOperationDependencies): readonly Operation[] {
-  return [createOpenTicketOperation(dependencies.opening), createCloseTicketOperation(dependencies.closing, dependencies.store)];
+  return [
+    createOpenTicketOperation(dependencies.opening),
+    createCloseTicketOperation(dependencies.closing, dependencies.store),
+    ...createAssistedTicketOperations(dependencies.opening, dependencies.closing),
+  ];
 }

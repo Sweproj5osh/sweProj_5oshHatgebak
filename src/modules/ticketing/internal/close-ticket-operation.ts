@@ -3,12 +3,15 @@ import type { Operation, WriteOperation } from '../../../entrypoint/operations/o
 import type { CloseRefusal, TicketClosing } from '../public';
 import type { TicketStore } from './ticket-store';
 
-const STATUS_FOR_REFUSAL: Readonly<Record<CloseRefusal, number>> = {
+export const STATUS_FOR_CLOSE_REFUSAL: Readonly<Record<CloseRefusal, number>> = {
   'forged code': 403,
   'wrong site': 403,
   'no open ticket': 409,
   'exit before entry': 409,
   'no price known': 409,
+  'not an assisted ticket': 409,
+  'attendant not assigned to this site': 403,
+  'car does not match': 409,
 };
 
 export const TICKET_CLOSED_TOPIC = 'ticket.closed';
@@ -35,7 +38,7 @@ export function createCloseTicketOperation(closing: TicketClosing, store: Ticket
       }
       const closed = await closing.closeTicket(requestId, ticketId, String(body['exitCode']));
       if (!closed.ok) {
-        return { response: refuse(STATUS_FOR_REFUSAL[closed.error], closed.error) };
+        return { response: refuse(STATUS_FOR_CLOSE_REFUSAL[closed.error], closed.error) };
       }
       const { value } = closed;
       events.publish({
