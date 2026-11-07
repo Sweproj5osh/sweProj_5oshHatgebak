@@ -1,7 +1,7 @@
 # Architecture rules and restrictions
 
 This file binds every person and every AI coding agent working in this repository. Read it before writing a line.
-The reasons behind each rule are in `adr/` (twelve Architecture Decision Records) and the task list is in
+The reasons behind each rule are in `adr/` (fifteen Architecture Decision Records) and the task list is in
 `docs/TEAM_TASKS.md`. When this file and a pull request disagree, this file wins until Zeyad Khaled (the architect
 and the only decision maker) changes it through a new decision record.
 
@@ -61,7 +61,9 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
   fails the build otherwise.
 - You write only inside the modules you own. Changes to another owner's module go through that owner.
 - Shared code lives in `src/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
-  unit of work.
+  unit of work, the operation contract and body schema, the rate-limiter port, the token-issuer port, the keyed serial
+  queue. A module never imports
+  `src/entrypoint` (F2): the entry point depends on the modules, not the reverse.
 - `committee-prices` imports nothing outside its own folder (F1): it is pure arithmetic, testable with plain numbers.
 - A must-stay-on module never calls a may-fail module synchronously (Rule D, F8). It publishes an event instead.
 
@@ -85,7 +87,11 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - The audit entry holds: who (person, role), what (operation, input), when (server clock), why (mandatory for prices,
   licences, waivers and corrections), the approver if any, the request id, and the hash of the previous entry.
 - The audit table is append-only twice over: no update or delete code path exists, and the application's database role
-  has no `UPDATE` or `DELETE` right on it. Corrections are new rows.
+  has no `UPDATE` or `DELETE` right on it. Corrections are new rows. A one-row head (last id, last hash) moves with
+  every append in the same transaction, so a log cut at its tail fails verification. The commit step of every audited
+  action (next id, chain, append, commit) is serialized per process and, across copies, by the advisory lock.
+- The first Chair is created once from the environment at start-up, as an audited action of the system actor
+  (`{ kind: 'system' }`); every other person is created by someone above them or registers themself.
 - Events (TicketOpened, TicketClosed, TicketPaid, DepositConfirmed, RequestAwaitingChair, …) are written to the
   `outbox` table inside the same transaction and delivered by a job. There is no message broker. Handlers tolerate
   receiving an event twice.
@@ -93,6 +99,35 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
   happen in one transaction.
 - An attendant is proven at the gate: sign-in (registered, licence live, re-checked on every request) and clock-in
   (binds the session to the site). Ticketing checks only that the request's site equals the session's site.
+- The unit of work reaches the modules (ADR-13). A handler receives `transaction: UnitOfWork & TableAccess`; module
+  stores read and write through it; **every cross-module write method takes the unit of work as its first parameter**,
+  so a module's rows, the audit entry and the events commit or roll back together. `audit_log` is not reachable
+  through it.
+- The audit entry carries no personal data (ADR-14). Every write declares `audit: { omit, replace }`; the pipeline
+  strips or substitutes before the entry is written; a personal field with no rule fails the build (F12).
+- Sign-in is the one door without a token (ADR-15): the `public` operation kind, with request id, server-clock rule,
+  body validation, unit of work, redacted audit entry (actor: the client address), events, and a rate limit per phone
+  and per address that only this kind has. Only `requestSignInCode` and `signIn` are public (F13).
+- **Measurements are not actions; decisions are.** A `telemetry` operation (a location reading) is token-checked,
+  rate-limited (one per person per minute), body-validated, and written into its module's tables with no request id,
+  no audit entry and no event. The flag a measurement may raise is an ordinary audited write.
+- Logged reads. Showing personal data is a role-checked, logged join (Rule F): the read declares `logged: true`; the
+  pipeline requires the request id, opens a unit of work, runs the handler and writes one redacted entry (operation,
+  actor, request id, the reference read, the subject). Modules never append entries themselves. A read that declares
+  `audit.touchesPersonalData` must be logged (F5). One's own data (a driver's own cars) is not logged.
+- Reads declare roles and a scope, so the permission table is one table: `open` (site configuration; any valid
+  token), `own` (the actor's own records; role table only), `staff-scoped` (anything naming a person, a plate, a shift
+  or money; role table, then `Authorization` with the same ladder as writes: Chair everywhere, Member in the district,
+  Inspector in the zone, Attendant at the own site).
+- The same request id with a different body is refused with 409 and writes nothing: the response store keeps the hash
+  of the body beside the response (Rule H). One request id is handled at a time, from the repeat lookup to the store of
+  the response, so a concurrent repeat waits and receives the stored answer.
+- A failed handler answers a plain "internal error" and a correlation id; the cause goes to the server log only.
+- The token is checked before the route: an unknown path answers 401 without a token, so the route table is not
+  discoverable.
+- Live status on every request: after the token check the pipeline asks `Authorization.liveStatus` and refuses anything
+  but active; the session's bound site rides on the actor. Tokens expire: staff after 14 hours, drivers after 30 days;
+  the live-status check is what locks a person out, the expiry only bounds a stolen token.
 
 ## 9. Failure behaviour (ADR-08, ADR-09)
 - Payment provider: 8-second timeout, then the ticket stays closed and unpaid and the driver sees "pay later or pay
@@ -137,13 +172,18 @@ web build. Formatting and naming follow the code already in the repository.
 Every "Test it by" step in `docs/TEAM_TASKS.md` passes, as an automated test where possible; the "Report" numbers are
 in the pull request; tests and fitness functions are green; one review by Zeyad.
 
-## 14. The eleven fitness functions (`npm run fitness`)
-F1 Prices imports nothing outside itself · F2 cross-module imports only through `public.ts` · F3 twenty parallel
-opens on five spaces give five tickets · F4 fee ≤ cap for any input · F5 one audit entry per successful write, none per
-failed write · F6 the application role cannot update or delete `audit_log`, and the hash chain verifies · F7 the same
-request id twice gives the same response and one change · F8 no synchronous call from must-stay-on into may-fail · F9
-the main-system suite passes with the assistant stopped · F10 no plate, phone or name column outside `personal_data` ·
-F11 no write schema accepts a timestamp.
+## 14. The thirteen fitness functions (`npm run fitness`)
+F1 Prices imports nothing outside itself · F2 cross-module imports only through `public.ts`, and no file under
+`src/modules` or `src/apps` imports `src/entrypoint` · F3 twenty parallel opens on five spaces give five tickets · F4
+fee ≤ cap for any input · F5 one audit entry per successful write or public write, none per failed one, none per
+telemetry post, and every read that touches personal data is logged; it reads the composed registry and runs an
+operation's `fixture` first · F6 the application role cannot update or delete `audit_log`, and the hash chain
+verifies · F7 the same request id twice gives the same response and one change · F8 no synchronous call from
+must-stay-on into may-fail · F9 the main-system suite passes with the assistant stopped · F10 no plate, phone or name
+column outside `personal_data` · F11 no body schema in the composed registry accepts a timestamp, and `localDateTime`
+appears only on committee operations · F12 every personal field (plate, phone, name, password, latitude, longitude) in
+a write or public schema has an `omit` or `replace` rule · F13 the public operations are exactly a subset of
+`requestSignInCode` and `signIn`.
 
 ## 15. Writing style for code, comments, documents and pull requests
 Plain English. No abbreviation without its full form first (write "Architecture Decision Record (ADR)" once, then

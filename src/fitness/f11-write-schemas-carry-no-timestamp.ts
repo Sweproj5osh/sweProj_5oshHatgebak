@@ -1,42 +1,53 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { LOCAL_DATE_TIME_KIND } from '../shared/body-schema';
+import { COMMITTEE_ROLES } from '../shared/identifiers';
 import { looksLikeTimestampKey } from '../shared/timestamp-fields';
+import { fieldNamesOf, loadComposedOperations, type DeclaredOperation } from './support/composed-operations';
 import { defineFitnessFunction } from './support/fitness-result';
 import { runWhenInvokedDirectly } from './support/run-as-script';
 
-export const OPERATIONS_MODULE = path.join('src', 'entrypoint', 'operations', 'foundation-operations.ts');
-export const OPERATIONS_EXPORT = 'foundationOperations';
-
-interface DeclaredWrite {
-  readonly kind: string;
-  readonly name: string;
-  readonly bodySchema?: { readonly fields: Readonly<Record<string, string>> };
-}
-
-/** F11: no declared write schema has a field whose name looks like a timestamp (ADR-08, Rule I). */
+/**
+ * F11 (ADR-08, Rule I, P6): no declared body schema in the composed registry has a field whose name looks like a
+ * timestamp, and a `localDateTime` field appears only on operations whose roles are all committee roles. A field
+ * declared `localDateTime` is exempt from the name rule (Q7): its kind already says what it is and the committee rule
+ * already fences it, so `closedFrom: 'localDateTime'` and `startDate: 'localDateTime'` pass while `startDate: 'number'`
+ * still fails.
+ */
 export const f11WriteSchemasCarryNoTimestamp = defineFitnessFunction(
   'F11',
-  'no write schema field is a timestamp',
+  'no write schema field is a timestamp; localDateTime only on committee operations',
   async (repositoryRoot) => {
-    const writes = await loadDeclaredWrites(repositoryRoot);
-    const violations = writes.flatMap((write) =>
-      Object.keys(write.bodySchema?.fields ?? {})
-        .filter(looksLikeTimestampKey)
-        .map((field) => `${write.name} declares the field "${field}", which looks like a timestamp`),
-    );
-    const checked = writes.reduce((count, write) => count + Object.keys(write.bodySchema?.fields ?? {}).length, 0);
+    const writes = (await loadComposedOperations(repositoryRoot)).filter(declaresABody);
+    const violations = writes.flatMap((write) => [...timestampKeyViolations(write), ...calendarOutsideCommitteeViolations(write)]);
+    const checked = writes.reduce((count, write) => count + fieldNamesOf(write).length, 0);
     return { violations, checked };
   },
 );
 
-async function loadDeclaredWrites(repositoryRoot: string): Promise<DeclaredWrite[]> {
-  const modulePath = path.join(repositoryRoot, OPERATIONS_MODULE);
-  const loaded = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
-  const operations = loaded[OPERATIONS_EXPORT];
-  if (!Array.isArray(operations)) {
-    throw new Error(`${modulePath} must export an array named ${OPERATIONS_EXPORT}`);
+function declaresABody(operation: DeclaredOperation): boolean {
+  return operation.bodySchema !== undefined;
+}
+
+function timestampKeyViolations(write: DeclaredOperation): string[] {
+  return Object.entries(write.bodySchema?.fields ?? {})
+    .filter(([field, kind]) => kind !== LOCAL_DATE_TIME_KIND && looksLikeTimestampKey(field))
+    .map(([field]) => `${write.name} declares the field "${field}", which looks like a timestamp`);
+}
+
+function calendarOutsideCommitteeViolations(write: DeclaredOperation): string[] {
+  if (isCommitteeOnly(write)) {
+    return [];
   }
-  return (operations as DeclaredWrite[]).filter((operation) => operation.kind === 'write');
+  return Object.entries(write.bodySchema?.fields ?? {})
+    .filter(([, kind]) => kind === LOCAL_DATE_TIME_KIND)
+    .map(
+      ([field]) =>
+        `${write.name} declares the ${LOCAL_DATE_TIME_KIND} field "${field}", but only committee operations (roles ${COMMITTEE_ROLES.join(', ')}) may take a calendar time`,
+    );
+}
+
+function isCommitteeOnly(write: DeclaredOperation): boolean {
+  const roles = write.allowedRoles ?? [];
+  return roles.length > 0 && roles.every((role) => (COMMITTEE_ROLES as readonly string[]).includes(role));
 }
 
 runWhenInvokedDirectly(import.meta.url, f11WriteSchemasCarryNoTimestamp);

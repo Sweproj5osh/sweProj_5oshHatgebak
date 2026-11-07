@@ -1,11 +1,10 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from './composition';
 import { createHttpServer } from './server';
-import { TEST_TOKEN_SECRET, tokenFor } from './test-helpers';
+import { testApplication, tokenFor } from './test-helpers';
 
 describe('http server adapter', () => {
-  const server = createHttpServer(composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET }).handle);
+  const server = createHttpServer(testApplication().handle);
   let baseUrl = '';
 
   beforeAll(async () => {

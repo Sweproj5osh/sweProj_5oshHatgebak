@@ -1,21 +1,76 @@
 import { InMemoryAuditLogStore } from '../adapters/in-memory/in-memory-audit-log-store';
 import { InMemoryDatabase } from '../adapters/in-memory/in-memory-database';
 import { InMemoryOutboxStore } from '../adapters/in-memory/in-memory-outbox-store';
+import { InMemorySlidingWindowRateLimiter } from '../adapters/in-memory/in-memory-rate-limiter';
 import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-store';
-import { createHashChainedAuditTrail, type AuditTrail } from '../modules/audit-log/public';
+import {
+  createAccountsAndAccessControl,
+  createInMemoryAccountsStores,
+  type AccountsAndAccessControl,
+  type SiteLocator,
+} from '../modules/accounts-and-access-control/public';
+import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/audit-log/public';
 import { SystemClock, type Clock } from '../shared/clock';
 import type { EventSubscriber } from '../shared/events/event';
 import { OutboxDeliveryJob } from '../shared/events/outbox-delivery-job';
+import { KeyedSerialQueue } from '../shared/keyed-serial-queue';
+import type { Operation } from '../shared/operation-contract';
+import { SerialQueue } from '../shared/serial-queue';
+import type { TokenIssuer } from '../shared/token-issuer';
+import { EVERYONE_IS_LIVE, type AccessChecks } from './auth/access-checks';
 import { PermissionTable } from './auth/permission-table';
+import { createTokenIssuer } from './auth/token-issuer';
+import { bootstrapFirstChair, type BootstrapOutcome } from './bootstrap';
 import { createRequestHandler, type RequestHandler } from './handle-request';
 import { foundationOperations } from './operations/foundation-operations';
-import type { Operation } from './operations/operation';
 import { OperationRegistry } from './operations/registry';
-import type { WriteResourcesFactory } from './write-resources';
+import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
+
+/** What the modules' `operations(dependencies)` exports need. Each owner adds the fields their module needs (P4). */
+export interface ModuleDependencies {
+  /** The audit trail read outside any transaction. */
+  readonly audit: AuditTrail;
+  /** Mints a token at sign-in (Q4); the accounts module's signIn uses it. */
+  readonly tokens: TokenIssuer;
+}
+
+/**
+ * The one list of every operation the server exposes: each module's `operations(dependencies)` in alphabetical order
+ * of module, then the foundation's own. An owner adds their module's line in their own pull request (P4). The fitness
+ * functions and the tests build the registry through this same function, so they see exactly what the server runs.
+ */
+export function composeRegistry(dependencies: ModuleDependencies, additionalOperations: readonly Operation[] = []): OperationRegistry {
+  return new OperationRegistry([
+    ...auditLogOperations(dependencies),
+    ...foundationOperations,
+    ...additionalOperations,
+  ]);
+}
+
+/** The declaration-reading fitness functions never issue a token; this secret only lets the registry be built. */
+const INSPECTION_ONLY_SECRET = 'fitness-inspection-never-signs-a-real-token';
+
+/** The composed registry over fresh in-memory dependencies, for the fitness functions that inspect declarations. */
+export function composeInMemoryRegistry(): OperationRegistry {
+  const database = new InMemoryDatabase();
+  const clock = new SystemClock();
+  return composeRegistry({
+    audit: createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock),
+    tokens: createTokenIssuer(INSPECTION_ONLY_SECRET, clock),
+  });
+}
 
 export interface InMemoryApplicationOptions {
   readonly tokenSecret: string;
   readonly clock?: Clock;
+  /** Who answers live status, bound site and scope in tests. Absent: everyone is live. The server never uses this. */
+  readonly accessChecks?: AccessChecks;
+  /** Test-only operations registered beside the composed ones. */
+  readonly additionalOperations?: readonly Operation[];
+  /**
+   * Transitional (see QUESTIONS.md): the whole registry instead of the composed one, for tests already on main that
+   * build their own list. New tests use `additionalOperations`.
+   */
   readonly operations?: readonly Operation[];
   readonly subscribers?: readonly EventSubscriber[];
 }
@@ -23,47 +78,96 @@ export interface InMemoryApplicationOptions {
 export interface InMemoryApplication {
   readonly handle: RequestHandler;
   readonly database: InMemoryDatabase;
+  /** The accounts module as composed, so the operator and the tests can register people and change their status. */
+  readonly accounts: AccountsAndAccessControl;
   readonly audit: AuditTrail;
   readonly outbox: InMemoryOutboxStore;
   readonly outboxDelivery: OutboxDeliveryJob;
   readonly permissions: PermissionTable;
   readonly registry: OperationRegistry;
+  /** What the modules' operations(dependencies) received, for tests that exercise a port such as the token issuer. */
+  readonly moduleDependencies: ModuleDependencies;
+  /** Creates the first Chair from the environment once (Q2); main.ts calls it at start-up. */
+  bootstrapFirstChair(environment: NodeJS.ProcessEnv): Promise<BootstrapOutcome>;
+}
+
+/** The in-memory server as `main.ts` runs it: the real accounts module answers live status, bound site and scope. */
+export function composeInMemoryServer(options: Pick<InMemoryApplicationOptions, 'tokenSecret' | 'clock'>): InMemoryApplication {
+  return compose(options, (accounts) => accounts.authorization);
+}
+
+/** The in-memory application for tests: a stand-in answers live status unless the test passes its own checks. */
+export function composeInMemoryApplication(options: InMemoryApplicationOptions): InMemoryApplication {
+  return compose(options, () => options.accessChecks ?? EVERYONE_IS_LIVE);
 }
 
 /** The composition root for the in-memory stack: construction happens here and nowhere else. */
-export function composeInMemoryApplication(options: InMemoryApplicationOptions): InMemoryApplication {
+function compose(
+  options: InMemoryApplicationOptions,
+  chooseAccessChecks: (accounts: AccountsAndAccessControl) => AccessChecks,
+): InMemoryApplication {
   const clock = options.clock ?? new SystemClock();
   const database = new InMemoryDatabase();
   const outbox = new InMemoryOutboxStore(database, clock);
-  const operations = options.operations ?? foundationOperations;
-  const registry = new OperationRegistry(operations);
-  const permissions = new PermissionTable(operations);
-  const writeResources: WriteResourcesFactory = {
+  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
+  const accounts = createAccountsAndAccessControl({ stores: createInMemoryAccountsStores(), siteLocator: NO_SITES_YET });
+  const moduleDependencies: ModuleDependencies = { audit, tokens: createTokenIssuer(options.tokenSecret, clock) };
+  const registry = registryFor(options, moduleDependencies);
+  const permissions = new PermissionTable(registry.all());
+  const chainCommits = new SerialQueue();
+  const resources: UnitOfWorkResourcesFactory = {
     begin() {
       const transaction = database.begin();
+      const auditInTransaction = createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction.tables), clock);
       return {
         transaction,
-        audit: createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction), clock),
-        events: outbox.publisherBoundTo(transaction),
+        events: outbox.publisherBoundTo(transaction.tables),
+        appendAuditEntryAndCommit: (entry) =>
+          chainCommits.run(async () => {
+            await auditInTransaction.append(entry);
+            await transaction.commit();
+          }),
       };
     },
   };
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database), clock);
   const handle = createRequestHandler({
     registry,
     permissions,
     tokenSecret: options.tokenSecret,
-    writeResources,
+    clock,
+    database,
+    resources,
+    accessChecks: chooseAccessChecks(accounts),
     responses: new InMemoryResponseStore(),
-    auditReadSide: audit,
+    writeLocks: new KeyedSerialQueue(),
+    rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
   });
   return {
     handle,
     database,
+    accounts,
     audit,
     outbox,
     outboxDelivery: new OutboxDeliveryJob(outbox, options.subscribers ?? [], clock),
     permissions,
     registry,
+    moduleDependencies,
+    bootstrapFirstChair: (environment) => bootstrapFirstChair(environment, { accounts, audit, resources }),
   };
 }
+
+function registryFor(options: InMemoryApplicationOptions, dependencies: ModuleDependencies): OperationRegistry {
+  if (options.operations !== undefined) {
+    return new OperationRegistry(options.operations);
+  }
+  return composeRegistry(dependencies, options.additionalOperations);
+}
+
+/**
+ * No site registry implementation exists on main yet, so the accounts module is told that no site or zone is known;
+ * every scoped request is then refused as "unknown place" until Lino's registry fills this port (see QUESTIONS.md).
+ */
+const NO_SITES_YET: SiteLocator = {
+  locateSite: async () => undefined,
+  locateZone: async () => undefined,
+};

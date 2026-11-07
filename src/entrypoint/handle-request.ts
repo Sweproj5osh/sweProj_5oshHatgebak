@@ -1,161 +1,68 @@
-import type { AuditEntry, AuditTrail } from '../modules/audit-log/public';
 import type { Actor } from '../shared/identifiers';
-import { isWellFormedRequestId, REQUEST_ID_HEADER, type RequestId } from '../shared/request-id';
-import { findTimestampFields } from '../shared/timestamp-fields';
+import { refuse, type HttpResponse, type RoleGuardedOperation } from '../shared/operation-contract';
+import { authenticate, type AuthenticationDependencies } from './auth/authenticate';
 import type { PermissionTable } from './auth/permission-table';
-import { verifyToken } from './auth/token';
-import { refuse, type HttpRequest, type HttpResponse } from './http';
-import { validateBody } from './operations/body-schema';
-import type { Operation, ReadOperation, WriteOperation, WriteOutcome } from './operations/operation';
+import type { HttpRequest } from './http';
 import type { OperationRegistry } from './operations/registry';
-import { responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
-import type { WriteResources, WriteResourcesFactory } from './write-resources';
+import { handleRead, type ReadDependencies } from './reads';
+import { handleTelemetry } from './telemetry';
+import { handlePublicWrite, handleWrite, type WriteDependencies } from './writes';
 
-export interface RequestHandlerDependencies {
+export interface RequestHandlerDependencies extends WriteDependencies, ReadDependencies, AuthenticationDependencies {
   readonly registry: OperationRegistry;
   readonly permissions: PermissionTable;
-  readonly tokenSecret: string;
-  readonly writeResources: WriteResourcesFactory;
-  readonly responses: ResponseStore;
-  /** The audit trail for reads, outside any transaction. */
-  readonly auditReadSide: AuditTrail;
 }
 
 export type RequestHandler = (request: HttpRequest) => Promise<HttpResponse>;
 
-export const TIMESTAMPS_ARE_SET_BY_THE_SERVER = 'timestamps are set by the server';
+export { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './intake';
 
 /**
- * The single entry point. Every request passes, in order: route → token → permission table → (writes only)
- * request id → server clock rule → body schema → repeat check → the module, inside one unit of work.
- * Only a committed write's response is stored for repeats: a refusal or a rolled-back failure is re-evaluated when
- * the client retries, so a transient failure never becomes permanent.
+ * The single entry point. Every request passes, in order: token and expiry → live status → route → permission table
+ * → the operation's own pipeline (writes: request id → server clock rule → body schema → repeat check → the module, inside one unit of work).
+ * The token comes before the route, so an unknown path answers 401 without a token and the route table is not
+ * discoverable. A public operation has no token and no permission row; the rate limits stand in for them (ADR-15).
  */
 export function createRequestHandler(dependencies: RequestHandlerDependencies): RequestHandler {
   return async (request) => {
     const operation = dependencies.registry.find(request.method, request.path);
+    if (operation?.kind === 'public') {
+      return handlePublicWrite(operation, request, dependencies);
+    }
+    const actor = await authenticate(request, dependencies);
+    if (!actor.ok) {
+      return actor.error;
+    }
     if (operation === undefined) {
       return refuse(404, `no operation at ${request.method} ${request.path}`);
     }
-    const actor = authenticate(request, dependencies.tokenSecret);
-    if (!actor.ok) {
-      return refuse(401, actor.error);
-    }
-    if (!dependencies.permissions.allows(actor.value.role, operation.name)) {
+    if (!isPermitted(operation, actor.value, dependencies.permissions)) {
       return refuse(403, `role ${actor.value.role} may not call ${operation.name}`);
     }
     return dispatch(operation, request, actor.value, dependencies);
   };
 }
 
-function authenticate(request: HttpRequest, secret: string) {
-  const header = request.headers['authorization'];
-  const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
-  return verifyToken(token, secret);
+/** An open read (P10) needs only a valid token; every other operation needs its row in the permission table. */
+function isPermitted(operation: RoleGuardedOperation, actor: Actor, permissions: PermissionTable): boolean {
+  if (operation.kind === 'read' && operation.scope === 'open') {
+    return true;
+  }
+  return permissions.allows(actor.role, operation.name);
 }
 
 function dispatch(
-  operation: Operation,
+  operation: RoleGuardedOperation,
   request: HttpRequest,
   actor: Actor,
   dependencies: RequestHandlerDependencies,
 ): Promise<HttpResponse> {
-  if (operation.kind === 'read') {
-    return handleRead(operation, request, actor, dependencies.auditReadSide);
+  switch (operation.kind) {
+    case 'read':
+      return handleRead(operation, request, actor, dependencies);
+    case 'telemetry':
+      return handleTelemetry(operation, request, actor, dependencies);
+    case 'write':
+      return handleWrite(operation, request, actor, dependencies);
   }
-  return handleWrite(operation, request, actor, dependencies);
-}
-
-function handleRead(
-  operation: ReadOperation,
-  request: HttpRequest,
-  actor: Actor,
-  audit: AuditTrail,
-): Promise<HttpResponse> {
-  return operation.handle({ actor, query: request.query, audit });
-}
-
-async function handleWrite(
-  operation: WriteOperation,
-  request: HttpRequest,
-  actor: Actor,
-  dependencies: RequestHandlerDependencies,
-): Promise<HttpResponse> {
-  const requestId = request.headers[REQUEST_ID_HEADER];
-  if (!isWellFormedRequestId(requestId)) {
-    return refuse(400, `every write needs a well-formed ${REQUEST_ID_HEADER} header (8 to 128 letters, digits, - or _)`);
-  }
-  const timestampFields = findTimestampFields(request.body);
-  if (timestampFields.length > 0) {
-    return refuse(400, TIMESTAMPS_ARE_SET_BY_THE_SERVER, { fields: timestampFields });
-  }
-  const body = validateBody(operation.bodySchema, request.body);
-  if (!body.ok) {
-    return refuse(400, 'body does not match the operation schema', { problems: body.error });
-  }
-  const responseKey = responseKeyFor(actor.personId, requestId);
-  const earlier = await dependencies.responses.find(responseKey);
-  if (earlier !== undefined) {
-    return earlier;
-  }
-  const response = await executeInUnitOfWork(operation, { actor, requestId, body: body.value }, dependencies);
-  if (response.status < 400) {
-    await dependencies.responses.save(responseKey, response);
-  }
-  return response;
-}
-
-interface WriteInput {
-  readonly actor: Actor;
-  readonly requestId: RequestId;
-  readonly body: Readonly<Record<string, unknown>>;
-}
-
-/**
- * The handler runs, then the pipeline appends the one audit entry, then everything commits. A refusal (status 400 or
- * above) or a thrown error rolls the unit of work back, so a failed write leaves no entry and no event.
- */
-async function executeInUnitOfWork(
-  operation: WriteOperation,
-  input: WriteInput,
-  dependencies: RequestHandlerDependencies,
-): Promise<HttpResponse> {
-  const resources = dependencies.writeResources.begin();
-  try {
-    const outcome = await operation.handle({ ...input, transaction: resources.transaction, events: resources.events });
-    return await settle(operation, input, outcome, resources);
-  } catch (error) {
-    await resources.transaction.rollback();
-    return refuse(500, `${operation.name} failed and was rolled back`, { cause: describe(error) });
-  }
-}
-
-async function settle(
-  operation: WriteOperation,
-  input: WriteInput,
-  outcome: WriteOutcome,
-  resources: WriteResources,
-): Promise<HttpResponse> {
-  if (outcome.response.status >= 400) {
-    await resources.transaction.rollback();
-    return outcome.response;
-  }
-  await resources.audit.append(auditEntryFor(operation, input, outcome));
-  await resources.transaction.commit();
-  return outcome.response;
-}
-
-function auditEntryFor(operation: WriteOperation, input: WriteInput, outcome: WriteOutcome): AuditEntry {
-  return {
-    personId: input.actor.personId,
-    role: input.actor.role,
-    operation: operation.name,
-    input: input.body,
-    requestId: input.requestId,
-    ...outcome.audit,
-  };
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

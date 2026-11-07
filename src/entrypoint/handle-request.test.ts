@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../shared/clock';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
-import { composeInMemoryApplication } from './composition';
-import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
-import { respond } from './http';
-import { foundationOperations } from './operations/foundation-operations';
-import type { WriteOperation } from './operations/operation';
-import { readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
+import { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
+import { respond, type WriteOperation } from '../shared/operation-contract';
+import { readRequest, TEST_ADDRESS, testApplication, tokenFor, writeRequest } from './test-helpers';
 
 function application() {
-  return composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
-    clock: new FixedClock(new Date('2026-11-04T10:00:00Z')),
+  return testApplication({ clock: new FixedClock(new Date('2026-11-04T10:00:00Z')),
   });
 }
 
@@ -36,7 +31,7 @@ describe('entry point: token and permission table (Z4)', () => {
   it('refuses a request without a token with 401', async () => {
     const { handle } = application();
     const started = performance.now();
-    const response = await handle({ method: 'POST', path: '/example/approvals', query: {}, headers: {}, body: chairApproval });
+    const response = await handle({ method: 'POST', path: '/example/approvals', query: {}, headers: {}, address: TEST_ADDRESS, body: chairApproval });
     console.log(`Z4 report: refused-request latency ${(performance.now() - started).toFixed(2)} ms`);
     expect(response.status).toBe(401);
   });
@@ -48,6 +43,7 @@ describe('entry point: token and permission table (Z4)', () => {
       path: '/example/approvals',
       query: {},
       headers: { authorization: 'Bearer forged.token' },
+      address: TEST_ADDRESS,
       body: chairApproval,
     });
     expect(response.status).toBe(401);
@@ -67,10 +63,16 @@ describe('entry point: token and permission table (Z4)', () => {
     expect(response.body).toEqual({ operation: 'example.chair.approveRequest', requestId: 'request-0001' });
   });
 
-  it('answers 404 for an unknown route', async () => {
+  it('answers 404 for an unknown route only to a valid token', async () => {
     const { handle } = application();
     const response = await handle(readRequest('/nowhere', tokenFor('chair')));
     expect(response.status).toBe(404);
+  });
+
+  it('checks the token before the route: an unknown route without a token is 401, so the route table is not discoverable', async () => {
+    const { handle } = application();
+    const response = await handle({ method: 'GET', path: '/does-not-exist', query: {}, headers: {}, address: TEST_ADDRESS });
+    expect(response.status).toBe(401);
   });
 
   it('holds one row per registered operation in the permission table', () => {
@@ -94,10 +96,7 @@ describe('entry point: token and permission table (Z4)', () => {
   });
 
   it('takes a member\'s district from the signed token only, never from the query string', async () => {
-    const districtOne = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
-        ...foundationOperations,
+    const districtOne = testApplication({ additionalOperations: [
         auditedWriteInDistrict('/district-one-action', 'district-1'),
         auditedWriteInDistrict('/district-two-action', 'district-2'),
       ],
@@ -122,6 +121,7 @@ describe('entry point: repeatable writes (Z5)', () => {
       path: '/example/approvals',
       query: {},
       headers: { authorization: `Bearer ${tokenFor('chair')}` },
+      address: TEST_ADDRESS,
       body: chairApproval,
     });
     expect(response.status).toBe(400);
@@ -141,9 +141,7 @@ describe('entry point: repeatable writes (Z5)', () => {
 
   it('does not store a rolled-back failure: the same request id succeeds on retry and changes state once', async () => {
     let attempts = 0;
-    const { handle, audit } = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
+    const { handle, audit } = testApplication({ additionalOperations: [
         {
           kind: 'write',
           name: 'test.failsOnce',
@@ -171,6 +169,23 @@ describe('entry point: repeatable writes (Z5)', () => {
     expect(third).toEqual(second);
     expect(attempts).toBe(2);
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
+  });
+
+  it('refuses the same request id with a different body with 409 and writes nothing (P19)', async () => {
+    const { handle, audit, outbox } = application();
+    const first = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', chairApproval));
+    const reused = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { ...chairApproval, reason: 'Changed my mind' }));
+    expect(first.status).toBe(201);
+    expect(reused).toEqual({ status: 409, body: { error: REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT } });
+    expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
+    expect(outbox.allEvents()).toHaveLength(1);
+  });
+
+  it('treats the same body with its keys in another order as the same content', async () => {
+    const { handle } = application();
+    const first = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { approvalRequestId: 'request-1', reason: 'Within budget' }));
+    const reordered = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', { reason: 'Within budget', approvalRequestId: 'request-1' }));
+    expect(reordered).toEqual(first);
   });
 
   it('treats a different request id as a new write', async () => {
@@ -215,9 +230,7 @@ describe('entry point: audit entry and events commit together', () => {
   });
 
   it('rolls everything back when the handler throws', async () => {
-    const { handle, audit, outbox } = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
+    const { handle, audit, outbox } = testApplication({ additionalOperations: [
         {
           kind: 'write',
           name: 'test.explodes',

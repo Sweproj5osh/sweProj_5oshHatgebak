@@ -7,7 +7,7 @@ export class InMemoryResponseStore implements ResponseStore {
     return this.responses.get(responseKey);
   }
 
-  async save(responseKey: string, response: StoredResponse): Promise<void> {
-    this.responses.set(responseKey, response);
+  async save(responseKey: string, stored: StoredResponse): Promise<void> {
+    this.responses.set(responseKey, stored);
   }
 }

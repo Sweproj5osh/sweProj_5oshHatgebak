@@ -125,6 +125,7 @@ and the dashboard.
 | C16 | 2 | The money check | For a site and period, compute money due, paid in app, cash ticked, deposits confirmed, and the gap (cash ticked minus deposited), by reading other areas; store nothing | Seed 10 tickets, 4 cash ticks, 1 deposit → the five numbers add up; no new table | Query time for one month of one district |
 | C17 | 2 | Dashboard scope | Show a member their district, the Chair all districts, nobody else anything | Three tokens → three results, two refusals | Pass/fail |
 | C18 | 2 | A real payment provider behind the same port | Swap the fake for a real adapter by configuration only, after the free tier is verified on the vendor's page | All C1–C7 tests pass unchanged with the real adapter in test mode | Vendor page URL; tests passing |
+| C19 | 2 | Reinstate request | Let a member request that a revoked attendant comes back to work, with a reason; the Chair approves; a NEW licence is created and the audit entry names requester and approver in one transaction. "Revoked" itself never changes back (decision P24) | Member requests → awaiting Chair; Chair approves → new licence live, old one still revoked, one audit entry with both names; member approving → refused; no reason → refused | Approvals, Licensing |
 
 ---
 

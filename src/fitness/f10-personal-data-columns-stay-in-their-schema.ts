@@ -27,8 +27,9 @@ export const f10PersonalDataColumnsStayInTheirSchema = defineFitnessFunction(
   },
 );
 
+/** Splits snake_case and quoted camelCase names ("driverName") into words before lower-casing, so no word hides. */
 function namesPersonalData(columnName: string): boolean {
-  const words = columnName.toLowerCase().split(/[_\s]+|(?<=[a-z])(?=[A-Z])/);
+  const words = columnName.split(/[_\s]+|(?<=[a-z0-9])(?=[A-Z])/).map((word) => word.toLowerCase());
   return words.some((word) => PERSONAL_DATA_WORDS.includes(word) || word.includes('plate') || word.includes('phone'));
 }
 
