@@ -2,7 +2,16 @@ import { createFeeCalculator, createPriceList, type PriceVersion } from '../../.
 import { FixedClock } from '../../../../shared/clock';
 import type { SiteId } from '../../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../../shared/result';
-import { createTicketClosing, createTicketOpening, createTicketPaymentStatus, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
+import {
+  createTicketClosing,
+  createTicketOpening,
+  createTicketPaymentStatus,
+  InMemoryTicketStore,
+  type ClockedInAttendant,
+  type OpenTicketCommand,
+  type SiteCodeProblem,
+  type TicketingSites,
+} from '../../public';
 
 export interface PlateRequest {
   readonly carRef: string;
@@ -38,19 +47,22 @@ export class FakePlates {
   }
 }
 
-/** Who works where: an attendant is assigned to at most one site. */
-export class FakeAssignments {
-  private readonly sites = new Map<string, string>();
+/** The attendants as the entry point would prove them: clocked in at site-1, at site-2, or nowhere. */
+export const ATTENDANT_AT_SITE_1: ClockedInAttendant = { attendantId: 'attendant-1', boundSiteId: 'site-1' };
+export const ATTENDANT_AT_SITE_2: ClockedInAttendant = { attendantId: 'attendant-2', boundSiteId: 'site-2' };
+export const ATTENDANT_CLOCKED_OUT: ClockedInAttendant = { attendantId: 'attendant-unknown' };
 
-  assign(attendantId: string, siteId: string): this {
-    this.sites.set(attendantId, siteId);
-    return this;
-  }
-
-  async isAssignedTo(attendantId: string, siteId: string): Promise<boolean> {
-    await Promise.resolve();
-    return this.sites.get(attendantId) === siteId;
-  }
+/**
+ * Access checks for the in-memory application: everyone is live, and each named person's session is bound to the site
+ * given here (the stand-in for Lino's clock-in, P26 Q4). The shape is `AccessChecks` from the entry point, left
+ * unnamed so this support file imports nothing from `src/entrypoint` (F2).
+ */
+export function clockedIn(boundSites: Readonly<Record<string, string>>) {
+  return {
+    may: async () => true,
+    liveStatus: async () => 'active' as const,
+    boundSite: async (personId: string) => boundSites[personId],
+  };
 }
 
 /** A site registry stand-in: codes are "entry-<site>" and "exit-<site>", and each site is open or closed by hand. */
@@ -123,17 +135,16 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const store = new InMemoryTicketStore();
   const clock = new FixedClock(START);
   let counter = 0;
-  const assignments = new FakeAssignments().assign('attendant-1', 'site-1').assign('attendant-2', 'site-2');
-  const opening = createTicketOpening({ sites, store, clock, assignments, newTicketId: () => `ticket-${(counter += 1)}` });
+  const opening = createTicketOpening({ sites, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
   const prices = createPriceList({ isApproved: () => true });
   if (options.withPrice !== false) {
     await prices.applyApprovedVersion(PRICE, 'approval-1');
   }
   const residents = options.residents ?? [];
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
-  const closing = createTicketClosing({ sites, store, clock, prices, fees, assignments });
+  const closing = createTicketClosing({ sites, store, clock, prices, fees });
   const payments = createTicketPaymentStatus({ store });
-  return { sites, store, clock, opening, closing, payments, prices, assignments, fees };
+  return { sites, store, clock, opening, closing, payments, prices, fees };
 }
 
 let requestCounter = 0;

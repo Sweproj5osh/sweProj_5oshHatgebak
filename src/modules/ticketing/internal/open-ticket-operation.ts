@@ -7,7 +7,7 @@ export const STATUS_FOR_OPEN_REFUSAL: Readonly<Record<OpenRefusal, number>> = {
   'site closed': 409,
   'car already parked': 409,
   'site full': 409,
-  'attendant not assigned to this site': 403,
+  'attendant not clocked in at this site': 403,
 };
 
 /**

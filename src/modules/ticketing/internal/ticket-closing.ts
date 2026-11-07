@@ -1,23 +1,22 @@
-import type { PersonId } from '../../../shared/identifiers';
 import { fail, succeed, type Result } from '../../../shared/result';
-import type { CloseRefusal, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
+import type { ClockedInAttendant, CloseRefusal, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
 
 /**
  * Checks in a fixed order: an open ticket exists, the exit code is genuine and belongs to its site, the exit is not
  * before the entry, a price was in force when the ticket opened. Then the fee is asked of the fee calculator and the
  * ticket is closed in one indivisible step. The exit time is the server clock's, frozen here.
  *
- * An assisted ticket (task B10) is closed by an attendant assigned to its site, who also names the car seen at the
+ * An assisted ticket (task B10) is closed by an attendant clocked in at its site, who also names the car seen at the
  * exit; it must be the car that came in.
  */
 export function createTicketClosingService(dependencies: TicketClosingDependencies): TicketClosing {
-  const { sites, store, clock, prices, fees, assignments } = dependencies;
+  const { sites, store, clock, prices, fees } = dependencies;
 
   async function close(
     requestId: string,
     ticketId: string,
     exitCode: string,
-    assisted?: { readonly attendantId: PersonId; readonly carRef: string },
+    assisted?: { readonly attendant: ClockedInAttendant; readonly carRef: string },
   ): Promise<Result<Ticket, CloseRefusal>> {
     const requestKey = `close:${requestId}:${ticketId}`;
     const earlier = await store.findByRequestKey(requestKey);
@@ -32,8 +31,8 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
       if (!ticket.assisted) {
         return fail('not an assisted ticket');
       }
-      if (!(await assignments?.isAssignedTo(assisted.attendantId, ticket.siteId))) {
-        return fail('attendant not assigned to this site');
+      if (assisted.attendant.boundSiteId !== ticket.siteId) {
+        return fail('attendant not clocked in at this site');
       }
     }
     const code = await sites.verifyExitCode(exitCode, ticket.siteId);
@@ -58,6 +57,6 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
 
   return {
     closeTicket: (requestId, ticketId, exitCode) => close(requestId, ticketId, exitCode),
-    closeAssistedTicket: (requestId, ticketId, exitCode, attendantId, carRef) => close(requestId, ticketId, exitCode, { attendantId, carRef }),
+    closeAssistedTicket: (requestId, ticketId, exitCode, attendant, carRef) => close(requestId, ticketId, exitCode, { attendant, carRef }),
   };
 }

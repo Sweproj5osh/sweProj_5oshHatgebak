@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTicketReading, PLATE_UNAVAILABLE, TicketReadRefusal } from '../public';
-import { FakePlates, assistedCommand, buildTicketingWorld, openCommand, START } from './testing/ticketing-world';
+import { ATTENDANT_AT_SITE_1, FakePlates, assistedCommand, buildTicketingWorld, openCommand, START } from './testing/ticketing-world';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -134,10 +134,10 @@ describe('B13 the receipt', () => {
   it('works for an assisted ticket read by the attendant', async () => {
     const w = await world();
     w.plates.withPlate('car-walk', 'WALK 1');
-    const opened = await w.opening.openAssistedTicket(assistedCommand({ carRef: 'car-walk' }), 'attendant-1');
+    const opened = await w.opening.openAssistedTicket(assistedCommand({ carRef: 'car-walk' }), ATTENDANT_AT_SITE_1);
     if (!opened.ok) throw new Error('open failed');
     w.clock.advanceByMilliseconds(HOUR);
-    await w.closing.closeAssistedTicket('close-request-1', opened.value.ticketId, 'exit-site-1', 'attendant-1', 'car-walk');
+    await w.closing.closeAssistedTicket('close-request-1', opened.value.ticketId, 'exit-site-1', ATTENDANT_AT_SITE_1, 'car-walk');
     expect(await w.reading.receipt(opened.value.ticketId, 'attendant-1')).toMatchObject({ plate: 'WALK 1', hours: 1, fee: 10 });
   });
 });

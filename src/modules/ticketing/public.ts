@@ -43,7 +43,7 @@ export interface Ticket {
   readonly assisted: boolean;
 }
 
-export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site' | 'attendant not assigned to this site';
+export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site' | 'attendant not clocked in at this site';
 export type CloseRefusal =
   | 'no open ticket'
   | 'forged code'
@@ -51,7 +51,7 @@ export type CloseRefusal =
   | 'exit before entry'
   | 'no price known'
   | 'not an assisted ticket'
-  | 'attendant not assigned to this site'
+  | 'attendant not clocked in at this site'
   | 'car does not match';
 
 export interface OpenTicketCommand {
@@ -62,9 +62,20 @@ export interface OpenTicketCommand {
   readonly entryCode: string;
 }
 
+/**
+ * The attendant as the entry point proves them (P26 Q4, P28 #32): the person in the token and the site their clock-in
+ * bound the session to, read fresh on every request. Ticketing compares that site with the request's site and asks
+ * nobody else (Rule D: no port into the may-fail licensing module).
+ */
+export interface ClockedInAttendant {
+  readonly attendantId: PersonId;
+  /** Absent when the attendant has not clocked in anywhere. */
+  readonly boundSiteId?: SiteId;
+}
+
 export interface TicketDesk {
   openTicket(command: OpenTicketCommand): Promise<Result<Ticket, OpenRefusal>>;
-  openAssistedTicket(command: OpenTicketCommand, attendantId: PersonId): Promise<Result<Ticket, OpenRefusal>>;
+  openAssistedTicket(command: OpenTicketCommand, attendant: ClockedInAttendant): Promise<Result<Ticket, OpenRefusal>>;
   closeTicket(requestId: RequestId, ticketId: TicketId, exitCode: string): Promise<Result<Ticket, CloseRefusal>>;
   changePaymentStatus(requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>>;
   closeStaleTickets(siteId: SiteId, maximumHours: number): Promise<readonly TicketId[]>;
@@ -103,18 +114,8 @@ export interface TicketingSites {
   capacityOf(siteId: SiteId): Promise<number | undefined>;
 }
 
-/**
- * Who works where. Ticketing may not import the permission module, so it asks this one question and the composition
- * root answers it from Teammate A's assignments.
- */
-export interface AttendantAssignments {
-  isAssignedTo(attendantId: PersonId, siteId: SiteId): Promise<boolean>;
-}
-
 export interface TicketOpeningDependencies {
   readonly sites: TicketingSites;
-  /** Without it no attendant may open a ticket. */
-  readonly assignments?: AttendantAssignments;
   readonly store: TicketStore;
   readonly clock: Clock;
   /** Only tests replace this. */
@@ -130,8 +131,6 @@ export function createTicketOpening(dependencies: TicketOpeningDependencies): Ti
 
 export interface TicketClosingDependencies {
   readonly sites: Pick<TicketingSites, 'verifyExitCode'>;
-  /** Without it no attendant may close a ticket. */
-  readonly assignments?: AttendantAssignments;
   readonly store: TicketStore;
   readonly clock: Clock;
   /** The price in force at the moment the ticket opened (FR4.3). */
@@ -142,7 +141,7 @@ export interface TicketClosingDependencies {
 
 /** Closing an assisted ticket also names the attendant and the car seen at the exit, which must match the ticket's. */
 export interface AssistedClosing {
-  closeAssistedTicket(requestId: RequestId, ticketId: TicketId, exitCode: string, attendantId: PersonId, carRef: CarReference): Promise<Result<Ticket, CloseRefusal>>;
+  closeAssistedTicket(requestId: RequestId, ticketId: TicketId, exitCode: string, attendant: ClockedInAttendant, carRef: CarReference): Promise<Result<Ticket, CloseRefusal>>;
 }
 
 export type TicketClosing = Pick<TicketDesk, 'closeTicket'> & AssistedClosing;

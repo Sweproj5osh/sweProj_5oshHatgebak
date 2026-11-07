@@ -9,7 +9,7 @@ export const STATUS_FOR_CLOSE_REFUSAL: Readonly<Record<CloseRefusal, number>> = 
   'exit before entry': 409,
   'no price known': 409,
   'not an assisted ticket': 409,
-  'attendant not assigned to this site': 403,
+  'attendant not clocked in at this site': 403,
   'car does not match': 409,
 };
 
