@@ -69,6 +69,24 @@ describe('B10 assisted tickets: the monthly count', () => {
     expect(await counts.assistedTicketCount(world.database, 'site-1', 2027, 1)).toBe(0);
   });
 
+  it('counts by the Cairo calendar, not UTC: an assisted ticket opened at 22:30 UTC on 30 November belongs to December', async () => {
+    const world = await buildTicketingWorld();
+    const counts = createTicketCounts({ sites: world.sites, store: world.store });
+    world.clock.advanceByMilliseconds(new Date('2026-11-30T22:30:00Z').getTime() - START.getTime());
+    await world.openAssistedTicket(assistedCommand({ carRef: 'car-late' }), ATTENDANT_AT_SITE_1);
+    expect(await counts.assistedTicketCount(world.database, 'site-1', 2026, 11)).toBe(0);
+    expect(await counts.assistedTicketCount(world.database, 'site-1', 2026, 12)).toBe(1);
+  });
+
+  it('follows Cairo summer time too: 21:30 UTC on 30 June is already 1 July in Cairo', async () => {
+    const world = await buildTicketingWorld();
+    const counts = createTicketCounts({ sites: world.sites, store: world.store });
+    world.clock.advanceByMilliseconds(new Date('2027-06-30T21:30:00Z').getTime() - START.getTime());
+    await world.openAssistedTicket(assistedCommand({ carRef: 'car-summer' }), ATTENDANT_AT_SITE_1);
+    expect(await counts.assistedTicketCount(world.database, 'site-1', 2027, 6)).toBe(0);
+    expect(await counts.assistedTicketCount(world.database, 'site-1', 2027, 7)).toBe(1);
+  });
+
   it('keeps counting a ticket after it is closed', async () => {
     const world = await buildTicketingWorld();
     const counts = createTicketCounts({ sites: world.sites, store: world.store });

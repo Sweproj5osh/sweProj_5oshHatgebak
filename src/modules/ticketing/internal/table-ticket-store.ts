@@ -3,6 +3,7 @@ import { fail, succeed, type Result } from '../../../shared/result';
 import { SerialQueue } from '../../../shared/serial-queue';
 import type { TableAccess } from '../../../shared/unit-of-work';
 import type { Ticket } from '../public';
+import { cairoCalendarMonth } from './cairo-calendar';
 import { ALLOWED_PAYMENT_CHANGES } from './ticket-payment-status';
 import type { CloseRequest, OpenRequest, PaymentStatusRefusal, PaymentStatusRequest, StoreRefusal, TicketStore } from './ticket-store';
 
@@ -54,8 +55,8 @@ export class TableTicketStore implements TicketStore {
   async countAssisted(tables: TableAccess, siteId: SiteId, year: number, month: number): Promise<number> {
     const tickets = await tables.list<Ticket>(TICKETS_TABLE);
     return tickets.filter((ticket) => {
-      const openedAt = new Date(ticket.openedAt);
-      return ticket.assisted && ticket.siteId === siteId && openedAt.getUTCFullYear() === year && openedAt.getUTCMonth() + 1 === month;
+      const opened = cairoCalendarMonth(new Date(ticket.openedAt));
+      return ticket.assisted && ticket.siteId === siteId && opened.year === year && opened.month === month;
     }).length;
   }
 

@@ -115,6 +115,7 @@ export interface TicketQuery {
   ticketStatus(tables: TableAccess, ticketId: TicketId): Promise<Ticket>;
   ticketHistory(tables: TableAccess, driverRef: PersonId): Promise<readonly Ticket[]>;
   freeSpaces(tables: TableAccess, siteId: SiteId): Promise<number>;
+  /** Assisted tickets opened at the site in the given Cairo calendar month (Africa/Cairo), open or closed. */
   assistedTicketCount(tables: TableAccess, siteId: SiteId, year: number, month: number): Promise<number>;
   receipt(tables: TableAccess, ticketId: TicketId, reader: PersonId): Promise<Receipt>;
   frequentSites(tables: TableAccess, driverRef: PersonId): Promise<readonly SiteId[]>;
