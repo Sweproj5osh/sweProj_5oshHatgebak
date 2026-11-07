@@ -3,7 +3,7 @@
  * No ticket rules here: the server's answers are mapped to results, refusals or transport errors.
  */
 import { requiredString } from '../server-answer';
-import { ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
+import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import { DRIVER_CLOSE_TICKET_PATH, DRIVER_OPEN_TICKET_PATH } from './driver-ticket-routes';
 import {
   isTicketScanRefusal,
@@ -57,5 +57,5 @@ function rethrowAsTicketScanRefusal(error: unknown): never {
       throw new TicketScanRefusedError('not signed in');
     }
   }
-  throw error;
+  return asTransportFailureIfServerFailed(error);
 }

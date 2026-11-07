@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RequestId } from '../../../shared/request-id';
-import { ServerTransportError } from '../server-call';
-import { AttendantModeClient } from './attendant-mode-client';
-import { AttendantModeRefusedError, type AttendantModeApi } from './attendant-mode-api';
 import { InMemoryAttendantModeApi } from '../../test-support/in-memory-attendant-mode-api';
+import { ServerTransportError } from '../server-call';
+import { AttendantModeRefusedError, type AssistedTicketInput, type AttendantModeApi } from './attendant-mode-api';
+import { AttendantModeClient } from './attendant-mode-client';
 
 const SITE_ID = 'site-12';
 const RIGHT_CODE = `attendant-${SITE_ID}`;
@@ -40,9 +40,9 @@ class AnswerLosingApi implements AttendantModeApi {
     this.plan = plan;
   }
 
-  async clockIn(attendantId: string, siteId: string, code: string, requestId: RequestId) {
+  async clockIn(siteCode: string, requestId: RequestId) {
     this.seenRequestIds.push(requestId);
-    const result = await this.inner.clockIn(attendantId, siteId, code, requestId);
+    const result = await this.inner.clockIn(siteCode, requestId);
     this.loseAnswer();
     return result;
   }
@@ -55,7 +55,7 @@ class AnswerLosingApi implements AttendantModeApi {
     return this.inner.listCarsWaitingForCash(siteId);
   }
 
-  async openAssistedTicket(input: { requestId: RequestId; attendantId: string; siteId: string; driverId: string; plate: string }) {
+  async openAssistedTicket(input: AssistedTicketInput) {
     this.seenRequestIds.push(input.requestId);
     const result = await this.inner.openAssistedTicket(input);
     this.loseAnswer();
@@ -75,13 +75,15 @@ class AnswerLosingApi implements AttendantModeApi {
     }
   }
 }
+
 describe('D5 Staff App attendant mode client', () => {
-    it('clocks in on the correct site and lists unpaid cars', async () => {
+  it('clocks in by scanning the site code: the site comes back from the server, then lists unpaid cars', async () => {
     const { client } = buildClient();
 
-    const signIn = await client.clockIn('attendant-7', SITE_ID, RIGHT_CODE);
+    const clockedIn = await client.clockIn(RIGHT_CODE);
 
-    expect(valueOf(signIn).siteId).toBe(SITE_ID);
+    expect(valueOf(clockedIn)).toEqual({ siteId: SITE_ID, clockedIn: true });
+    expect(client.sessionSiteId()).toBe(SITE_ID);
     expect((await client.listOpenTickets()).ok).toBe(true);
     expect((await client.listCarsWaitingForCash()).ok).toBe(true);
 
@@ -92,11 +94,11 @@ describe('D5 Staff App attendant mode client', () => {
     expect(valueOf(await client.listCarsWaitingForCash())).toEqual(['ABC-111']);
   });
 
-    it('marks a ticket as paid in one tap and keeps the same request id for retry', async () => {
+  it('marks a ticket as paid in one tap and keeps the same request id for retry', async () => {
     const api = new AnswerLosingApi(new InMemoryAttendantModeApi(), [false, false, true, false]);
     const { client } = buildClient(api);
 
-    await client.clockIn('attendant-8', 'site-4', 'attendant-site-4');
+    await client.clockIn('attendant-site-4');
     const ticketId = valueOf(await client.openAssistedTicket('driver-b', 'XYZ-222')).ticketId;
 
     const lost = await client.markTicketPaid(ticketId);
@@ -104,45 +106,50 @@ describe('D5 Staff App attendant mode client', () => {
     expect(client.pendingMarkPaidRequestId()).toBe('d5-req-0003');
 
     const retry = await client.markTicketPaid(ticketId);
-    expect(retry).toEqual({ ok: true, value: { ok: true, requestId: 'd5-req-0003', ticketId, paid: true } });
+    expect(retry).toEqual({ ok: true, value: { requestId: 'd5-req-0003', ticketId, paid: true } });
     expect(client.pendingMarkPaidRequestId()).toBeUndefined();
     expect(valueOf(await client.listOpenTickets())).toEqual([]);
     expect(api.seenRequestIds).toEqual(['d5-req-0001', 'd5-req-0002', 'd5-req-0003', 'd5-req-0003']);
   });
 
-  it('refuses a wrong site and keeps the same request id for the same action', async () => {
+  it('shows the server refusal for a forged code and binds no site', async () => {
     const { client } = buildClient(new InMemoryAttendantModeApi());
 
-    const first = await client.clockIn('attendant-9', 'site-9', 'wrong-code');
-    const second = await client.clockIn('attendant-9', 'site-9', 'wrong-code');
+    const first = await client.clockIn('not-a-site-code');
+    const second = await client.clockIn('not-a-site-code');
 
-    expect(first).toEqual({ ok: false, error: 'wrong site' });
+    expect(first).toEqual({ ok: false, error: 'forged code' });
     expect(second).toEqual(first);
     expect(client.sessionSiteId()).toBeUndefined();
   });
 
   it('shows the server refusal as it is, whatever its name', async () => {
     const refusing: AttendantModeApi = {
-      clockIn: async () => { throw new AttendantModeRefusedError('wrong site'); },
+      clockIn: async () => {
+        throw new AttendantModeRefusedError('licence not live');
+      },
       listOpenTickets: async () => [],
       listCarsWaitingForCash: async () => [],
-      openAssistedTicket: async () => { throw new AttendantModeRefusedError('not clocked in'); },
-      markTicketPaid: async () => { throw new AttendantModeRefusedError('ticket not found'); },
+      openAssistedTicket: async () => {
+        throw new AttendantModeRefusedError('not clocked in');
+      },
+      markTicketPaid: async () => {
+        throw new AttendantModeRefusedError('ticket not found');
+      },
     };
 
     const { client } = buildClient(refusing);
-    const result = await client.clockIn('attendant-1', 'site-1', 'attendant-site-1');
-    expect(result).toEqual({ ok: false, error: 'wrong site' });
+
+    expect(await client.clockIn('attendant-site-1')).toEqual({ ok: false, error: 'licence not live' });
   });
 
   it('refuses a write when offline and never saves a local clock-in state', async () => {
     const api = new AnswerLosingApi(new InMemoryAttendantModeApi(), [true]);
     const { client } = buildClient(api);
 
-    const result = await client.clockIn('attendant-99', 'site-99', 'attendant-site-99');
+    const result = await client.clockIn('attendant-site-99');
 
     expect(result).toEqual({ ok: false, error: 'connection lost', requestId: 'd5-req-0001' });
-    expect(client.attendant()).toBeUndefined();
     expect(client.sessionSiteId()).toBeUndefined();
     expect(client.pendingClockInRequestId()).toBe('d5-req-0001');
   });

@@ -4,15 +4,15 @@
  */
 import type { RequestId } from '../../../shared/request-id';
 import { asRecord, requiredBoolean, requiredList, requiredString, type ServerAnswer } from '../server-answer';
-import { ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
+import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import {
   AttendantModeRefusedError,
   isAttendantModeRefusal,
   type AssistedTicketInput,
-  type AssistedTicketResult,
-  type AttendantClockInResult,
+  type AssistedTicketSuccess,
+  type AttendantClockInSuccess,
   type AttendantModeApi,
-  type MarkPaidResult,
+  type MarkPaidSuccess,
   type TicketSummary,
 } from './attendant-mode-api';
 import {
@@ -36,16 +36,12 @@ export class HttpAttendantModeApi implements AttendantModeApi {
     this.server = new ServerCall({ handle: options.handle, token: options.token });
   }
 
-  async clockIn(attendantId: string, siteId: string, code: string, requestId: RequestId): Promise<AttendantClockInResult> {
-    const answer = await this.server
-      .write(ATTENDANT_CLOCK_IN_PATH, requestId, { attendantId, siteId, code })
-      .catch(rethrowAsAttendantModeRefusal);
-    return {
-      ok: true,
-      requestId: requiredString(answer, 'requestId'),
-      attendantId: requiredString(answer, 'attendantId'),
-      siteId: requiredString(answer, 'siteId'),
-    };
+  async clockIn(siteCode: string, requestId: RequestId): Promise<AttendantClockInSuccess> {
+    const answer = await this.server.write(ATTENDANT_CLOCK_IN_PATH, requestId, { siteCode }).catch(rethrowAsAttendantModeRefusal);
+    if (requiredBoolean(answer, 'clockedIn') !== true) {
+      throw new Error('server answered a clock-in with clockedIn false');
+    }
+    return { siteId: requiredString(answer, 'siteId'), clockedIn: true };
   }
 
   async listOpenTickets(siteId: string): Promise<readonly TicketSummary[]> {
@@ -58,26 +54,16 @@ export class HttpAttendantModeApi implements AttendantModeApi {
     return requiredList(answer, 'cars').map(requiredPlateText);
   }
 
-  async openAssistedTicket(input: AssistedTicketInput): Promise<AssistedTicketResult> {
+  async openAssistedTicket(input: AssistedTicketInput): Promise<AssistedTicketSuccess> {
     const answer = await this.server
-      .write(ATTENDANT_ASSISTED_TICKET_PATH, input.requestId, {
-        attendantId: input.attendantId,
-        siteId: input.siteId,
-        driverId: input.driverId,
-        plate: input.plate,
-      })
+      .write(ATTENDANT_ASSISTED_TICKET_PATH, input.requestId, { siteId: input.siteId, driverId: input.driverId, plate: input.plate })
       .catch(rethrowAsAttendantModeRefusal);
-    return { ok: true, requestId: requiredString(answer, 'requestId'), ...readTicketSummary(answer) };
+    return { requestId: input.requestId, ...readTicketSummary(answer) };
   }
 
-  async markTicketPaid(ticketId: string, requestId: RequestId): Promise<MarkPaidResult> {
+  async markTicketPaid(ticketId: string, requestId: RequestId): Promise<MarkPaidSuccess> {
     const answer = await this.server.write(ATTENDANT_TICK_CASH_PATH, requestId, { ticketId }).catch(rethrowAsAttendantModeRefusal);
-    return {
-      ok: true,
-      requestId: requiredString(answer, 'requestId'),
-      ticketId: requiredString(answer, 'ticketId'),
-      paid: requiredBoolean(answer, 'paid'),
-    };
+    return { requestId, ticketId: requiredString(answer, 'ticketId'), paid: requiredBoolean(answer, 'paid') };
   }
 }
 
@@ -105,8 +91,8 @@ function rethrowAsAttendantModeRefusal(error: unknown): never {
       throw new AttendantModeRefusedError(error.refusal);
     }
     if (error.status === UNAUTHORIZED) {
-      throw new AttendantModeRefusedError('not clocked in');
+      throw new AttendantModeRefusedError('not signed in');
     }
   }
-  throw error;
+  return asTransportFailureIfServerFailed(error);
 }

@@ -1,14 +1,25 @@
 /**
- * In-memory stand-in for the map API while the main system is not yet plugged in.
- * The app only receives the current distance-sorted results and free-space bands from the server.
+ * In-memory stand-in for the map data layer, for client tests that need no server (P14). It plays the server: it
+ * derives distance, order and the band word from the seeded counts, which is exactly what the app must never do; that
+ * is why this file lives in test-support and not in the library.
  */
 import { ServerTransportError } from '../shared-client/server-call';
-import {
-  type DriverMapApi,
-  type GeoPoint,
-  type NearbySiteResult,
-  type SiteMapEntry,
-} from '../shared-client/map/driver-map-api';
+import type { DriverMapApi, FreeSpaceBand, GeoPoint, NearbySite } from '../shared-client/map/driver-map-api';
+
+/** What the stand-in server knows about a site; the app never sees capacity or counts (Rule G: tickets are the truth). */
+export interface SiteMapEntry {
+  readonly siteId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly firstHourFee: number;
+  readonly capacity: number;
+  readonly openTicketCount: number;
+}
+
+/** Engineering defaults of P11, as Lino listed them: "full" at 0 spaces, "few" at 2 or fewer or a fifth of capacity. */
+const FEW_SPACES_AT_MOST = 2;
+const FEW_SPACES_SHARE_OF_CAPACITY = 1 / 5;
+const METRES_PER_DEGREE = 111_000;
 
 export class InMemoryDriverMapApi implements DriverMapApi {
   private readonly sites: Map<string, SiteMapEntry>;
@@ -29,50 +40,44 @@ export class InMemoryDriverMapApi implements DriverMapApi {
 
   updateSiteTicketCount(siteId: string, openTicketCount: number): void {
     const existing = this.sites.get(siteId);
-    if (existing === undefined) {
-      return;
+    if (existing !== undefined) {
+      this.sites.set(siteId, { ...existing, openTicketCount });
     }
-
-    this.sites.set(siteId, {
-      ...existing,
-      openTicketCount,
-    });
   }
 
-  async nearbySites(from: GeoPoint, radiusMeters: number): Promise<readonly NearbySiteResult[]> {
+  async nearbySites(from: GeoPoint, radiusMeters: number): Promise<readonly NearbySite[]> {
     const nearby = [...this.sites.values()]
-      .filter((site) => distanceMeters(from, { latitude: site.latitude, longitude: site.longitude }) <= radiusMeters)
-      .map((site) => ({
-        siteId: site.siteId,
-        distanceMeters: distanceMeters(from, { latitude: site.latitude, longitude: site.longitude }),
-        firstHourFee: site.firstHourFee,
-        band: computeFreeSpaceBand(site.capacity, site.openTicketCount),
-      }))
-      .sort((left, right) => {
-        if (left.distanceMeters !== right.distanceMeters) {
-          return left.distanceMeters - right.distanceMeters;
-        }
-        return bandOrder(left.band) - bandOrder(right.band);
-      });
+      .map((site) => toNearbySite(site, from))
+      .filter((site) => site.distanceMeters <= radiusMeters)
+      .sort((left, right) => left.distanceMeters - right.distanceMeters);
 
     if (this.transportDropsRemaining > 0) {
       this.transportDropsRemaining -= 1;
       throw new ServerTransportError();
     }
-
     return nearby;
-  }
-
-  getRefreshIntervalMs(): number {
-    return 15_000;
   }
 }
 
-function computeFreeSpaceBand(capacity: number, openTicketCount: number): NearbySiteResult['band'] {
-  if (capacity <= 0 || openTicketCount >= capacity) {
+function toNearbySite(site: SiteMapEntry, from: GeoPoint): NearbySite {
+  const centre = { latitude: site.latitude, longitude: site.longitude };
+  return {
+    siteId: site.siteId,
+    label: site.siteId,
+    centre,
+    distanceMeters: distanceMeters(from, centre),
+    open: true,
+    firstHourFee: site.firstHourFee,
+    band: bandOf(site.capacity, site.openTicketCount),
+  };
+}
+
+function bandOf(capacity: number, openTicketCount: number): FreeSpaceBand {
+  const freeSpaces = capacity - openTicketCount;
+  if (freeSpaces <= 0) {
     return 'full';
   }
-  if (openTicketCount >= Math.ceil(capacity * 0.75)) {
+  if (freeSpaces <= FEW_SPACES_AT_MOST || freeSpaces <= capacity * FEW_SPACES_SHARE_OF_CAPACITY) {
     return 'few';
   }
   return 'free';
@@ -81,18 +86,5 @@ function computeFreeSpaceBand(capacity: number, openTicketCount: number): Nearby
 function distanceMeters(from: GeoPoint, to: GeoPoint): number {
   const latitudeDelta = to.latitude - from.latitude;
   const longitudeDelta = to.longitude - from.longitude;
-  return Math.sqrt(latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta) * 111_000;
-}
-
-function bandOrder(band: NearbySiteResult['band']): number {
-  switch (band) {
-    case 'free':
-      return 0;
-    case 'few':
-      return 1;
-    case 'full':
-      return 2;
-    default:
-      return 3;
-  }
+  return Math.sqrt(latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta) * METRES_PER_DEGREE;
 }

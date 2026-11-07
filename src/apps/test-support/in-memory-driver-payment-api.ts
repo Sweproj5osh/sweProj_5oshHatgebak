@@ -1,15 +1,16 @@
 /**
- * In-memory stand-in for the payment API while the real payment module is not attached.
- * It keeps the same request id for a repeated write and refuses invalid or incomplete payments.
+ * In-memory stand-in for the payment data layer, for client tests that need no server (P14). It answers a repeated
+ * request id with the same payment, as the pipeline does, and knows the fee itself: the client never sends one.
  */
 import type { RequestId } from '../../shared/request-id';
-import { ServerTransportError } from '../shared-client/server-call';
 import {
   DriverPaymentRefusedError,
-  type DriverPayResult,
   type DriverPaymentApi,
   type DriverReceipt,
+  type PayAnswer,
+  type PaymentRecord,
 } from '../shared-client/payments/driver-payment-api';
+import { ServerTransportError } from '../shared-client/server-call';
 
 interface SavedTicket extends DriverReceipt {
   readonly paid: boolean;
@@ -17,8 +18,9 @@ interface SavedTicket extends DriverReceipt {
 
 export class InMemoryDriverPaymentApi implements DriverPaymentApi {
   private readonly tickets = new Map<string, SavedTicket>();
-  private readonly seenResults = new Map<RequestId, DriverPayResult>();
+  private readonly answersByRequestId = new Map<RequestId, PayAnswer>();
   private transportDropsRemaining = 0;
+  private paymentsMade = 0;
 
   constructor(initialTickets: readonly SavedTicket[] = []) {
     for (const ticket of initialTickets) {
@@ -31,8 +33,8 @@ export class InMemoryDriverPaymentApi implements DriverPaymentApi {
     this.transportDropsRemaining = count;
   }
 
-  async pay(ticketId: string, amount: number, requestId: RequestId): Promise<DriverPayResult> {
-    const known = this.seenResults.get(requestId);
+  async pay(ticketId: string, requestId: RequestId): Promise<PayAnswer> {
+    const known = this.answersByRequestId.get(requestId);
     if (known !== undefined) {
       this.maybeDropAfterApply();
       return known;
@@ -42,26 +44,23 @@ export class InMemoryDriverPaymentApi implements DriverPaymentApi {
     if (ticket === undefined || ticket.closedAt.length === 0) {
       throw new DriverPaymentRefusedError('ticket not closed');
     }
-    if (amount !== ticket.fee) {
-      throw new DriverPaymentRefusedError('declined');
+    if (ticket.paid) {
+      throw new DriverPaymentRefusedError('nothing to pay');
     }
 
-    const result: DriverPayResult = {
-      ok: true,
-      requestId,
-      ticketId,
-      paid: true,
-    };
-    this.seenResults.set(requestId, result);
+    this.paymentsMade += 1;
+    const payment: PaymentRecord = { paymentId: `payment-${this.paymentsMade}`, ticketId, amount: ticket.fee, method: 'app', state: 'paid' };
+    const answer: PayAnswer = { payment };
+    this.answersByRequestId.set(requestId, answer);
     this.tickets.set(ticketId, { ...ticket, paid: true });
     this.maybeDropAfterApply();
-    return result;
+    return answer;
   }
 
   async receipt(ticketId: string): Promise<DriverReceipt> {
     const ticket = this.tickets.get(ticketId);
     if (ticket === undefined) {
-      throw new DriverPaymentRefusedError('ticket not closed');
+      throw new DriverPaymentRefusedError('unknown ticket');
     }
     const { paid: _paid, ...receipt } = ticket;
     return receipt;

@@ -1,14 +1,15 @@
 /**
- * Driver App map client for task D2.
- * The app holds the refresh timing and renders the server's answer; the server keeps the site facts and the free-space band.
+ * Driver App map client for task D2. The app keeps only the refresh timing and renders the server's answer; the
+ * server keeps the site facts and computes the free-space band.
  */
 import { ServerTransportError } from '../server-call';
 import {
   DriverMapRefusedError,
+  FREE_SPACE_BAND_REFRESH_MILLISECONDS,
   type DriverMapApi,
   type DriverMapRefusal,
   type GeoPoint,
-  type NearbySiteResult,
+  type NearbySite,
 } from './driver-map-api';
 
 export type DriverMapClientSuccess<T> = { readonly ok: true; readonly value: T };
@@ -37,7 +38,7 @@ export class DriverMapClient {
   }
 
   refreshIntervalMs(): number {
-    return this.api.getRefreshIntervalMs();
+    return FREE_SPACE_BAND_REFRESH_MILLISECONDS;
   }
 
   isRefreshDue(nowMs = this.now()): boolean {
@@ -47,7 +48,7 @@ export class DriverMapClient {
     return nowMs - this.lastRefreshedAtMs >= this.refreshIntervalMs();
   }
 
-  async nearbySites(from: GeoPoint, radiusMeters: number): Promise<DriverMapClientResult<readonly NearbySiteResult[]>> {
+  async nearbySites(from: GeoPoint, radiusMeters: number): Promise<DriverMapClientResult<readonly NearbySite[]>> {
     try {
       const results = await this.api.nearbySites(from, radiusMeters);
       this.lastRefreshedAtMs = this.now();

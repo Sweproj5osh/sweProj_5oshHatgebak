@@ -1,26 +1,26 @@
 export { AttendantModeClient } from './attendant-mode-client';
-export type { AttendantModeClientFailure, AttendantModeClientResult, AttendantModeClientSuccess } from './attendant-mode-client';
+export type {
+  AttendantModeClientFailure,
+  AttendantModeClientReadResult,
+  AttendantModeClientResult,
+  AttendantModeClientSuccess,
+} from './attendant-mode-client';
 export {
   ATTENDANT_ASSISTED_TICKET_PATH,
-  ATTENDANT_CLOCK_IN_PATH,
   ATTENDANT_CARS_WAITING_FOR_CASH_PATH,
+  ATTENDANT_CLOCK_IN_OPERATION,
+  ATTENDANT_CLOCK_IN_PATH,
   ATTENDANT_OPEN_TICKETS_PATH,
   ATTENDANT_TICK_CASH_PATH,
 } from './attendant-mode-routes';
 export {
   AttendantModeRefusedError,
   isAttendantModeRefusal,
-  type AssistedTicketFailure,
   type AssistedTicketInput,
-  type AssistedTicketResult,
   type AssistedTicketSuccess,
-  type AttendantClockInFailure,
-  type AttendantClockInResult,
   type AttendantClockInSuccess,
   type AttendantModeApi,
   type AttendantModeRefusal,
-  type MarkPaidFailure,
-  type MarkPaidResult,
   type MarkPaidSuccess,
   type TicketSummary,
 } from './attendant-mode-api';

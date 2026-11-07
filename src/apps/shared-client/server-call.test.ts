@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { refuse, respond, type HttpResponse } from '../../shared/operation-contract';
 import { REQUEST_ID_HEADER } from '../../shared/request-id';
-import { ServerCall, ServerRefusedError, ServerTransportError, type ServerRequest } from './server-call';
+import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, ServerTransportError, type ServerRequest } from './server-call';
 
 function recordingServer(answer: HttpResponse) {
   const requests: ServerRequest[] = [];
@@ -68,16 +68,29 @@ describe('the one HTTP call of the data layer', () => {
     await expect(outcome).rejects.toMatchObject({ status: 409, refusal: 'car already parked' });
   });
 
-  it('turns a 5xx answer and a dropped connection into transport failures, so the caller retries with the same id', async () => {
-    const { call: failing } = recordingServer(respond(503, { error: 'internal error' }));
+  it('turns a dropped connection into a transport failure, so the caller retries with the same id', async () => {
     const dropped = new ServerCall({
       handle: async () => {
         throw new Error('socket hang up');
       },
     });
 
-    await expect(failing.write('/tickets/open', 'request-0005', {})).rejects.toBeInstanceOf(ServerTransportError);
-    await expect(dropped.write('/tickets/open', 'request-0005', {})).rejects.toMatchObject({ message: 'socket hang up' });
+    const outcome = dropped.write('/tickets/open', 'request-0005', {});
+
+    await expect(outcome).rejects.toBeInstanceOf(ServerTransportError);
+    await expect(outcome).rejects.toMatchObject({ message: 'socket hang up' });
+  });
+
+  it('carries a 5xx answer as a refusal with its word, and the adapter decides: a known word is shown, an unknown one is retried', async () => {
+    const { call } = recordingServer(respond(500, { error: 'internal error', correlationId: 'c-1' }));
+
+    const outcome = call.write('/tickets/open', 'request-0006', {}).catch(asTransportFailureIfServerFailed);
+
+    await expect(outcome).rejects.toBeInstanceOf(ServerTransportError);
+    await expect(outcome).rejects.toMatchObject({ message: 'server error 500: internal error' });
+    await expect(Promise.reject(new ServerRefusedError(409, 'car already parked')).catch(asTransportFailureIfServerFailed)).rejects.toMatchObject({
+      status: 409,
+    });
   });
 
   it('names a refusal without a word by its status', async () => {

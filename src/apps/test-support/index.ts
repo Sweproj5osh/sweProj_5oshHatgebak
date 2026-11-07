@@ -15,5 +15,7 @@ export { InMemoryDriverAuthApi, type InMemoryDriverAuthApiOptions } from './in-m
 export { InMemoryTicketScanApi } from './in-memory-ticket-scan-api';
 export { createStandInDriverTicketOperations, createStandInTicketDeskState, type StandInTicketDeskState } from './stand-in-driver-ticket-operations';
 export { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
-export { InMemoryDriverMapApi } from './in-memory-driver-map-api';
+export { InMemoryDriverMapApi, type SiteMapEntry } from './in-memory-driver-map-api';
 export { InMemoryDriverPaymentApi } from './in-memory-driver-payment-api';
+export { createStandInAttendanceOperations, createStandInAttendanceState, type StandInAttendanceState } from './stand-in-attendance-operations';
+export { createStandInPaymentOperations, createStandInPaymentState, type StandInPaymentState } from './stand-in-payment-operations';

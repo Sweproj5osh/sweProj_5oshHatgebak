@@ -2,8 +2,9 @@
  * The one HTTP call of the apps' data layer (P12). Every adapter sends through it: the token of the signed-in person,
  * the request id of a write or a logged read (Rule H, P9), and the plain request the entry point's own HTTP adapter
  * hands the pipeline, so a test can call the pipeline in-process. It holds no business rule (Rule A): a status of
- * 400 to 499 is the server's "no", carried as the word in the answer's `error`; 500 and above, or no answer at all,
- * is a transport failure the caller may retry with the same request id.
+ * 400 or above is the server's "no", carried as the word in the answer's `error`, and the adapter that knows the
+ * operation decides which words the screen shows; no answer at all is a transport failure the caller may retry with
+ * the same request id.
  */
 import type { HttpMethod, HttpResponse } from '../../shared/operation-contract';
 import { REQUEST_ID_HEADER, type RequestId } from '../../shared/request-id';
@@ -87,9 +88,6 @@ export class ServerCall {
 
   private async send(request: ServerRequest): Promise<ServerAnswer> {
     const response = await this.answerOf(request);
-    if (response.status >= FIRST_SERVER_FAILURE_STATUS) {
-      throw new ServerTransportError(`server error ${response.status}`);
-    }
     if (response.status >= FIRST_REFUSAL_STATUS) {
       throw new ServerRefusedError(response.status, refusalWordOf(response));
     }
@@ -103,6 +101,19 @@ export class ServerCall {
       throw error instanceof ServerTransportError ? error : new ServerTransportError(describe(error));
     }
   }
+}
+
+/**
+ * The last step of every adapter's refusal mapping. A word the adapter knows is a refusal the screen shows, whatever
+ * the status (Amina's "pay later or pay cash" is a 503). A 5xx the adapter does not know is the server failing: the
+ * pipeline rolled the write back and answered "internal error", so the caller retries with the same request id. A 4xx
+ * the adapter does not know is a fault in this app or the server, and is not hidden.
+ */
+export function asTransportFailureIfServerFailed(error: unknown): never {
+  if (error instanceof ServerRefusedError && error.status >= FIRST_SERVER_FAILURE_STATUS) {
+    throw new ServerTransportError(`server error ${error.status}: ${error.refusal}`);
+  }
+  throw error;
 }
 
 function refusalWordOf(response: HttpResponse): string {

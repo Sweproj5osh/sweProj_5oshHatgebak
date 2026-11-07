@@ -6,7 +6,7 @@
  */
 import type { RequestId } from '../../../shared/request-id';
 import { asRecord, requiredList, requiredString } from '../server-answer';
-import { ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
+import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import {
   DriverAuthRefusedError,
   isSaveCarRefusal,
@@ -70,5 +70,5 @@ function rethrowAsDriverAuthRefusal(error: unknown): never {
       throw new DriverAuthRefusedError('not signed in');
     }
   }
-  throw error;
+  return asTransportFailureIfServerFailed(error);
 }
