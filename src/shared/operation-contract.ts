@@ -7,7 +7,7 @@ import type { BodySchema, ValidBody } from './body-schema';
 import type { EventPublisher } from './events/event';
 import type { Actor, DistrictId, PersonId, Role } from './identifiers';
 import type { RequestId } from './request-id';
-import type { Transaction } from './unit-of-work';
+import type { TableAccess, Transaction } from './unit-of-work';
 
 /** Plain data crossing the boundary between the HTTP adapter and the pipeline. No framework types. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -82,6 +82,8 @@ export interface WriteOperation extends OperationBase {
   readonly bodySchema: BodySchema;
   /** Sample bodies for the audit-coverage harness (F5): one that passes validation, one that does not. */
   readonly examples: { readonly valid: ValidBody; readonly invalid: unknown };
+  /** Seeds whatever rows `examples.valid` needs to succeed; the F5 harness runs it before the sample request. */
+  fixture?(database: TableAccess): Promise<void>;
   handle(context: WriteContext): Promise<WriteOutcome>;
 }
 
