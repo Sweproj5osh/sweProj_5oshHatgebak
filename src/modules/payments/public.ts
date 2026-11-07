@@ -58,11 +58,18 @@ export interface PaymentRecord {
 /**
  * Why a pay in the app was refused. "declined" and "ticket not closed" come from the task sheet; "nothing to pay" (the
  * ticket is already paid or waived) and "not your ticket" keep one ticket from being charged twice or by a stranger;
- * "payment pending, try again shortly" is P18: a ticket with a pending attempt takes no second charge. A timed-out or
+ * "payment pending, try again shortly" is P18: a ticket with a pending attempt takes no second charge; "request id
+ * reused for another ticket or payer" is P19: the module's own repeat guard beside the pipeline's. A timed-out or
  * pending provider answer is not a refusal: the attempt is recorded as pending and the driver reads "pay later or pay
  * cash" (section 9 of the rules).
  */
-export type PayRefusal = 'declined' | 'ticket not closed' | 'nothing to pay' | 'not your ticket' | 'payment pending, try again shortly';
+export type PayRefusal =
+  | 'declined'
+  | 'ticket not closed'
+  | 'nothing to pay'
+  | 'not your ticket'
+  | 'payment pending, try again shortly'
+  | 'request id reused for another ticket or payer';
 
 export interface PaymentLedger {
   payInApp(requestId: RequestId, ticketId: TicketId, payer: PersonId): Promise<Result<PaymentRecord, PayRefusal>>;

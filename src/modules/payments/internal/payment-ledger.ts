@@ -61,7 +61,7 @@ export class PaymentLedgerService implements PaymentLedger {
   async payInApp(requestId: RequestId, ticketId: TicketId, payer: PersonId): Promise<Result<PaymentRecord, PayRefusal>> {
     const alreadyRecorded = await this.store.byRequestId(requestId);
     if (alreadyRecorded !== undefined) {
-      return succeed(toRecord(alreadyRecorded));
+      return this.repeatOf(alreadyRecorded, ticketId, payer);
     }
     const refusal = await this.whyTicketCannotBeCharged(ticketId, payer);
     if (refusal !== undefined) {
@@ -97,6 +97,17 @@ export class PaymentLedgerService implements PaymentLedger {
 
   async paymentsForTicket(ticketId: TicketId): Promise<readonly PaymentRecord[]> {
     return (await this.store.forTicket(ticketId)).map(toRecord);
+  }
+
+  /**
+   * The module's own repeat guard (P19): the request id is keyed by payer and ticket, so an id reused for another
+   * ticket or by another payer is refused instead of being answered with the earlier payment.
+   */
+  private repeatOf(recorded: StoredPayment, ticketId: TicketId, payer: PersonId): Result<PaymentRecord, PayRefusal> {
+    if (recorded.ticketId !== ticketId || recorded.payerId !== payer) {
+      return fail('request id reused for another ticket or payer');
+    }
+    return succeed(toRecord(recorded));
   }
 
   /** The ticket's own state first, then the attempts already recorded against it (P18). */

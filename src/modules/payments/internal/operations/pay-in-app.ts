@@ -18,6 +18,7 @@ const STATUS_BY_REFUSAL: Readonly<Record<PayRefusal, number>> = {
   'nothing to pay': 409,
   'not your ticket': 403,
   'payment pending, try again shortly': 409,
+  'request id reused for another ticket or payer': 409,
 };
 
 /**

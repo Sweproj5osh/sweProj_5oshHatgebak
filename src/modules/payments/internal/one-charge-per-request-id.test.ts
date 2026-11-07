@@ -3,7 +3,7 @@ import { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database
 import { InMemoryOutboxStore } from '../../../adapters/in-memory/in-memory-outbox-store';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
 import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
-import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
 import { FixedClock } from '../../../shared/clock';
 import type { PersonId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
@@ -189,6 +189,45 @@ describe('C3 one charge per request id', () => {
     expect(await database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
     expect(gateway.chargeCallCount(ONE_ID)).toBe(2);
     expect(retried.ok && retried.value.providerReference).toBeTruthy();
+  });
+
+  it('P19 at the ledger: the same id for another ticket of the same payer is refused, not answered with the earlier payment', async () => {
+    const { clock, tickets, gateway, payments } = setUp();
+    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    tickets.seed(closedUnpaidTicket('ticket-2', 11));
+    const database = new InMemoryDatabase();
+    const outbox = new InMemoryOutboxStore(database, clock);
+
+    const first = database.begin();
+    await payments.ledgerBoundTo(first, outbox.publisherBoundTo(first.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
+    await first.commit();
+    const reused = database.begin();
+    const refused = await payments.ledgerBoundTo(reused, outbox.publisherBoundTo(reused.tables)).payInApp(ONE_ID, 'ticket-2', DRIVER);
+
+    expect(refused).toEqual({ ok: false, error: 'request id reused for another ticket or payer' });
+    expect(gateway.chargeCallCount()).toBe(1);
+  });
+
+  it('P19 through the entry point: another payer reusing the id reaches the ledger (another response key) and is refused with 409', async () => {
+    const { clock, tickets, gateway, payments } = setUp();
+    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    tickets.seed({ ...closedUnpaidTicket('ticket-2', 11), driverRef: 'driver-2' });
+    const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
+
+    expect((await application.handle(writeRequest(PAY_PATH, 'driver', ONE_ID, { ticketId: 'ticket-1' }))).status).toBe(201);
+    const otherPayer = await application.handle({
+      method: 'POST',
+      path: PAY_PATH,
+      query: {},
+      headers: { authorization: `Bearer ${tokenFor('driver', { personId: 'driver-2' })}`, 'x-request-id': ONE_ID },
+      address: TEST_ADDRESS,
+      body: { ticketId: 'ticket-2' },
+    });
+
+    expect(otherPayer.status).toBe(409);
+    expect(otherPayer.body).toEqual({ error: 'request id reused for another ticket or payer' });
+    expect(await application.database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
+    expect(gateway.chargeCallCount()).toBe(1);
   });
 
   it('two concurrent pays of one ticket under two request ids give one row and one charge: the ticket is locked per attempt', async () => {
