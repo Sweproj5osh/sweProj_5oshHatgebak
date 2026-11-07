@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFeeCalculator, type PriceVersion } from '../../modules/committee-prices/public';
+import { createFeeCalculator, type PriceVersion } from '../public';
 
 /**
  * Task B4: a car registered to a street address at a site pays 0 at that site.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFeeCalculator, type PriceVersion } from '../../modules/committee-prices/public';
+import { createFeeCalculator, type PriceVersion } from '../public';
 
 /**
  * P28 #27: a started hour that begins inside a free period costs 0; the cap still applies. The free periods live in

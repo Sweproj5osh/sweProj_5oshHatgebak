@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createPriceList, type PriceLookup, type PriceVersion } from '../../modules/committee-prices/public';
+import { createPriceList, type PriceLookup, type PriceVersion } from '../public';
 
 /**
  * Task B3: dated price versions. The price list returns the version valid at a given moment and accepts a new version
- * only when the approvals area vouches for it. The tests live outside src/modules/committee-prices for the same reason
- * as the fee calculator tests: fitness function F1 forbids that folder from importing the test runner.
+ * only when the approvals area vouches for it.
  */
 
 function priceVersion(overrides: Partial<PriceVersion> = {}): PriceVersion {

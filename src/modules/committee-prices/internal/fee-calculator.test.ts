@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createFeeCalculator, type PriceVersion } from '../../modules/committee-prices/public';
+import { createFeeCalculator, type PriceVersion } from '../public';
 
 /**
- * Tasks B1 and B2: the fee calculator, tested with plain numbers.
- *
- * This file lives outside src/modules/committee-prices on purpose. Fitness function F1 scans every file inside that
- * folder, test files included, and forbids any import from outside it, which would rule out importing the test runner.
+ * Tasks B1 and B2: the fee calculator, tested with plain numbers. Fitness function F1 scans the module's production
+ * files and skips `*.test.ts` (P28 #28), so the tests live beside the code they test.
  */
 
 const calculator = createFeeCalculator();
