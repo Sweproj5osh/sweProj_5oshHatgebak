@@ -63,10 +63,16 @@ describe('entry point: token and permission table (Z4)', () => {
     expect(response.body).toEqual({ operation: 'example.chair.approveRequest', requestId: 'request-0001' });
   });
 
-  it('answers 404 for an unknown route', async () => {
+  it('answers 404 for an unknown route only to a valid token', async () => {
     const { handle } = application();
     const response = await handle(readRequest('/nowhere', tokenFor('chair')));
     expect(response.status).toBe(404);
+  });
+
+  it('checks the token before the route: an unknown route without a token is 401, so the route table is not discoverable', async () => {
+    const { handle } = application();
+    const response = await handle({ method: 'GET', path: '/does-not-exist', query: {}, headers: {}, address: TEST_ADDRESS });
+    expect(response.status).toBe(401);
   });
 
   it('holds one row per registered operation in the permission table', () => {

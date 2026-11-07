@@ -18,22 +18,23 @@ export type RequestHandler = (request: HttpRequest) => Promise<HttpResponse>;
 export { REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT, TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './intake';
 
 /**
- * The single entry point. Every request passes, in order: route → token and expiry → live status → permission table
+ * The single entry point. Every request passes, in order: token and expiry → live status → route → permission table
  * → the operation's own pipeline (writes: request id → server clock rule → body schema → repeat check → the module, inside one unit of work).
- * A public operation has no token and no permission row; the rate limits stand in for them (ADR-15).
+ * The token comes before the route, so an unknown path answers 401 without a token and the route table is not
+ * discoverable. A public operation has no token and no permission row; the rate limits stand in for them (ADR-15).
  */
 export function createRequestHandler(dependencies: RequestHandlerDependencies): RequestHandler {
   return async (request) => {
     const operation = dependencies.registry.find(request.method, request.path);
-    if (operation === undefined) {
-      return refuse(404, `no operation at ${request.method} ${request.path}`);
-    }
-    if (operation.kind === 'public') {
+    if (operation?.kind === 'public') {
       return handlePublicWrite(operation, request, dependencies);
     }
     const actor = await authenticate(request, dependencies);
     if (!actor.ok) {
       return actor.error;
+    }
+    if (operation === undefined) {
+      return refuse(404, `no operation at ${request.method} ${request.path}`);
     }
     if (!isPermitted(operation, actor.value, dependencies.permissions)) {
       return refuse(403, `role ${actor.value.role} may not call ${operation.name}`);
