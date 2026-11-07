@@ -23,23 +23,23 @@ const car = { carRef: 'car-x' };
 
 describe('free periods in the fee (P28 #27)', () => {
   it('charges nothing for a started hour that begins inside the free period: 11:30 to 13:30 gives 10', async () => {
-    expect(await freeAtMidday.computeFeeForCar(car, at(11, 30), at(13, 30), priceVersion())).toBe(10);
+    expect((await freeAtMidday.computeFeeForCar(car, at(11, 30), at(13, 30), priceVersion())).fee).toBe(10);
   });
 
   it('charges 0 when the only started hour begins inside the free period: 12:15 to 13:15', async () => {
-    expect(await freeAtMidday.computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).toBe(0);
+    expect((await freeAtMidday.computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).fee).toBe(0);
   });
 
   it('keeps the positions of the hours that are charged: 11:00 to 15:00 gives the first hour plus one later hour, 15', async () => {
-    expect(await freeAtMidday.computeFeeForCar(car, at(11), at(15), priceVersion())).toBe(15);
+    expect((await freeAtMidday.computeFeeForCar(car, at(11), at(15), priceVersion())).fee).toBe(15);
   });
 
   it('still applies the cap to what remains: 10:00 to 16:00 with a cap of 12 gives 12', async () => {
-    expect(await freeAtMidday.computeFeeForCar(car, at(10), at(16), priceVersion({ dailyCap: 12 }))).toBe(12);
+    expect((await freeAtMidday.computeFeeForCar(car, at(10), at(16), priceVersion({ dailyCap: 12 }))).fee).toBe(12);
   });
 
   it('frees hours only at the site of the price version', async () => {
-    expect(await freeAtMidday.computeFeeForCar(car, at(11, 30), at(13, 30), priceVersion({ siteId: 'site-2' }))).toBe(15);
+    expect((await freeAtMidday.computeFeeForCar(car, at(11, 30), at(13, 30), priceVersion({ siteId: 'site-2' }))).fee).toBe(15);
   });
 
   it('asks once per started hour, at the moment each hour begins, naming the site of the version', async () => {
@@ -58,9 +58,25 @@ describe('free periods in the fee (P28 #27)', () => {
   });
 
   it('frees nothing when no question is supplied, and frees only on a clear yes', async () => {
-    expect(await createFeeCalculator().computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).toBe(10);
+    expect((await createFeeCalculator().computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).fee).toBe(10);
     const vague = createFeeCalculator({ isFreeAt: (() => 'yes') as unknown as () => boolean });
-    expect(await vague.computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).toBe(10);
+    expect((await vague.computeFeeForCar(car, at(12, 15), at(13, 15), priceVersion())).fee).toBe(10);
+  });
+
+  it('charges the hour whose free-period check failed and every later one, and names the failure once', async () => {
+    let calls = 0;
+    const failing = createFeeCalculator({
+      isFreeAt: () => {
+        calls += 1;
+        if (calls === 2) throw new Error('free periods unavailable');
+        return true;
+      },
+    });
+    expect(await failing.computeFeeForCar(car, at(10), at(14), priceVersion())).toEqual({
+      fee: 15,
+      warnings: ['free period check failed, normal fee charged: free periods unavailable'],
+    });
+    expect(calls).toBe(2);
   });
 
   it('leaves the plain tariff alone: computeFee shows the price table without free periods', () => {
@@ -69,6 +85,6 @@ describe('free periods in the fee (P28 #27)', () => {
 
   it('a resident still pays 0 whatever the free periods say', async () => {
     const resident = createFeeCalculator({ isResident: () => true, isFreeAt: () => false });
-    expect(await resident.computeFeeForCar(car, at(10), at(13), priceVersion())).toBe(0);
+    expect((await resident.computeFeeForCar(car, at(10), at(13), priceVersion())).fee).toBe(0);
   });
 });

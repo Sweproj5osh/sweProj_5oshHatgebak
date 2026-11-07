@@ -60,4 +60,5 @@ export interface CloseRequest {
   readonly ticketId: TicketId;
   readonly closedAt: string;
   readonly fee: number;
+  readonly feeWarnings: readonly string[];
 }

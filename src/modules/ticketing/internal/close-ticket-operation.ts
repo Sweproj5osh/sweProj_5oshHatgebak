@@ -1,5 +1,5 @@
-import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
-import type { CloseRefusal, TicketClosing } from '../public';
+import { refuse, respond, type AuditDetail, type Operation, type WriteOperation } from '../../../shared/operation-contract';
+import type { CloseRefusal, Ticket, TicketClosing } from '../public';
 import { SAMPLE_EXIT_CODE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 import type { TicketStore } from './ticket-store';
 
@@ -15,6 +15,14 @@ export const STATUS_FOR_CLOSE_REFUSAL: Readonly<Record<CloseRefusal, number>> = 
 };
 
 export const TICKET_CLOSED_TOPIC = 'ticket.closed';
+
+/**
+ * What the one audit entry of a close says about the fee: when a lookup the fee depends on failed (residency, a free
+ * period), the entry's reason names it, so the normal fee charged under a failed check is traceable (accountability).
+ */
+export function feeAuditDetail(ticket: Ticket): AuditDetail {
+  return ticket.feeWarnings === undefined ? {} : { reason: ticket.feeWarnings.join('; ') };
+}
 
 /**
  * A driver scans the exit code. Only the driver who holds the ticket may close it. The exit time is the server
@@ -46,7 +54,7 @@ export function createCloseTicketOperation(closing: TicketClosing, store: Ticket
         topic: TICKET_CLOSED_TOPIC,
         payload: { ticketId: value.ticketId, siteId: value.siteId, driverRef: value.driverRef, closedAt: value.closedAt, fee: value.fee },
       });
-      return { response: respond(200, { ticket: value }) };
+      return { response: respond(200, { ticket: value }), audit: feeAuditDetail(value) };
     },
   };
   return operation;

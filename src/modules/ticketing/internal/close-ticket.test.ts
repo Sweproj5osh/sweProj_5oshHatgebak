@@ -78,6 +78,22 @@ describe('B8 closing a ticket', () => {
     expect(await world.closeTicket('close-request-1', ticket.ticketId, 'exit-site-1')).toMatchObject({ ok: true, value: { fee: 0 } });
   });
 
+  it('charges the normal fee when the resident lookup fails, and records the failure on the ticket instead of swallowing it', async () => {
+    const world = await buildTicketingWorld(5, { residents: ['car-resident'], residentLookupFails: true });
+    const ticket = await openTicket(world, 'car-resident');
+    world.clock.advanceByMilliseconds(2 * HOUR);
+    const closed = await world.closeTicket('close-request-1', ticket.ticketId, 'exit-site-1');
+    expect(closed).toMatchObject({ ok: true, value: { fee: 15, feeWarnings: ['resident check failed, normal fee charged: registrations unavailable'] } });
+  });
+
+  it('records no warning on a ticket whose checks all answered', async () => {
+    const world = await buildTicketingWorld();
+    const ticket = await openTicket(world);
+    world.clock.advanceByMilliseconds(HOUR);
+    const closed = await world.closeTicket('close-request-1', ticket.ticketId, 'exit-site-1');
+    expect(closed.ok && 'feeWarnings' in closed.value).toBe(false);
+  });
+
   it('refuses to close when no price was known at the opening, and leaves the ticket open', async () => {
     const world = await buildTicketingWorld(5, { withPrice: false });
     const ticket = await openTicket(world);

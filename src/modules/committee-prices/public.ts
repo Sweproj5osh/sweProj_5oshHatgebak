@@ -70,6 +70,12 @@ export interface FeeCalculatorOptions {
   readonly isFreeAt?: IsFreeAt;
 }
 
+/** The fee and what could not be checked while computing it; `warnings` is empty when every question answered. */
+export interface FeeForCar {
+  readonly fee: Money;
+  readonly warnings: readonly string[];
+}
+
 export interface FeeCalculator {
   /** The plain tariff of a stay, with no exemption and no free period: what a price table shows. */
   computeFee(entry: Date, exit: Date, version: PriceVersion): Money;
@@ -78,9 +84,10 @@ export interface FeeCalculator {
   startedHours(entry: Date, exit: Date): number;
   /**
    * The fee for one car at the site of the price version: 0 for a resident; for everyone else the tariff of the started
-   * hours, where a started hour that begins inside a free period costs 0, capped as any stay is.
+   * hours, where a started hour that begins inside a free period costs 0, capped as any stay is. A question that could
+   * not be answered is named in `warnings` and the normal fee is charged (a wrongly charged driver can be refunded).
    */
-  computeFeeForCar(car: CarAtSite, entry: Date, exit: Date, version: PriceVersion): Promise<Money>;
+  computeFeeForCar(car: CarAtSite, entry: Date, exit: Date, version: PriceVersion): Promise<FeeForCar>;
 }
 
 export { createFeeCalculator } from './internal/fee-calculator';

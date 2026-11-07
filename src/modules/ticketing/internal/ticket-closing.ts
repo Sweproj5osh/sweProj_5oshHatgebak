@@ -63,8 +63,8 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
     if (!price.found) {
       return fail('no price known');
     }
-    const fee = await fees.computeFeeForCar({ carRef: ticket.carRef }, entry, exit, price.version);
-    return store.closeIfOpen(unitOfWork, { requestKey, ticketId: ticket.ticketId, closedAt: exit.toISOString(), fee });
+    const { fee, warnings } = await fees.computeFeeForCar({ carRef: ticket.carRef }, entry, exit, price.version);
+    return store.closeIfOpen(unitOfWork, { requestKey, ticketId: ticket.ticketId, closedAt: exit.toISOString(), fee, feeWarnings: warnings });
   }
 
   async function closeStaleTickets(unitOfWork: Transaction, siteId: SiteId, maximumHours: number): Promise<StaleTicketSweep> {

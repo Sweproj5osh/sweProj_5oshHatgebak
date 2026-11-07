@@ -153,6 +153,8 @@ export interface WorldOptions {
   readonly withPrice?: boolean;
   /** Cars registered as residents at site-1. */
   readonly residents?: readonly string[];
+  /** Whether the resident lookup fails instead of answering (the identity area down). */
+  readonly residentLookupFails?: boolean;
 }
 
 /**
@@ -174,7 +176,14 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
     await prices.applyApprovedVersion(PRICE, 'approval-1');
   }
   const residents = options.residents ?? [];
-  const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
+  const fees = createFeeCalculator({
+    isResident: (carRef, siteId) => {
+      if (options.residentLookupFails === true) {
+        throw new Error('registrations unavailable');
+      }
+      return siteId === 'site-1' && residents.includes(carRef);
+    },
+  });
   const closing = createTicketClosing({ sites, store, clock, prices, fees });
   const payments = createTicketPaymentStatus({ store });
   const dependencies: TicketingDependencies = { carOwnership: cars, clock, fees, plates, prices, sites, tickets: store };

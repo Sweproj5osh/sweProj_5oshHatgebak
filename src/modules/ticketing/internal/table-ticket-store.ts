@@ -95,7 +95,8 @@ export class TableTicketStore implements TicketStore {
       if (current === undefined || current.state !== 'open') {
         return fail('no open ticket');
       }
-      const closed: Ticket = { ...current, state: 'closed', closedAt: request.closedAt, fee: request.fee };
+      const warnings = request.feeWarnings.length === 0 ? {} : { feeWarnings: request.feeWarnings };
+      const closed: Ticket = { ...current, state: 'closed', closedAt: request.closedAt, fee: request.fee, ...warnings };
       await tables.replace(TICKETS_TABLE, request.ticketId, closed);
       await rememberAnswer(tables, request.requestKey, request.ticketId);
       return succeed(closed);

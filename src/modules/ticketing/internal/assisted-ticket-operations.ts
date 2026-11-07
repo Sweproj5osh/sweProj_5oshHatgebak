@@ -1,7 +1,7 @@
 import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
 import type { Actor } from '../../../shared/identifiers';
 import type { ClockedInAttendant, TicketClosing, TicketOpening } from '../public';
-import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC } from './close-ticket-operation';
+import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC, feeAuditDetail } from './close-ticket-operation';
 import { STATUS_FOR_OPEN_REFUSAL } from './open-ticket-operation';
 import { SAMPLE_CAR, SAMPLE_ENTRY_CODE, SAMPLE_EXIT_CODE, SAMPLE_SITE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 
@@ -73,7 +73,7 @@ function closeAssisted(closing: TicketClosing, seedSampleTicket: SampleSeeder): 
         topic: TICKET_CLOSED_TOPIC,
         payload: { ticketId: value.ticketId, siteId: value.siteId, driverRef: value.driverRef, closedAt: value.closedAt, fee: value.fee },
       });
-      return { response: respond(200, { ticket: value }), audit: { subjectPersonIds: [value.driverRef] } };
+      return { response: respond(200, { ticket: value }), audit: { ...feeAuditDetail(value), subjectPersonIds: [value.driverRef] } };
     },
   };
 }

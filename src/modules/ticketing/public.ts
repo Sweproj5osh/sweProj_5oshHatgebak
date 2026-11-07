@@ -43,6 +43,8 @@ export interface Ticket {
   readonly openedAt: string;
   readonly closedAt?: string;
   readonly fee?: number;
+  /** What the fee calculator could not check when the ticket closed (a failed resident or free-period lookup); absent when every check answered. */
+  readonly feeWarnings?: readonly string[];
   readonly assisted: boolean;
 }
 
