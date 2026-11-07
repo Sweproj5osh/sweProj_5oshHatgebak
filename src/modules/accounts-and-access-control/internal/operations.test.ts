@@ -5,7 +5,7 @@ import type { HttpRequest } from '../../../entrypoint/http';
 import { loggedReadRequest, publicRequest, readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
 import { FixedClock } from '../../../shared/clock';
 import type { PersonId, Role } from '../../../shared/identifiers';
-import { REQUEST_SIGN_IN_CODE_PATH, SIGN_IN_PATH } from './operations';
+import { REQUEST_SIGN_IN_CODE_PATH, SIGN_IN_PATH, SIGN_IN_WITH_SECOND_STEP_PATH } from './operations';
 
 /**
  * This module's requests through the composed in-memory server: the real accounts module answers live status and
@@ -50,8 +50,12 @@ async function requestCode(phone: string) {
   return application.handle(publicRequest(REQUEST_SIGN_IN_CODE_PATH, nextRequestId(), { phone }));
 }
 
-async function signIn(phone: string, code: string, password = '') {
-  return application.handle(publicRequest(SIGN_IN_PATH, nextRequestId(), { phone, code, password }));
+/** The Driver App's body is the phone and the code; the committee's second step adds the password at its own path. */
+async function signIn(phone: string, code: string, password?: string) {
+  if (password === undefined) {
+    return application.handle(publicRequest(SIGN_IN_PATH, nextRequestId(), { phone, code }));
+  }
+  return application.handle(publicRequest(SIGN_IN_WITH_SECOND_STEP_PATH, nextRequestId(), { phone, code, password }));
 }
 
 async function codeSentTo(phone: string): Promise<string> {

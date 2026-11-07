@@ -6,7 +6,9 @@ import {
   type PublicWriteOperation,
   type ReadOperation,
   type WriteOperation,
+  type WriteOutcome,
 } from '../../../shared/operation-contract';
+import type { Result } from '../../../shared/result';
 import type { TableAccess } from '../../../shared/unit-of-work';
 import {
   createAccountsStores,
@@ -15,6 +17,7 @@ import {
   type CreatePersonRefusal,
   type ErasureRefusal,
   type PasswordRefusal,
+  type SignedIn,
   type SignInRefusal,
 } from '../public';
 import { hashOfCode, minutesAfter, SIGN_IN_POLICY } from './domain/one-time-code';
@@ -35,6 +38,7 @@ export function accountsOperations({ accounts, signInCodeSecret }: AccountsOpera
   return [
     requestSignInCode(accounts),
     signIn(accounts, signInCodeSecret),
+    signInWithSecondStep(accounts, signInCodeSecret),
     createPerson(accounts),
     addCar(accounts),
     setCommitteePassword(accounts),
@@ -46,6 +50,9 @@ export function accountsOperations({ accounts, signInCodeSecret }: AccountsOpera
 
 export const REQUEST_SIGN_IN_CODE_PATH = '/sign-in/code';
 export const SIGN_IN_PATH = '/sign-in';
+export const SIGN_IN_WITH_SECOND_STEP_PATH = '/sign-in/committee';
+/** The one public sign-in operation name (F13), served at two paths: the phone and code, or those plus the committee's password. */
+const SIGN_IN_OPERATION = 'signIn';
 
 /** Any Egyptian mobile number is answered the same way and gets a code: the door never says who is registered (P3). */
 function requestSignInCode(accounts: AccountsAndAccessControl): PublicWriteOperation {
@@ -69,48 +76,63 @@ function requestSignInCode(accounts: AccountsAndAccessControl): PublicWriteOpera
 const SAMPLE_SIGN_IN = { personId: 'person-sign-in-sample', phone: '+201098765432', code: '246810' };
 
 /**
- * One operation signs everyone in (F13 allows no third public name): drivers, attendants and inspectors send an empty
- * password; members and the Chair send theirs as the second step (task A15). A phone nobody registered becomes a
- * driver inside this write's unit of work (P3), answered 201; the audit entry carries the person reference, never the phone.
+ * The driver's, attendant's and inspector's sign-in: the phone and its code, as the apps send them. A member or the
+ * Chair is answered "second step required" here and signs in at the second path. A phone nobody registered becomes a
+ * driver inside this write's unit of work (P3), answered 201; the entry carries the person reference, never the phone.
  */
 function signIn(accounts: AccountsAndAccessControl, signInCodeSecret: string): PublicWriteOperation {
   return {
     kind: 'public',
-    name: 'signIn',
+    name: SIGN_IN_OPERATION,
     method: 'POST',
     path: SIGN_IN_PATH,
+    bodySchema: { fields: { phone: 'string', code: 'string' } },
+    audit: { omit: ['code'], replace: { phone: 'personId' } },
+    rateLimitKey: 'phone',
+    examples: { valid: { phone: SAMPLE_SIGN_IN.phone, code: SAMPLE_SIGN_IN.code }, invalid: { phone: 1 } },
+    fixture: (database) => seedSampleSignIn(database, signInCodeSecret),
+    handle: ({ body, transaction }) => signedInOutcome(accounts.signIn.signIn(transaction, String(body['phone']), String(body['code']))),
+  };
+}
+
+/**
+ * The committee's two-step sign-in (task A15): the same `signIn` operation (F13 allows no third public name) with the
+ * password as the second factor, at its own path so that the one-step body stays exactly what the Driver App sends.
+ */
+function signInWithSecondStep(accounts: AccountsAndAccessControl, signInCodeSecret: string): PublicWriteOperation {
+  return {
+    kind: 'public',
+    name: SIGN_IN_OPERATION,
+    method: 'POST',
+    path: SIGN_IN_WITH_SECOND_STEP_PATH,
     bodySchema: { fields: { phone: 'string', code: 'string', password: 'string' } },
     audit: { omit: ['code', 'password'], replace: { phone: 'personId' } },
     rateLimitKey: 'phone',
-    examples: { valid: { phone: SAMPLE_SIGN_IN.phone, code: SAMPLE_SIGN_IN.code, password: '' }, invalid: { phone: 1 } },
-    async fixture(database) {
-      await seedPerson(database, SAMPLE_SIGN_IN.personId, 'driver', SAMPLE_SIGN_IN.phone);
-      await createAccountsStores().signInChallenges.save(database, {
-        phone: SAMPLE_SIGN_IN.phone,
-        personId: SAMPLE_SIGN_IN.personId,
-        codeHash: hashOfCode(signInCodeSecret, SAMPLE_SIGN_IN.phone, SAMPLE_SIGN_IN.code),
-        expiresAt: minutesAfter(new Date(), SIGN_IN_POLICY.codeLifetimeMinutes).toISOString(),
-        failedAttempts: 0,
-      });
-    },
-    async handle({ body, transaction }) {
-      const phone = String(body['phone']);
-      const code = String(body['code']);
-      const password = String(body['password']);
-      const signedIn =
-        password === ''
-          ? await accounts.signIn.signIn(transaction, phone, code)
-          : await accounts.signIn.signInWithSecondStep(transaction, phone, code, password);
-      if (!signedIn.ok) {
-        return { response: refuse(SIGN_IN_REFUSAL_STATUS[signedIn.error], signedIn.error) };
-      }
-      const { token, personId, registered } = signedIn.value;
-      return {
-        response: respond(registered ? 201 : 200, { token }),
-        audit: { subjectPersonIds: [personId], references: { personId } },
-      };
-    },
+    examples: { valid: { phone: SAMPLE_SIGN_IN.phone, code: SAMPLE_SIGN_IN.code, password: 'not needed for a driver' }, invalid: { phone: 1 } },
+    fixture: (database) => seedSampleSignIn(database, signInCodeSecret),
+    handle: ({ body, transaction }) =>
+      signedInOutcome(accounts.signIn.signInWithSecondStep(transaction, String(body['phone']), String(body['code']), String(body['password']))),
   };
+}
+
+async function signedInOutcome(attempt: Promise<Result<SignedIn, SignInRefusal>>): Promise<WriteOutcome> {
+  const signedIn = await attempt;
+  if (!signedIn.ok) {
+    return { response: refuse(SIGN_IN_REFUSAL_STATUS[signedIn.error], signedIn.error) };
+  }
+  const { token, personId, registered } = signedIn.value;
+  return { response: respond(registered ? 201 : 200, { token }), audit: { subjectPersonIds: [personId], references: { personId } } };
+}
+
+async function seedSampleSignIn(database: TableAccess, signInCodeSecret: string): Promise<void> {
+  await seedPerson(database, SAMPLE_SIGN_IN.personId, 'driver', SAMPLE_SIGN_IN.phone);
+  await createAccountsStores().signInChallenges.save(database, {
+    phone: SAMPLE_SIGN_IN.phone,
+    personId: SAMPLE_SIGN_IN.personId,
+    codeHash: hashOfCode(signInCodeSecret, SAMPLE_SIGN_IN.phone, SAMPLE_SIGN_IN.code),
+    expiresAt: minutesAfter(new Date(), SIGN_IN_POLICY.codeLifetimeMinutes).toISOString(),
+    failedAttempts: 0,
+  });
 }
 
 const SIGN_IN_REFUSAL_STATUS: Readonly<Record<SignInRefusal, number>> = {
