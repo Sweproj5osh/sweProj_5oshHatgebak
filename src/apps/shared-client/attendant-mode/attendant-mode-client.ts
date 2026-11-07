@@ -5,6 +5,7 @@
  */
 import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
+import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import {
   AttendantModeRefusedError,
@@ -34,25 +35,22 @@ export type AttendantModeClientReadResult<T> =
 
 export interface AttendantModeClientOptions {
   readonly api: AttendantModeApi;
-  readonly createRequestId: () => RequestId;
-}
-
-interface PendingRequest {
-  readonly input: string;
-  readonly requestId: RequestId;
+  /** Only tests replace the generator. */
+  readonly createRequestId?: () => RequestId;
 }
 
 export class AttendantModeClient {
   private readonly api: AttendantModeApi;
-  private readonly createRequestId: () => RequestId;
+  private readonly clockInRequests: RequestIdKeeper;
+  private readonly assistedRequests: RequestIdKeeper;
+  private readonly markPaidRequests: RequestIdKeeper;
   private siteId: SiteId | undefined;
-  private pendingClockIn: PendingRequest | undefined;
-  private pendingAssisted: PendingRequest | undefined;
-  private pendingMarkPaid: PendingRequest | undefined;
 
   constructor(options: AttendantModeClientOptions) {
     this.api = options.api;
-    this.createRequestId = options.createRequestId;
+    this.clockInRequests = new RequestIdKeeper(options.createRequestId);
+    this.assistedRequests = new RequestIdKeeper(options.createRequestId);
+    this.markPaidRequests = new RequestIdKeeper(options.createRequestId);
   }
 
   /** The site the server bound the session to at clock-in; undefined until the server has answered. */
@@ -61,32 +59,31 @@ export class AttendantModeClient {
   }
 
   pendingClockInRequestId(): RequestId | undefined {
-    return this.pendingClockIn?.requestId;
+    return this.clockInRequests.pendingId();
   }
 
   pendingAssistedRequestId(): RequestId | undefined {
-    return this.pendingAssisted?.requestId;
+    return this.assistedRequests.pendingId();
   }
 
   pendingMarkPaidRequestId(): RequestId | undefined {
-    return this.pendingMarkPaid?.requestId;
+    return this.markPaidRequests.pendingId();
   }
 
   /** One tap: the scanned code goes to the server; the site comes back from it, never from the phone. */
   async clockIn(siteCode: string): Promise<AttendantModeClientResult<AttendantClockInSuccess>> {
-    const pending = this.keepOrCreate(this.pendingClockIn, siteCode);
-    this.pendingClockIn = pending;
+    const requestId = this.clockInRequests.idFor(siteCode);
 
     try {
-      const result = await this.api.clockIn(siteCode, pending.requestId);
-      this.pendingClockIn = undefined;
+      const result = await this.api.clockIn(siteCode, requestId);
+      this.clockInRequests.settle();
       this.siteId = result.siteId;
       return { ok: true, value: result };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingClockIn = undefined;
+      this.clockInRequests.settle();
       this.siteId = undefined;
       return this.refusalOrRethrow(error);
     }
@@ -128,18 +125,17 @@ export class AttendantModeClient {
       return { ok: false, error: 'not clocked in' };
     }
 
-    const pending = this.keepOrCreate(this.pendingAssisted, `${siteId}\u0000${driverId}\u0000${plate}`);
-    this.pendingAssisted = pending;
+    const requestId = this.assistedRequests.idFor(`${siteId}\u0000${driverId}\u0000${plate}`);
 
     try {
-      const result = await this.api.openAssistedTicket({ requestId: pending.requestId, siteId, driverId, plate });
-      this.pendingAssisted = undefined;
+      const result = await this.api.openAssistedTicket({ requestId, siteId, driverId, plate });
+      this.assistedRequests.settle();
       return { ok: true, value: result };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingAssisted = undefined;
+      this.assistedRequests.settle();
       return this.refusalOrRethrow(error);
     }
   }
@@ -149,24 +145,19 @@ export class AttendantModeClient {
       return { ok: false, error: 'not clocked in' };
     }
 
-    const pending = this.keepOrCreate(this.pendingMarkPaid, ticketId);
-    this.pendingMarkPaid = pending;
+    const requestId = this.markPaidRequests.idFor(ticketId);
 
     try {
-      const result = await this.api.markTicketPaid(ticketId, pending.requestId);
-      this.pendingMarkPaid = undefined;
+      const result = await this.api.markTicketPaid(ticketId, requestId);
+      this.markPaidRequests.settle();
       return { ok: true, value: result };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingMarkPaid = undefined;
+      this.markPaidRequests.settle();
       return this.refusalOrRethrow(error);
     }
-  }
-
-  private keepOrCreate(existing: PendingRequest | undefined, input: string): PendingRequest {
-    return existing?.input === input ? existing : { input, requestId: this.createRequestId() };
   }
 
   /** A refusal from the server goes to the screen; anything else is a fault and is not hidden. */

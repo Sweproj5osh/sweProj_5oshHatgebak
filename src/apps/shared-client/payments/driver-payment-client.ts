@@ -5,6 +5,7 @@
  * receipt shows the plate and is a logged read (P9).
  */
 import type { RequestId } from '../../../shared/request-id';
+import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import {
   DriverPaymentRefusedError,
@@ -22,66 +23,56 @@ export type DriverPaymentClientResult<T> = DriverPaymentClientSuccess<T> | Drive
 
 export interface DriverPaymentClientOptions {
   readonly api: DriverPaymentApi;
-  readonly createRequestId: () => RequestId;
-}
-
-interface PendingRequest {
-  readonly input: string;
-  readonly requestId: RequestId;
+  /** Only tests replace the generator. */
+  readonly createRequestId?: () => RequestId;
 }
 
 export class DriverPaymentClient {
   private readonly api: DriverPaymentApi;
-  private readonly createRequestId: () => RequestId;
-  private pendingPayment: PendingRequest | undefined;
-  private pendingReceipt: PendingRequest | undefined;
+  private readonly paymentRequests: RequestIdKeeper;
+  private readonly receiptRequests: RequestIdKeeper;
 
   constructor(options: DriverPaymentClientOptions) {
     this.api = options.api;
-    this.createRequestId = options.createRequestId;
+    this.paymentRequests = new RequestIdKeeper(options.createRequestId);
+    this.receiptRequests = new RequestIdKeeper(options.createRequestId);
   }
 
   pendingPaymentRequestId(): RequestId | undefined {
-    return this.pendingPayment?.requestId;
+    return this.paymentRequests.pendingId();
   }
 
   /** One tap pays the ticket; the amount is the server's and never leaves the phone (Rule I). */
   async pay(ticketId: string): Promise<DriverPaymentClientResult<PayAnswer>> {
-    const pending = this.keepOrCreate(this.pendingPayment, ticketId);
-    this.pendingPayment = pending;
+    const requestId = this.paymentRequests.idFor(ticketId);
 
     try {
-      const answer = await this.api.pay(ticketId, pending.requestId);
-      this.pendingPayment = undefined;
+      const answer = await this.api.pay(ticketId, requestId);
+      this.paymentRequests.settle();
       return { ok: true, value: answer };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingPayment = undefined;
+      this.paymentRequests.settle();
       return refusalOrRethrow(error);
     }
   }
 
   async receipt(ticketId: string): Promise<DriverPaymentClientResult<DriverReceipt>> {
-    const pending = this.keepOrCreate(this.pendingReceipt, ticketId);
-    this.pendingReceipt = pending;
+    const requestId = this.receiptRequests.idFor(ticketId);
 
     try {
-      const receipt = await this.api.receipt(ticketId, pending.requestId);
-      this.pendingReceipt = undefined;
+      const receipt = await this.api.receipt(ticketId, requestId);
+      this.receiptRequests.settle();
       return { ok: true, value: receipt };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingReceipt = undefined;
+      this.receiptRequests.settle();
       return refusalOrRethrow(error);
     }
-  }
-
-  private keepOrCreate(existing: PendingRequest | undefined, input: string): PendingRequest {
-    return existing?.input === input ? existing : { input, requestId: this.createRequestId() };
   }
 }
 

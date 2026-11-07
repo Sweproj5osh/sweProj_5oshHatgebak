@@ -9,6 +9,7 @@
  */
 import type { TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
+import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import { TicketScanRefusedError, type OpenTicketScanInput, type ScannedTicket, type TicketScanApi, type TicketScanRefusal } from './ticket-scan-api';
 
@@ -21,18 +22,12 @@ export type DriverScanClientResult<T> = DriverScanClientSuccess<T> | DriverScanC
 
 export interface DriverScanClientOptions {
   readonly api: TicketScanApi;
-  /** Creates a new client request id when a scan starts and none is pending for the same scan. */
-  readonly createRequestId: () => RequestId;
+  /** Only tests replace the generator. */
+  readonly createRequestId?: () => RequestId;
 }
 
 /** What the driver scanned: the site, the car they chose from their cars, and the code printed at the entrance. */
 export type EntryScan = Omit<OpenTicketScanInput, 'requestId'>;
-
-/** One write that has been sent and not yet answered, with the scan it was sent for. */
-interface PendingRequest {
-  readonly input: string;
-  readonly requestId: RequestId;
-}
 
 /** A scan that is running now, so a second tap on the same scan joins it instead of sending again. */
 interface InFlight<T> {
@@ -42,16 +37,16 @@ interface InFlight<T> {
 
 export class DriverScanClient {
   private readonly api: TicketScanApi;
-  private readonly createRequestId: () => RequestId;
-  private pendingOpen: PendingRequest | undefined;
-  private pendingClose: PendingRequest | undefined;
+  private readonly openRequests: RequestIdKeeper;
+  private readonly closeRequests: RequestIdKeeper;
   private activeTicketId: TicketId | undefined;
   private inFlightEntry: InFlight<ScannedTicket> | undefined;
   private inFlightExit: InFlight<ScannedTicket> | undefined;
 
   constructor(options: DriverScanClientOptions) {
     this.api = options.api;
-    this.createRequestId = options.createRequestId;
+    this.openRequests = new RequestIdKeeper(options.createRequestId);
+    this.closeRequests = new RequestIdKeeper(options.createRequestId);
   }
 
   /** The open ticket from the last successful entry scan, if any. */
@@ -61,12 +56,12 @@ export class DriverScanClient {
 
   /** Request id held until the entry answer arrives; undefined when idle. */
   pendingEntryRequestId(): RequestId | undefined {
-    return this.pendingOpen?.requestId;
+    return this.openRequests.pendingId();
   }
 
   /** Request id held until the exit answer arrives; undefined when idle. */
   pendingExitRequestId(): RequestId | undefined {
-    return this.pendingClose?.requestId;
+    return this.closeRequests.pendingId();
   }
 
   /**
@@ -122,48 +117,41 @@ export class DriverScanClient {
   }
 
   private async runEntryScan(scan: EntryScan, input: string): Promise<DriverScanClientResult<ScannedTicket>> {
-    const pending = this.keepOrCreate(this.pendingOpen, input);
-    this.pendingOpen = pending;
+    const requestId = this.openRequests.idFor(input);
 
     try {
-      const opened = await this.api.openTicket({ requestId: pending.requestId, ...scan });
+      const opened = await this.api.openTicket({ requestId, ...scan });
       this.activeTicketId = opened.ticketId;
-      this.pendingOpen = undefined;
+      this.openRequests.settle();
       return { ok: true, value: opened };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingOpen = undefined;
+      this.openRequests.settle();
       return refusalOrRethrow(error);
     }
   }
 
   private async runExitScan(ticketId: TicketId, exitCode: string, input: string): Promise<DriverScanClientResult<ScannedTicket>> {
-    const pending = this.keepOrCreate(this.pendingClose, input);
-    this.pendingClose = pending;
+    const requestId = this.closeRequests.idFor(input);
 
     try {
-      const closed = await this.api.closeTicket({ requestId: pending.requestId, ticketId, exitCode });
+      const closed = await this.api.closeTicket({ requestId, ticketId, exitCode });
       this.activeTicketId = undefined;
-      this.pendingClose = undefined;
+      this.closeRequests.settle();
       return { ok: true, value: closed };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingClose = undefined;
+      this.closeRequests.settle();
       const refusal = refusalOrRethrow(error);
       if (refusal.error === 'no open ticket') {
         this.activeTicketId = undefined;
       }
       return refusal;
     }
-  }
-
-  /** The id of an unanswered request for the same scan, or a new one. */
-  private keepOrCreate(existing: PendingRequest | undefined, input: string): PendingRequest {
-    return existing?.input === input ? existing : { input, requestId: this.createRequestId() };
   }
 }
 

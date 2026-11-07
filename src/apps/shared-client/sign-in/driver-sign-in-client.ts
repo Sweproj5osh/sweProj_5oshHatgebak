@@ -3,11 +3,11 @@
  * Collects the phone number, then the code (two taps), then can save a plate. Every decision stays on the server
  * (Rule A): the client shows the server's refusal and never judges a code or a plate itself.
  *
- * Every write keeps its request id until the answer arrives (Rule H), so after a lost connection the retry carries the
- * same id and the server answers once. The id is kept only while the retry is for the same input: a different phone,
- * code or plate is a different request and gets a new id.
+ * Every write keeps its request id until the answer arrives (Rule H, `RequestIdKeeper`), so after a lost connection
+ * the retry carries the same id and the server answers once.
  */
 import type { RequestId } from '../../../shared/request-id';
+import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import { DriverAuthRefusedError, type DriverAuthApi, type DriverAuthRefusal, type SignInSuccess } from './driver-auth-api';
 
@@ -21,28 +21,24 @@ export type DriverSignInClientResult<T> = DriverSignInClientSuccess<T> | DriverS
 
 export interface DriverSignInClientOptions {
   readonly api: DriverAuthApi;
-  readonly createRequestId: () => RequestId;
-}
-
-/** One write that has been sent and not yet answered, with the input it was sent for. */
-interface PendingRequest {
-  readonly input: string;
-  readonly requestId: RequestId;
+  /** Only tests replace the generator. */
+  readonly createRequestId?: () => RequestId;
 }
 
 export class DriverSignInClient {
   private readonly api: DriverAuthApi;
-  private readonly createRequestId: () => RequestId;
+  private readonly codeRequests: RequestIdKeeper;
+  private readonly signInRequests: RequestIdKeeper;
+  private readonly carRequests: RequestIdKeeper;
   private taps = 0;
   private phone: string | undefined;
   private session: SignInSuccess | undefined;
-  private pendingCode: PendingRequest | undefined;
-  private pendingSignIn: PendingRequest | undefined;
-  private pendingCar: PendingRequest | undefined;
 
   constructor(options: DriverSignInClientOptions) {
     this.api = options.api;
-    this.createRequestId = options.createRequestId;
+    this.codeRequests = new RequestIdKeeper(options.createRequestId);
+    this.signInRequests = new RequestIdKeeper(options.createRequestId);
+    this.carRequests = new RequestIdKeeper(options.createRequestId);
   }
 
   /** How many taps the driver has made on the sign-in flow so far (D1 report: 2 on the way in with the right code). */
@@ -60,33 +56,32 @@ export class DriverSignInClient {
 
   /** The request id kept for an unanswered sign-in code request, for tests and for the "try again" screen. */
   pendingCodeRequestId(): RequestId | undefined {
-    return this.pendingCode?.requestId;
+    return this.codeRequests.pendingId();
   }
 
   pendingSignInRequestId(): RequestId | undefined {
-    return this.pendingSignIn?.requestId;
+    return this.signInRequests.pendingId();
   }
 
   pendingCarRequestId(): RequestId | undefined {
-    return this.pendingCar?.requestId;
+    return this.carRequests.pendingId();
   }
 
   /** First tap: submit the phone number so the server can send a one-time code. */
   async submitPhone(phone: string): Promise<DriverSignInClientResult<void>> {
     this.taps += 1;
     this.phone = phone;
-    const pending = this.keepOrCreate(this.pendingCode, phone);
-    this.pendingCode = pending;
+    const requestId = this.codeRequests.idFor(phone);
 
     try {
-      await this.api.requestCode(phone, pending.requestId);
-      this.pendingCode = undefined;
+      await this.api.requestCode(phone, requestId);
+      this.codeRequests.settle();
       return { ok: true, value: undefined };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingCode = undefined;
+      this.codeRequests.settle();
       return this.refusalOrRethrow(error);
     }
   }
@@ -99,19 +94,18 @@ export class DriverSignInClient {
     }
 
     this.taps += 1;
-    const pending = this.keepOrCreate(this.pendingSignIn, `${phone}\u0000${code}`);
-    this.pendingSignIn = pending;
+    const requestId = this.signInRequests.idFor(`${phone}\u0000${code}`);
 
     try {
-      const session = await this.api.signIn(phone, code, pending.requestId);
+      const session = await this.api.signIn(phone, code, requestId);
       this.session = session;
-      this.pendingSignIn = undefined;
+      this.signInRequests.settle();
       return { ok: true, value: session };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingSignIn = undefined;
+      this.signInRequests.settle();
       return this.refusalOrRethrow(error);
     }
   }
@@ -122,18 +116,17 @@ export class DriverSignInClient {
       return { ok: false, error: 'not signed in' };
     }
 
-    const pending = this.keepOrCreate(this.pendingCar, plate);
-    this.pendingCar = pending;
+    const requestId = this.carRequests.idFor(plate);
 
     try {
-      const cars = await this.api.saveCar(plate, pending.requestId);
-      this.pendingCar = undefined;
+      const cars = await this.api.saveCar(plate, requestId);
+      this.carRequests.settle();
       return { ok: true, value: cars };
     } catch (error) {
       if (error instanceof ServerTransportError) {
-        return { ok: false, error: 'connection lost', requestId: pending.requestId };
+        return { ok: false, error: 'connection lost', requestId };
       }
-      this.pendingCar = undefined;
+      this.carRequests.settle();
       return this.refusalOrRethrow(error);
     }
   }
@@ -151,11 +144,6 @@ export class DriverSignInClient {
       }
       return this.refusalOrRethrow(error);
     }
-  }
-
-  /** The id of an unanswered request for the same input, or a new one. */
-  private keepOrCreate(existing: PendingRequest | undefined, input: string): PendingRequest {
-    return existing?.input === input ? existing : { input, requestId: this.createRequestId() };
   }
 
   /** A refusal from the server goes to the screen; anything else is a fault and is not hidden. */
