@@ -1,35 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
-import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
+import { TEST_ADDRESS, testApplication } from '../../../entrypoint/test-helpers';
 import { FixedClock } from '../../../shared/clock';
 import type { TokenIssuer } from '../../../shared/token-issuer';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
-import { DriverSignInClient } from './driver-sign-in-client';
-import { HttpDriverAuthApi } from './http-driver-auth-api';
+import { fromAddress } from '../../test-support/from-address';
 import {
   createStandInAccountsState,
   createStandInCarOperations,
-  createStandInSignInGateway,
+  createStandInSignInOperations,
   lastCodeSentTo,
-} from './stand-in-driver-auth-operations';
+} from '../../test-support/stand-in-driver-auth-operations';
+import { DriverSignInClient } from './driver-sign-in-client';
+import { HttpDriverAuthApi } from './http-driver-auth-api';
 
 const PHONE = '01012345678';
 const UNKNOWN_PHONE = '01199999999';
-const DRIVER_ID = `driver-${PHONE}`;
+const DRIVER_ID = 'driver-1';
+const CHAIR = { personId: 'chair-1', role: 'chair' } as const;
 
 function buildStack(drops: AnswerDrops = { remaining: 0 }) {
   /** The stand-in mints through the application's own issuer, which exists only once the application is composed. */
   const tokensOfTheApplication: TokenIssuer = { issue: (identity) => app.moduleDependencies.tokens.issue(identity) };
   const accounts = createStandInAccountsState(tokensOfTheApplication, [PHONE]);
-  const app = composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
+  const app = testApplication({
     clock: new FixedClock(new Date('2026-11-06T12:00:00Z')),
-    operations: [...foundationOperations, ...createStandInCarOperations(accounts)],
+    additionalOperations: [...createStandInSignInOperations(accounts), ...createStandInCarOperations(accounts)],
   });
-  const api = new HttpDriverAuthApi({
-    handle: answerDroppingHandle(createStandInSignInGateway(accounts, app.handle), drops),
-  });
+  const api = new HttpDriverAuthApi({ handle: answerDroppingHandle(fromAddress(app.handle, TEST_ADDRESS), drops) });
 
   let serial = 1;
   const client = new DriverSignInClient({
@@ -59,6 +56,19 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
     expect(await client.listCars()).toEqual({ ok: true, value: [] });
 
     console.log(`D1 report: taps to sign in = ${client.tapsToSignIn()}`);
+  });
+
+  it('goes through the pipeline, not around it: both sign-in steps leave an anonymous, redacted audit entry (P3)', async () => {
+    const { signIn, audit } = buildStack();
+
+    await signIn();
+
+    const entries = await audit.readByScope(CHAIR);
+    expect(entries.map((entry) => entry.operation)).toEqual(['requestSignInCode', 'signIn']);
+    expect(entries.map((entry) => entry.address)).toEqual([TEST_ADDRESS, TEST_ADDRESS]);
+    expect(entries.map((entry) => entry.personId)).toEqual([undefined, undefined]);
+    expect(entries.map((entry) => entry.requestId)).toEqual(['d1-http-req-0001', 'd1-http-req-0002']);
+    expect(JSON.stringify(entries)).not.toContain(PHONE);
   });
 
   it('refuses a wrong code, and three wrong codes lock the phone even for the right code', async () => {
@@ -96,7 +106,8 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
     expect(listed).toEqual({ ok: true, value: ['ABC123'] });
 
     const entries = await audit.readByScope({ personId: DRIVER_ID, role: 'driver' });
-    expect(entries.map((entry) => entry.operation)).toEqual(['personalData.addCar']);
+    expect(entries.map((entry) => entry.operation)).toEqual(['signIn', 'personalData.addCar']);
+    expect(JSON.stringify(entries)).not.toContain('ABC123');
   });
 
   it('saving the same plate twice keeps one car', async () => {
@@ -118,7 +129,7 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
 
     expect(result).toEqual({ ok: false, error: 'invalid plate' });
     expect(accounts.carsSaved).toBe(0);
-    expect(await audit.readByScope({ personId: DRIVER_ID, role: 'driver' })).toHaveLength(0);
+    expect((await audit.readByScope({ personId: DRIVER_ID, role: 'driver' })).map((entry) => entry.operation)).toEqual(['signIn']);
     expect(client.pendingCarRequestId()).toBeUndefined();
   });
 
@@ -130,10 +141,10 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
   });
 
   it('airplane mode after the plate was saved, then retry: one car and one audit entry', async () => {
-    const drop = { remaining: 0 };
-    const { client, signIn, accounts, audit } = buildStack(drop);
+    const drops = { remaining: 0 };
+    const { client, signIn, accounts, audit } = buildStack(drops);
     await signIn();
-    drop.remaining = 1;
+    drops.remaining = 1;
 
     const lost = await client.addCar('ABC123');
     expect(lost.ok).toBe(false);
@@ -146,15 +157,15 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
     expect(accounts.carsSaved).toBe(1);
     expect(client.pendingCarRequestId()).toBeUndefined();
     const entries = await audit.readByScope({ personId: DRIVER_ID, role: 'driver' });
-    expect(entries).toHaveLength(1);
+    expect(entries.filter((entry) => entry.operation === 'personalData.addCar')).toHaveLength(1);
   });
 
   it('airplane mode after the sign-in was answered, then retry: the same token and one sign-in', async () => {
-    const drop = { remaining: 0 };
-    const { client, accounts } = buildStack(drop);
+    const drops = { remaining: 0 };
+    const { client, accounts, audit } = buildStack(drops);
     await client.submitPhone(PHONE);
     const code = lastCodeSentTo(accounts, PHONE) ?? '';
-    drop.remaining = 1;
+    drops.remaining = 1;
 
     const lost = await client.submitCode(code);
     expect(lost.ok).toBe(false);
@@ -167,11 +178,12 @@ describe('D1 Driver App sign-in and cars over the HTTP entry point', () => {
     expect(client.isSignedIn()).toBe(true);
     expect(accounts.tokensIssued).toBe(1);
     expect(client.tapsToSignIn()).toBe(3);
+    expect((await audit.readByScope(CHAIR)).filter((entry) => entry.operation === 'signIn')).toHaveLength(1);
   });
 
   it('airplane mode after the code request, then retry: one code is sent', async () => {
-    const drop = { remaining: 1 };
-    const { client, accounts } = buildStack(drop);
+    const drops = { remaining: 1 };
+    const { client, accounts } = buildStack(drops);
 
     const lost = await client.submitPhone(PHONE);
     expect(lost.ok).toBe(false);

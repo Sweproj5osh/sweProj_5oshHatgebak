@@ -1,20 +1,19 @@
 /**
  * HTTP routes the Driver App uses for sign-in and cars.
  *
- * Real today: reading the driver's own cars, `GET /cars`, registered by Teammate A's `createAccountsOperations`
- * under the name `personalData.ownCars`.
+ * Sign-in is the two public operations of P3 (ADR-15): `requestSignInCode` at POST /sign-in/code (body: phone) and
+ * `signIn` at POST /sign-in (body: phone, code), which Lino registers in accounts-and-access-control. The app calls
+ * them through the entry point like every other request; nothing answers sign-in before the pipeline.
  *
- * Provisional (not registered by anyone yet; the paths and names below are this app's proposal):
- * - requesting a sign-in code and signing in: the entry point answers 401 to every request that has no token, and a
- *   person who is signing in has none (Teammate A's question 1 for the foundation owner);
- * - adding a car: the entry point copies the whole request body into the permanent audit entry, so the plate would be
- *   kept in the audit log for ever and defeat erasure (Teammate A's question 3 for the foundation owner).
+ * Cars: GET /cars is Lino's `personalData.ownCars` and answers `{ cars: [{ carRef, plate }] }`. POST /cars with a
+ * plate is this app's proposal for `personalData.addCar`, which Lino has not registered yet (it waits on the
+ * redaction rule of P2); the pull request lists it under "Needs Lino".
  */
-export const DRIVER_REQUEST_CODE_PATH = '/driver/sign-in/request-code';
-export const DRIVER_SIGN_IN_PATH = '/driver/sign-in';
+export const DRIVER_REQUEST_CODE_PATH = '/sign-in/code';
+export const DRIVER_SIGN_IN_PATH = '/sign-in';
 export const DRIVER_CARS_PATH = '/cars';
 
-export const DRIVER_REQUEST_CODE_OPERATION = 'driver.requestSignInCode';
-export const DRIVER_SIGN_IN_OPERATION = 'driver.signIn';
+export const REQUEST_SIGN_IN_CODE_OPERATION = 'requestSignInCode';
+export const SIGN_IN_OPERATION = 'signIn';
 export const DRIVER_OWN_CARS_OPERATION = 'personalData.ownCars';
 export const DRIVER_ADD_CAR_OPERATION = 'personalData.addCar';
