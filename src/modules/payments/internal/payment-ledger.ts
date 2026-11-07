@@ -7,12 +7,16 @@ import type { RequestId } from '../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { PaymentGateway, PaymentLedger, PaymentRecord, PayRefusal } from '../public';
 import type { PaymentStore, StoredPayment } from './ports';
+import { askProvider, type ProviderAnswer } from './provider-answer';
 
-/** The provider gets this long to answer before the driver is told "pay later or pay cash" (ADR-08). */
+/** The provider gets this long to answer before the attempt stays pending and the driver is told to pay later (P18, C4). */
 export const PROVIDER_TIMEOUT_MILLISECONDS = 8_000;
 
 /** Published after a payment lands, for Notifications, the dashboard and the money check (ADR-07). */
 export const TICKET_PAID_TOPIC = 'TicketPaid';
+
+/** What the driver reads when the attempt is pending: the provider has not given its final answer (section 9 of the rules). */
+export const PAY_LATER_OR_PAY_CASH = 'pay later or pay cash';
 
 export interface TicketPaidPayload {
   readonly ticketId: TicketId;
@@ -23,15 +27,20 @@ export interface TicketPaidPayload {
 
 export interface PaymentLedgerDependencies {
   readonly gateway: PaymentGateway;
-  readonly ticketDesk: TicketDesk;
-  readonly ticketQuery: TicketQuery;
+  readonly ticketDesk: Pick<TicketDesk, 'changePaymentStatus'>;
+  readonly ticketQuery: Pick<TicketQuery, 'ticketStatus'>;
   readonly clock: Clock;
 }
 
 /**
- * The payments ledger for one unit of work (task C2). Paying in the app: ask Ticketing for the ticket, charge the
- * provider with the request id as the idempotency key, record the answer as a new row, mark the ticket paid and
- * publish "ticket paid". The row, the ticket status, the audit entry and the event commit together (Rule E).
+ * The payments ledger for one unit of work (task C2). Paying in the app: ask Ticketing for the ticket, record a
+ * pending attempt, charge the provider with the request id as the idempotency key, record the answer on the attempt,
+ * mark the ticket paid and publish "ticket paid". The row, the ticket status, the audit entry and the event commit
+ * together (Rule E).
+ *
+ * One attempt per ticket (P18): an attempt stays `pending` until the provider's final answer, and a ticket with a
+ * pending attempt refuses a second charge. The 8-second timer is the ledger's, so every adapter is timed the same way;
+ * the attempt row is written before the provider is asked, so a late answer finds its row at reconciliation.
  *
  * One charge per request id (task C3) holds at two levels: the entry point answers a repeat from its stored
  * response without calling the ledger, and the ledger itself answers from the row the id already created, so even
@@ -49,49 +58,17 @@ export class PaymentLedgerService implements PaymentLedger {
     if (alreadyRecorded !== undefined) {
       return succeed(toRecord(alreadyRecorded));
     }
-    const ticket = await this.dependencies.ticketQuery.ticketStatus(ticketId);
-    if (ticket.driverRef !== payer) {
-      return fail('not your ticket');
+    const refusal = await this.whyTicketCannotBeCharged(ticketId, payer);
+    if (refusal !== undefined) {
+      return fail(refusal);
     }
-    if (ticket.state !== 'closed' || ticket.fee === undefined) {
-      return fail('ticket not closed');
+    const fee = (await this.dependencies.ticketQuery.ticketStatus(ticketId)).fee;
+    if (fee === undefined) {
+      throw new Error(`Ticket ${ticketId} is closed but carries no fee`);
     }
-    if (ticket.paymentStatus !== 'unpaid') {
-      return fail('nothing to pay');
-    }
-
-    const charge = await this.dependencies.gateway.charge(ticket.fee, requestId, PROVIDER_TIMEOUT_MILLISECONDS);
-    if (charge.outcome === 'declined') {
-      return fail('declined');
-    }
-    if (charge.outcome === 'timed out') {
-      return fail('pay later or pay cash');
-    }
-
-    const payment: StoredPayment = {
-      paymentId: `payment-${randomUUID()}`,
-      ticketId,
-      amount: ticket.fee,
-      method: 'app',
-      outcome: charge.outcome,
-      ...(charge.providerReference === undefined ? {} : { providerReference: charge.providerReference }),
-      requestId,
-      payerId: payer,
-      recordedAt: this.dependencies.clock.now().toISOString(),
-    };
-    await this.store.add(payment);
-
-    if (charge.outcome === 'paid') {
-      await this.markTicketPaid(requestId, ticketId);
-      const payload: TicketPaidPayload = {
-        ticketId,
-        paymentId: payment.paymentId,
-        amount: payment.amount,
-        ...(payment.providerReference === undefined ? {} : { providerReference: payment.providerReference }),
-      };
-      this.events.publish({ topic: TICKET_PAID_TOPIC, payload });
-    }
-    return succeed(toRecord(payment));
+    const attempt = await this.recordPendingAttempt(requestId, ticketId, payer, fee);
+    const answer = await askProvider(() => this.dependencies.gateway.charge(fee, requestId), PROVIDER_TIMEOUT_MILLISECONDS);
+    return this.recordAnswer(attempt, answer);
   }
 
   async tickCash(_requestId: RequestId, _ticketId: TicketId, _attendantId: PersonId): Promise<Result<PaymentRecord, string>> {
@@ -114,12 +91,77 @@ export class PaymentLedgerService implements PaymentLedger {
     return (await this.store.forTicket(ticketId)).map(toRecord);
   }
 
+  /** The ticket's own state first, then the attempts already recorded against it (P18). */
+  private async whyTicketCannotBeCharged(ticketId: TicketId, payer: PersonId): Promise<PayRefusal | undefined> {
+    const ticket = await this.dependencies.ticketQuery.ticketStatus(ticketId);
+    if (ticket.driverRef !== payer) {
+      return 'not your ticket';
+    }
+    if (ticket.state !== 'closed' || ticket.fee === undefined) {
+      return 'ticket not closed';
+    }
+    if (ticket.paymentStatus !== 'unpaid') {
+      return 'nothing to pay';
+    }
+    const attempts = await this.store.forTicket(ticketId);
+    if (attempts.some((attempt) => attempt.state === 'pending')) {
+      return 'payment pending, try again shortly';
+    }
+    if (attempts.some((attempt) => attempt.state === 'paid')) {
+      return 'nothing to pay';
+    }
+    return undefined;
+  }
+
+  /** Written before the provider is asked, so the row exists whatever the provider does with the next eight seconds. */
+  private async recordPendingAttempt(requestId: RequestId, ticketId: TicketId, payer: PersonId, fee: number): Promise<StoredPayment> {
+    const attempt: StoredPayment = {
+      paymentId: `payment-${randomUUID()}`,
+      ticketId,
+      amount: fee,
+      method: 'app',
+      state: 'pending',
+      requestId,
+      payerId: payer,
+      recordedAt: this.dependencies.clock.now().toISOString(),
+    };
+    await this.store.add(attempt);
+    return attempt;
+  }
+
+  private async recordAnswer(attempt: StoredPayment, answer: ProviderAnswer): Promise<Result<PaymentRecord, PayRefusal>> {
+    switch (answer.kind) {
+      case 'declined':
+        return fail('declined');
+      case 'paid':
+        return succeed(toRecord(await this.recordPaid(attempt, answer.providerReference)));
+      case 'pending':
+        return succeed(toRecord(await this.replaceAttempt({ ...attempt, providerReference: answer.providerReference })));
+      case 'no answer':
+        return succeed(toRecord(attempt));
+    }
+  }
+
+  private async recordPaid(attempt: StoredPayment, providerReference: string): Promise<StoredPayment> {
+    const paid = await this.replaceAttempt({ ...attempt, state: 'paid', providerReference, settledAt: this.dependencies.clock.now().toISOString() });
+    await this.markTicketPaid(paid.requestId, paid.ticketId);
+    const payload: TicketPaidPayload = { ticketId: paid.ticketId, paymentId: paid.paymentId, amount: paid.amount, providerReference };
+    this.events.publish({ topic: TICKET_PAID_TOPIC, payload });
+    return paid;
+  }
+
+  private async replaceAttempt(attempt: StoredPayment): Promise<StoredPayment> {
+    await this.store.replace(attempt);
+    return attempt;
+  }
+
   /**
    * The provider has taken the money, so a ticket that cannot be marked paid is an error, not a refusal: the whole
    * write rolls back, and the driver's retry with the same request id reaches the provider's stored answer, never
    * a second charge (ADR-08).
    */
   private async markTicketPaid(requestId: RequestId, ticketId: TicketId): Promise<void> {
+    // TODO(P1): pass the unit of work first once Karim's changePaymentStatus(unitOfWork, requestId, ticketId, to) lands.
     const marked = await this.dependencies.ticketDesk.changePaymentStatus(requestId, ticketId, 'paid');
     if (!marked.ok) {
       throw new Error(`Ticket ${ticketId} was charged but could not be marked paid: ${marked.error}`);
@@ -129,6 +171,6 @@ export class PaymentLedgerService implements PaymentLedger {
 
 /** The public record: the stored row without the module's own bookkeeping columns. */
 export function toRecord(payment: StoredPayment): PaymentRecord {
-  const { requestId: _requestId, payerId: _payerId, recordedAt: _recordedAt, ...record } = payment;
+  const { requestId: _requestId, payerId: _payerId, recordedAt: _recordedAt, settledAt: _settledAt, ...record } = payment;
   return record;
 }

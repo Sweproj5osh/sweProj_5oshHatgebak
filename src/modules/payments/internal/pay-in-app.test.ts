@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
 import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
@@ -12,7 +12,9 @@ import {
   createFakePaymentGateway,
   createPayments,
   operations,
+  PAY_LATER_OR_PAY_CASH,
   PAYMENTS_TABLE,
+  PROVIDER_TIMEOUT_MILLISECONDS,
   TICKET_PAID_TOPIC,
   type PaymentRecord,
 } from '../public';
@@ -136,7 +138,12 @@ function errorIn(response: { body: unknown }): string {
   return (response.body as { error: string }).error;
 }
 
+function messageIn(response: { body: unknown }): string {
+  return (response.body as { message: string }).message;
+}
+
 let payLatencyMilliseconds = Number.NaN;
+let timeoutHonouredMilliseconds = Number.NaN;
 
 describe('C2 paying in the app', () => {
   it('pays a closed ticket: paid with a provider reference, ticket shows paid, one row, one audit entry, one event', async () => {
@@ -149,7 +156,7 @@ describe('C2 paying in the app', () => {
 
     expect(response.status).toBe(201);
     const payment = paymentIn(response);
-    expect(payment).toMatchObject({ ticketId: 'ticket-1', amount: 11, method: 'app', outcome: 'paid' });
+    expect(payment).toMatchObject({ ticketId: 'ticket-1', amount: 11, method: 'app', state: 'paid' });
     expect(payment.providerReference).toMatch(/^fake-/);
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
 
@@ -174,18 +181,67 @@ describe('C2 paying in the app', () => {
     });
   });
 
-  it('records a pending answer as a row, leaves the ticket unpaid and publishes nothing yet', async () => {
+  it('records a pending answer as a pending attempt with the provider reference, leaves the ticket unpaid and publishes nothing yet', async () => {
     const { tickets, application, pay, paymentRows } = setUp();
     tickets.seed(closedTicket('ticket-1', 13));
 
     const response = await pay('request-pay-0002', 'ticket-1');
 
     expect(response.status).toBe(202);
-    expect(paymentIn(response).outcome).toBe('pending');
+    expect(paymentIn(response).state).toBe('pending');
+    expect(messageIn(response)).toBe(PAY_LATER_OR_PAY_CASH);
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
     expect(await paymentRows()).toHaveLength(1);
-    expect((await paymentRows())[0]?.outcome).toBe('pending');
+    expect((await paymentRows())[0]).toMatchObject({ state: 'pending', providerReference: expect.stringMatching(/^fake-/) });
     expect(application.outbox.allEvents()).toHaveLength(0);
+  });
+
+  it('P18: a ticket with a pending attempt refuses a second charge under a new request id', async () => {
+    const { tickets, gateway, pay, paymentRows } = setUp();
+    tickets.seed(closedTicket('ticket-1', 13));
+
+    expect((await pay('request-pay-0011', 'ticket-1')).status).toBe(202);
+    const second = await pay('request-pay-0012', 'ticket-1');
+
+    expect(second.status).toBe(409);
+    expect(errorIn(second)).toBe('payment pending, try again shortly');
+    expect(await paymentRows()).toHaveLength(1);
+    expect(gateway.chargeCallCount()).toBe(1);
+    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+  });
+
+  describe('C4: the 8-second timer is the ledger\'s', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('gives the slow provider exactly 8 seconds, then records a pending attempt, keeps the ticket unpaid and says pay later or pay cash', async () => {
+      const { tickets, gateway, pay, paymentRows } = setUp();
+      tickets.seed(closedTicket('ticket-1', 19));
+      let answered = false;
+      const paying = pay('request-pay-0013', 'ticket-1').then((response) => {
+        answered = true;
+        return response;
+      });
+
+      await vi.advanceTimersByTimeAsync(PROVIDER_TIMEOUT_MILLISECONDS - 1);
+      expect(answered).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const response = await paying;
+      timeoutHonouredMilliseconds = PROVIDER_TIMEOUT_MILLISECONDS;
+
+      expect(response.status).toBe(202);
+      expect(messageIn(response)).toBe(PAY_LATER_OR_PAY_CASH);
+      expect(paymentIn(response).state).toBe('pending');
+      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      expect((await paymentRows())[0]).toMatchObject({ state: 'pending', requestId: 'request-pay-0013' });
+      expect((await paymentRows())[0]?.providerReference).toBeUndefined();
+      expect(gateway.chargeCallCount()).toBe(1);
+    });
   });
 
   it('refuses a declined charge and keeps no row, no audit entry and no event', async () => {
@@ -286,5 +342,6 @@ describe('C2 paying in the app', () => {
 
   afterAll(() => {
     console.log(`C2 report: pay latency ${payLatencyMilliseconds.toFixed(1)} ms (one pay through the entry point on the in-memory stack)`);
+    console.log(`C4 report: timeout honoured at ${(timeoutHonouredMilliseconds / 1000).toFixed(3)} s (the ledger's timer, measured with fake timers)`);
   });
 });

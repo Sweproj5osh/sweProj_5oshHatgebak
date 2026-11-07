@@ -15,7 +15,8 @@ import { payInAppOperation } from './internal/operations/pay-in-app';
 import { PaymentLedgerService } from './internal/payment-ledger';
 import { TableAccessPaymentStore } from './internal/adapters/table-access-payment-store';
 
-export type ChargeOutcome = 'paid' | 'declined' | 'pending' | 'timed out';
+/** The provider's answer to a charge. Anything else an adapter lets through is an adapter error (Rule B). */
+export type ChargeOutcome = 'paid' | 'declined' | 'pending';
 
 export interface ChargeResult {
   readonly outcome: ChargeOutcome;
@@ -23,14 +24,21 @@ export interface ChargeResult {
 }
 
 /**
- * Port to the outside payment provider (ADR-11). The request id is the idempotency key (ADR-08).
- * `charge` answers within `timeoutMilliseconds` or returns "timed out" with no reference; it never throws for a slow
- * provider. `status` asks the provider about a charge it issued earlier, for settling pending payments (C5).
+ * Port to the outside payment provider (ADR-11). The request id is the idempotency key (ADR-08): the same key asked
+ * twice gives the provider's first answer. The adapter does not time itself; the ledger gives up after its own
+ * 8-second timer (P18), so a slow provider simply answers late. `status` asks the provider about a charge it issued
+ * earlier, for settling pending payments (C5).
  */
 export interface PaymentGateway {
-  charge(amount: number, idempotencyKey: RequestId, timeoutMilliseconds: number): Promise<ChargeResult>;
+  charge(amount: number, idempotencyKey: RequestId): Promise<ChargeResult>;
   status(providerReference: string): Promise<ChargeOutcome>;
 }
+
+/**
+ * The state of one payment attempt (P18): `pending` until the provider's final answer, then `paid` or `failed`. It is
+ * a state of the attempt, never of the ticket, whose payment status stays within unpaid/paid/disputed/waived.
+ */
+export type AttemptState = 'pending' | 'paid' | 'failed';
 
 /** The fake provider for tests and the in-memory server (C1); the composition root builds it through this function. */
 export { createFakePaymentGateway, type FakePaymentGateway } from './internal/adapters/fake-payment-gateway';
@@ -40,17 +48,20 @@ export interface PaymentRecord {
   readonly ticketId: TicketId;
   readonly amount: number;
   readonly method: 'app' | 'cash' | 'correction';
-  readonly outcome: ChargeOutcome;
+  readonly state: AttemptState;
   readonly reason?: string;
   /** The provider's reference for an app payment; absent for cash and corrections. */
   readonly providerReference?: string;
 }
 
 /**
- * Why a pay in the app was refused. The first three come from the task sheet; "nothing to pay" (the ticket is
- * already paid or waived) and "not your ticket" keep one ticket from being charged twice or by a stranger.
+ * Why a pay in the app was refused. "declined" and "ticket not closed" come from the task sheet; "nothing to pay" (the
+ * ticket is already paid or waived) and "not your ticket" keep one ticket from being charged twice or by a stranger;
+ * "payment pending, try again shortly" is P18: a ticket with a pending attempt takes no second charge. A timed-out or
+ * pending provider answer is not a refusal: the attempt is recorded as pending and the driver reads "pay later or pay
+ * cash" (section 9 of the rules).
  */
-export type PayRefusal = 'declined' | 'pay later or pay cash' | 'ticket not closed' | 'nothing to pay' | 'not your ticket';
+export type PayRefusal = 'declined' | 'ticket not closed' | 'nothing to pay' | 'not your ticket' | 'payment pending, try again shortly';
 
 export interface PaymentLedger {
   payInApp(requestId: RequestId, ticketId: TicketId, payer: PersonId): Promise<Result<PaymentRecord, PayRefusal>>;
@@ -61,10 +72,11 @@ export interface PaymentLedger {
   paymentsForTicket(ticketId: TicketId): Promise<readonly PaymentRecord[]>;
 }
 
+/** What this module needs from Ticketing: the ticket's state and the one status change payments may make. */
 export interface PaymentsDependencies {
   readonly gateway: PaymentGateway;
-  readonly ticketDesk: TicketDesk;
-  readonly ticketQuery: TicketQuery;
+  readonly ticketDesk: Pick<TicketDesk, 'changePaymentStatus'>;
+  readonly ticketQuery: Pick<TicketQuery, 'ticketStatus'>;
   readonly clock: Clock;
 }
 
@@ -91,4 +103,4 @@ export function operations(dependencies: PaymentsDependencies): readonly Operati
 }
 
 export { PAYMENTS_TABLE } from './internal/adapters/table-access-payment-store';
-export { PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './internal/payment-ledger';
+export { PAY_LATER_OR_PAY_CASH, PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './internal/payment-ledger';

@@ -14,11 +14,17 @@ export interface StoredPayment extends PaymentRecord {
   readonly payerId: string;
   /** Server time, from the clock (Rule I). */
   readonly recordedAt: string;
+  /** When the provider's final answer was recorded on the attempt; absent while it is pending. */
+  readonly settledAt?: string;
 }
 
-/** The payments table. Rows are only ever added: a correction is a new row, never an edit (task C7). */
+/**
+ * The payments table. An attempt's row is added before the provider is asked and its state is replaced when the
+ * answer arrives (P18); amounts are never edited, a correction is a new row (task C7).
+ */
 export interface PaymentStore {
   add(payment: StoredPayment): Promise<void>;
+  replace(payment: StoredPayment): Promise<void>;
   forTicket(ticketId: TicketId): Promise<readonly StoredPayment[]>;
   /** The row a request id already created, if any: a repeat must find it before the provider is called (C3). */
   byRequestId(requestId: RequestId): Promise<StoredPayment | undefined>;

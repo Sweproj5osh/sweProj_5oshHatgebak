@@ -17,6 +17,10 @@ export class TableAccessPaymentStore implements PaymentStore {
     await this.tables.insert(PAYMENTS_TABLE, payment.paymentId, payment);
   }
 
+  async replace(payment: StoredPayment): Promise<void> {
+    await this.tables.replace(PAYMENTS_TABLE, payment.paymentId, payment);
+  }
+
   async forTicket(ticketId: TicketId): Promise<readonly StoredPayment[]> {
     return (await this.all()).filter((payment) => payment.ticketId === ticketId);
   }
