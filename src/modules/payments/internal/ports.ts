@@ -16,6 +16,8 @@ export interface StoredPayment extends PaymentRecord {
   readonly recordedAt: string;
   /** When the provider's final answer was recorded on the attempt; absent while it is pending. */
   readonly settledAt?: string;
+  /** What the provider literally said when it was not paid, declined or pending: timed out, an error, or an unknown word. */
+  readonly rawProviderOutcome?: string;
 }
 
 /**

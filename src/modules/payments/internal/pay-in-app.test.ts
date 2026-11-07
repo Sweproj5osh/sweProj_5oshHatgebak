@@ -16,6 +16,8 @@ import {
   PAYMENTS_TABLE,
   PROVIDER_TIMEOUT_MILLISECONDS,
   TICKET_PAID_TOPIC,
+  type ChargeOutcome,
+  type PaymentGateway,
   type PaymentRecord,
 } from '../public';
 import type { StoredPayment } from './ports';
@@ -108,12 +110,12 @@ function closedTicket(ticketId: TicketId, fee: number, overrides: Partial<Ticket
   };
 }
 
-function setUp() {
+function setUp(overrides: { readonly gateway?: PaymentGateway } = {}) {
   const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
   const tickets = new FakeTickets();
   const gateway = createFakePaymentGateway();
   const payments = createPayments({
-    gateway,
+    gateway: overrides.gateway ?? gateway,
     ticketDesk: tickets,
     ticketQuery: tickets,
     clock,
@@ -210,6 +212,47 @@ describe('C2 paying in the app', () => {
     expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
   });
 
+  describe('Rule B: a provider answer outside paid, declined and pending is an adapter error', () => {
+    /** An adapter that lets the provider's own word through; the cast is the adapter error under test. */
+    function gatewaySaying(outcome: string): PaymentGateway {
+      return {
+        charge: async () => ({ outcome: outcome as ChargeOutcome, providerReference: 'fake-raw-1' }),
+        status: async () => 'pending',
+      };
+    }
+
+    const throwingGateway: PaymentGateway = {
+      charge: async () => {
+        throw new Error('connection reset');
+      },
+      status: async () => 'pending',
+    };
+
+    it('is recorded as a pending attempt carrying the raw outcome, not on the audit entry, and answered 202, never 201', async () => {
+      const { tickets, application, pay, paymentRows, auditRows } = setUp({ gateway: gatewaySaying('authorized') });
+      tickets.seed(closedTicket('ticket-1', 11));
+
+      const response = await pay('request-pay-0014', 'ticket-1');
+
+      expect(response.status).toBe(202);
+      expect(paymentIn(response).state).toBe('pending');
+      expect((await paymentRows())[0]).toMatchObject({ state: 'pending', rawProviderOutcome: 'authorized' });
+      expect(JSON.stringify(await auditRows())).not.toContain('authorized');
+      expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
+      expect(application.outbox.allEvents()).toHaveLength(0);
+    });
+
+    it('treats a throwing adapter the same way: the attempt stays pending with the error as its raw outcome', async () => {
+      const { tickets, pay, paymentRows } = setUp({ gateway: throwingGateway });
+      tickets.seed(closedTicket('ticket-1', 11));
+
+      const response = await pay('request-pay-0015', 'ticket-1');
+
+      expect(response.status).toBe(202);
+      expect((await paymentRows())[0]).toMatchObject({ state: 'pending', rawProviderOutcome: 'provider error: connection reset' });
+    });
+  });
+
   describe('C4: the 8-second timer is the ledger\'s', () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -238,7 +281,7 @@ describe('C2 paying in the app', () => {
       expect(messageIn(response)).toBe(PAY_LATER_OR_PAY_CASH);
       expect(paymentIn(response).state).toBe('pending');
       expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('unpaid');
-      expect((await paymentRows())[0]).toMatchObject({ state: 'pending', requestId: 'request-pay-0013' });
+      expect((await paymentRows())[0]).toMatchObject({ state: 'pending', requestId: 'request-pay-0013', rawProviderOutcome: 'timed out' });
       expect((await paymentRows())[0]?.providerReference).toBeUndefined();
       expect(gateway.chargeCallCount()).toBe(1);
     });

@@ -160,7 +160,7 @@ export class PaymentLedgerService implements PaymentLedger {
       case 'pending':
         return succeed(toRecord(await this.replaceAttempt({ ...attempt, providerReference: answer.providerReference })));
       case 'no answer':
-        return succeed(toRecord(attempt));
+        return succeed(toRecord(await this.replaceAttempt({ ...attempt, rawProviderOutcome: answer.rawOutcome })));
     }
   }
 
@@ -193,6 +193,6 @@ export class PaymentLedgerService implements PaymentLedger {
 
 /** The public record: the stored row without the module's own bookkeeping columns. */
 export function toRecord(payment: StoredPayment): PaymentRecord {
-  const { requestId: _requestId, payerId: _payerId, recordedAt: _recordedAt, settledAt: _settledAt, ...record } = payment;
+  const { requestId: _requestId, payerId: _payerId, recordedAt: _recordedAt, settledAt: _settledAt, rawProviderOutcome: _raw, ...record } = payment;
   return record;
 }
