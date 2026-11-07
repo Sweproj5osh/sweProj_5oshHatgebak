@@ -58,6 +58,15 @@ describe('opening a ticket through the entry point', () => {
     expect(await auditRows(app)).toHaveLength(1);
   });
 
+  it('answers 403 and leaves no audit entry when the car is registered to someone else', async () => {
+    const { app, cars } = await application();
+    cars.register('car-a', 'driver-2');
+    const response = await app.handle(writeRequest('/tickets/open', 'driver', 'request-id-1', body));
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'car not registered to this driver' });
+    expect(await auditRows(app)).toHaveLength(0);
+  });
+
   it('does not let an attendant open a driver ticket', async () => {
     const { app } = await application();
     const response = await app.handle(writeRequest('/tickets/open', 'attendant', 'request-id-1', body));

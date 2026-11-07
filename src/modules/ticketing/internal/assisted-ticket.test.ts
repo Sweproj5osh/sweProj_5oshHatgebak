@@ -31,6 +31,13 @@ describe('B10 assisted tickets: opening', () => {
     expect(await world.openAssistedTicket(assistedCommand({ carRef: 'car-c' }), ATTENDANT_AT_SITE_1)).toEqual({ ok: false, error: 'site closed' });
   });
 
+  it('asks no ownership question: the identity area binds the walk-in driver to the car at the kerb (P15)', async () => {
+    const world = await buildTicketingWorld();
+    world.cars.register('car-a', 'someone-else');
+    const opened = await world.openAssistedTicket(assistedCommand({ carRef: 'car-a' }), ATTENDANT_AT_SITE_1);
+    expect(opened).toMatchObject({ ok: true, value: { assisted: true, carRef: 'car-a' } });
+  });
+
   it('does not flag an ordinary driver ticket', async () => {
     const world = await buildTicketingWorld();
     expect(await world.openTicket(openCommand())).toMatchObject({ ok: true, value: { assisted: false } });

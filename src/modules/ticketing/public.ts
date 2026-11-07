@@ -46,7 +46,14 @@ export interface Ticket {
   readonly assisted: boolean;
 }
 
-export type OpenRefusal = 'site closed' | 'car already parked' | 'site full' | 'forged code' | 'wrong site' | 'attendant not clocked in at this site';
+export type OpenRefusal =
+  | 'site closed'
+  | 'car already parked'
+  | 'site full'
+  | 'forged code'
+  | 'wrong site'
+  | 'attendant not clocked in at this site'
+  | 'car not registered to this driver';
 export type CloseRefusal =
   | 'no open ticket'
   | 'forged code'
@@ -128,6 +135,8 @@ export interface TicketingSites {
 
 export interface TicketOpeningDependencies {
   readonly sites: TicketingSites;
+  /** A driver opens a ticket only for a car registered to them (integrity, rank 1). */
+  readonly carOwnership: CarOwnership;
   readonly store: TicketStore;
   readonly clock: Clock;
   /** Only tests replace this. */
@@ -237,8 +246,8 @@ export interface TicketingDependencies {
 
 /** The requests this module answers; the composition root calls this once and registers the result (P4). */
 export function operations(dependencies: TicketingDependencies): readonly Operation[] {
-  const { sites, clock, prices, fees, plates, tickets: store } = dependencies;
-  const opening = createTicketOpeningService({ sites, store, clock });
+  const { sites, clock, prices, fees, plates, carOwnership, tickets: store } = dependencies;
+  const opening = createTicketOpeningService({ sites, carOwnership, store, clock });
   const closing = createTicketClosingService({ sites, store, clock, prices, fees });
   const reading = createTicketReadingService({ store, plates, fees });
   const counts = createTicketCountsService({ sites, store });

@@ -52,7 +52,11 @@ export class FakePlates {
   }
 }
 
-/** The identity area's car register: a car belongs to exactly the person it was registered to. */
+/**
+ * The identity area's car register. A registered car belongs to exactly the person it was registered to; a car nobody
+ * registered belongs to whoever asks, so the many tests that invent car references need no registration step. A test
+ * about ownership registers the car it names.
+ */
 export class FakeCarOwnership {
   private readonly ownerByCar = new Map<string, string>();
 
@@ -63,7 +67,8 @@ export class FakeCarOwnership {
 
   async carBelongsTo(carRef: string, personId: string): Promise<boolean> {
     await Promise.resolve();
-    return this.ownerByCar.get(carRef) === personId;
+    const owner = this.ownerByCar.get(carRef);
+    return owner === undefined || owner === personId;
   }
 }
 
@@ -163,7 +168,7 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const plates = new FakePlates().withPlate('car-a', 'ABC 123');
   const cars = new FakeCarOwnership();
   let counter = 0;
-  const opening = createTicketOpening({ sites, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
+  const opening = createTicketOpening({ sites, carOwnership: cars, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
   const prices = createPriceList({ isApproved: () => true });
   if (options.withPrice !== false) {
     await prices.applyApprovedVersion(PRICE, 'approval-1');

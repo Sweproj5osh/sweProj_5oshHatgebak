@@ -11,6 +11,15 @@ describe('B5 opening a ticket', () => {
     });
   });
 
+  it('refuses a car registered to another driver, before any other check, and creates no ticket', async () => {
+    const world = await buildTicketingWorld();
+    world.cars.register('car-theirs', 'driver-2');
+    const refused = await world.openTicket(openCommand({ driverRef: 'driver-1', carRef: 'car-theirs', entryCode: 'made-up' }));
+    expect(refused).toEqual({ ok: false, error: 'car not registered to this driver' });
+    expect(await world.countOpen('site-1')).toBe(0);
+    expect((await world.openTicket(openCommand({ driverRef: 'driver-2', carRef: 'car-theirs' }))).ok).toBe(true);
+  });
+
   it('refuses a forged code and creates no ticket', async () => {
     const world = await buildTicketingWorld();
     expect(await world.openTicket(openCommand({ entryCode: 'made-up' }))).toEqual({ ok: false, error: 'forged code' });
