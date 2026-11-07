@@ -3,7 +3,8 @@ import { TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../entrypoin
 import { respond, type HttpResponse } from '../../../shared/operation-contract';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import { createStandInPaymentOperations, createStandInPaymentState } from '../../test-support/stand-in-payment-operations';
-import { buildTicketingWorld } from '../../test-support/ticketing-world';
+import { platesFor, priceListFor, TEST_PRICE } from '../../test-support/ticketing-ports';
+import { FixedClock } from '../../../shared/clock';
 import { DriverScanClient } from '../scanning/driver-scan-client';
 import { HttpTicketScanApi } from '../scanning/http-ticket-scan-api';
 import type { ServerRequest } from '../server-call';
@@ -93,20 +94,29 @@ describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
     expect(receipt).toEqual(RECEIPT);
   });
 
-  it('reads the receipt from Karim\'s real ticketing.receipt read on main, with the plate from the logged join', async () => {
-    const world = await buildTicketingWorld({ sites: { 'site-1': 5 }, plates: { 'car-a': 'ABC123' } });
-    const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, clock: world.clock, additionalOperations: world.operations });
+  it('reads the receipt from Karim\'s composed ticketing.receipt, a logged read: the plate from the join and one audit entry naming the request', async () => {
+    const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));
+    const prices = await priceListFor(['site-1']);
+    const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, moduleDependencies: { prices, plates: platesFor({ 'car-a': 'ABC123' }) } });
     const token = () => tokenFor('driver');
     let scanSerial = 1;
     const scans = new DriverScanClient({ api: new HttpTicketScanApi({ handle: app.handle, token }), createRequestId: () => `d4-scan-${String(scanSerial++).padStart(4, '0')}` });
     const payments = new HttpDriverPaymentApi({ handle: app.handle, token });
-    await scans.scanEntry({ siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' });
-    world.clock.advanceByMilliseconds(45 * 60 * 1000);
+    const opened = await scans.scanEntry({ siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' });
+    const ticketId = opened.ok ? opened.value.ticketId : 'no ticket opened';
+    clock.advanceByMilliseconds(45 * 60 * 1000);
     const closed = await scans.scanExit('exit-site-1');
 
-    const receipt = await payments.receipt('ticket-1', 'd4-receipt-0001');
+    const receipt = await payments.receipt(ticketId, 'd4-receipt-0001');
 
     expect(closed.ok).toBe(true);
-    expect(receipt).toEqual({ ticketId: 'ticket-1', siteId: 'site-1', openedAt: '2026-11-09T08:00:00.000Z', closedAt: '2026-11-09T08:45:00.000Z', hours: 1, fee: world.price.firstHourFee, plate: 'ABC123' });
+    expect(receipt).toEqual({ ticketId, siteId: 'site-1', openedAt: '2026-11-09T08:00:00.000Z', closedAt: '2026-11-09T08:45:00.000Z', hours: 1, fee: TEST_PRICE.firstHourFee, plate: 'ABC123' });
+    const entries = await app.audit.readByScope({ personId: 'driver-1', role: 'driver' });
+    expect(entries.map((entry) => [entry.operation, entry.requestId])).toEqual([
+      ['ticketing.openTicket', 'd4-scan-0001'],
+      ['ticketing.closeTicket', 'd4-scan-0002'],
+      ['ticketing.receipt', 'd4-receipt-0001'],
+    ]);
+    expect(JSON.stringify(entries)).not.toContain('ABC123');
   });
 });

@@ -57,7 +57,6 @@ export type DriverPaymentRefusal =
   | 'payment pending, try again shortly'
   | 'request id reused for another ticket or payer'
   | 'unknown ticket'
-  | 'plate read refused'
   | 'not signed in';
 
 export const DRIVER_PAYMENT_REFUSALS: readonly DriverPaymentRefusal[] = [
@@ -68,7 +67,6 @@ export const DRIVER_PAYMENT_REFUSALS: readonly DriverPaymentRefusal[] = [
   'payment pending, try again shortly',
   'request id reused for another ticket or payer',
   'unknown ticket',
-  'plate read refused',
   'not signed in',
 ];
 

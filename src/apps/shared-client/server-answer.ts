@@ -63,6 +63,18 @@ export function nullableNumber(answer: ServerAnswer, field: string): number | nu
   return answer[field] === null ? null : requiredNumber(answer, field);
 }
 
+/** A list of words the server may leave out entirely (the fee warnings on a closed ticket). */
+export function optionalStringList(answer: ServerAnswer, field: string): readonly string[] | undefined {
+  const value = answer[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+    throw new MalformedServerAnswerError(field);
+  }
+  return value as readonly string[];
+}
+
 export function requiredBoolean(answer: ServerAnswer, field: string): boolean {
   const value = answer[field];
   if (typeof value !== 'boolean') {

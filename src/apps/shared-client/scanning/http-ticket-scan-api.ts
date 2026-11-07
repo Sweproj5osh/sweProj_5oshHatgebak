@@ -2,7 +2,7 @@
  * TicketScanApi adapter: the Driver App talks to the main system only through the HTTP entry point.
  * No ticket rules here: the server's `{ ticket }` answers are read as they are; refusals are the server's words.
  */
-import { optionalNumber, optionalString, requiredBoolean, requiredRecord, requiredString, requiredWord, type ServerAnswer } from '../server-answer';
+import { optionalNumber, optionalString, optionalStringList, requiredBoolean, requiredRecord, requiredString, requiredWord, type ServerAnswer } from '../server-answer';
 import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import { DRIVER_CLOSE_TICKET_PATH, DRIVER_OPEN_TICKET_PATH } from './driver-ticket-routes';
 import {
@@ -45,6 +45,7 @@ export class HttpTicketScanApi implements TicketScanApi {
 function readTicket(ticket: ServerAnswer): ScannedTicket {
   const closedAt = optionalString(ticket, 'closedAt');
   const fee = optionalNumber(ticket, 'fee');
+  const feeWarnings = optionalStringList(ticket, 'feeWarnings');
   return {
     ticketId: requiredString(ticket, 'ticketId'),
     siteId: requiredString(ticket, 'siteId'),
@@ -55,6 +56,7 @@ function readTicket(ticket: ServerAnswer): ScannedTicket {
     openedAt: requiredString(ticket, 'openedAt'),
     ...(closedAt === undefined ? {} : { closedAt }),
     ...(fee === undefined ? {} : { fee }),
+    ...(feeWarnings === undefined ? {} : { feeWarnings }),
     assisted: requiredBoolean(ticket, 'assisted'),
   };
 }

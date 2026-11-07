@@ -40,6 +40,8 @@ export interface ScannedTicket {
   readonly openedAt: string;
   readonly closedAt?: string;
   readonly fee?: number;
+  /** What the fee calculator could not check when the ticket closed; absent when every check answered. */
+  readonly feeWarnings?: readonly string[];
   readonly assisted: boolean;
 }
 
@@ -50,7 +52,8 @@ export type TicketScanRefusal =
   | 'site full'
   | 'forged code'
   | 'wrong site'
-  | 'attendant not assigned to this site'
+  | 'attendant not clocked in at this site'
+  | 'car not registered to this driver'
   | 'no open ticket'
   | 'exit before entry'
   | 'no price known'
@@ -65,7 +68,8 @@ export const TICKET_SCAN_REFUSALS: readonly TicketScanRefusal[] = [
   'site full',
   'forged code',
   'wrong site',
-  'attendant not assigned to this site',
+  'attendant not clocked in at this site',
+  'car not registered to this driver',
   'no open ticket',
   'exit before entry',
   'no price known',
