@@ -69,6 +69,18 @@ describe('A12 the rest of the assignments', () => {
     });
   });
 
+  it('refuses a member pulling an inspector out of another district\'s zone into their own', async () => {
+    const inspector = await createPerson(world, 'inspector');
+    valueOf(await world.licensing.assignments.assignInspectorToZone(world.chair, inspector, world.zoneTwo));
+    expect(await world.licensing.assignments.assignInspectorToZone(world.memberOfDistrictOne, inspector, world.zoneOne)).toEqual({
+      ok: false,
+      error: 'not allowed here',
+    });
+    expect(await world.licensing.assignments.zoneOf(inspector)).toBe(world.zoneTwo);
+    valueOf(await world.licensing.assignments.assignInspectorToZone(world.chair, inspector, world.zoneOne));
+    expect(await world.licensing.assignments.zoneOf(inspector)).toBe(world.zoneOne);
+  });
+
   it('assigns an inspector to a zone and records it in access control', async () => {
     const inspector = await createPerson(world, 'inspector');
     valueOf(await world.licensing.assignments.assignInspectorToZone(world.memberOfDistrictOne, inspector, world.zoneOne));
