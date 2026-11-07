@@ -4,7 +4,7 @@ import { isWellFormedRequestId, REQUEST_ID_HEADER, type RequestId } from '../sha
 import { fail, succeed, type Result } from '../shared/result';
 import { findTimestampFields } from '../shared/timestamp-fields';
 import type { HttpRequest } from './http';
-import { bodyHashOf, responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
+import { bodyHashOf, type ResponseStore } from './repeatable-writes/response-store';
 
 export const TIMESTAMPS_ARE_SET_BY_THE_SERVER = 'timestamps are set by the server';
 export const REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT = 'request id reused with different content';
@@ -18,31 +18,27 @@ export interface AdmittedWrite {
 }
 
 /**
- * The checks every write passes before any unit of work opens, in order: request id → server clock rule → body schema
- * → repeat check (Rule H, Rule I, P19). The failure side carries the answer to send instead: a refusal, the stored
+ * The checks every write passes before any unit of work opens, after its request id was admitted and under the lock
+ * for its response key: server clock rule → body schema → repeat check (Rule H, Rule I, P19). The failure side carries the answer to send instead: a refusal, the stored
  * response of an earlier identical write, or 409 when the same id arrives with different content.
  */
 export async function admitWrite(
   request: HttpRequest,
+  requestId: RequestId,
   schema: BodySchema,
-  responseOwner: string,
+  responseKey: string,
   responses: ResponseStore,
 ): Promise<Result<AdmittedWrite, HttpResponse>> {
-  const requestId = admitRequestId(request, 'every write');
-  if (!requestId.ok) {
-    return requestId;
-  }
   const body = admitBody(request, schema);
   if (!body.ok) {
     return body;
   }
-  const responseKey = responseKeyFor(responseOwner, requestId.value);
   const bodyHash = bodyHashOf(body.value);
   const earlier = await responses.find(responseKey);
   if (earlier !== undefined) {
     return fail(earlier.bodyHash === bodyHash ? earlier.response : refuse(409, REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT));
   }
-  return succeed({ requestId: requestId.value, body: body.value, responseKey, bodyHash });
+  return succeed({ requestId, body: body.value, responseKey, bodyHash });
 }
 
 /** Rule H: the client's request id, well formed, or the refusal naming who needs it ("every write", "a logged read"). */

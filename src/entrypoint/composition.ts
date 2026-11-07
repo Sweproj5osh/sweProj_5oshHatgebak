@@ -13,7 +13,9 @@ import { createHashChainedAuditTrail, operations as auditLogOperations, type Aud
 import { SystemClock, type Clock } from '../shared/clock';
 import type { EventSubscriber } from '../shared/events/event';
 import { OutboxDeliveryJob } from '../shared/events/outbox-delivery-job';
+import { KeyedSerialQueue } from '../shared/keyed-serial-queue';
 import type { Operation } from '../shared/operation-contract';
+import { SerialQueue } from '../shared/serial-queue';
 import { EVERYONE_IS_LIVE, type AccessChecks } from './auth/access-checks';
 import { PermissionTable } from './auth/permission-table';
 import { createRequestHandler, type RequestHandler } from './handle-request';
@@ -95,13 +97,19 @@ function compose(
   const accounts = createAccountsAndAccessControl({ stores: createInMemoryAccountsStores(), siteLocator: NO_SITES_YET });
   const registry = registryFor(options, audit);
   const permissions = new PermissionTable(registry.all());
+  const chainCommits = new SerialQueue();
   const resources: UnitOfWorkResourcesFactory = {
     begin() {
       const transaction = database.begin();
+      const auditInTransaction = createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction.tables), clock);
       return {
         transaction,
-        audit: createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction.tables), clock),
         events: outbox.publisherBoundTo(transaction.tables),
+        appendAuditEntryAndCommit: (entry) =>
+          chainCommits.run(async () => {
+            await auditInTransaction.append(entry);
+            await transaction.commit();
+          }),
       };
     },
   };
@@ -114,6 +122,7 @@ function compose(
     resources,
     accessChecks: chooseAccessChecks(accounts),
     responses: new InMemoryResponseStore(),
+    writeLocks: new KeyedSerialQueue(),
     rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
   });
   return {

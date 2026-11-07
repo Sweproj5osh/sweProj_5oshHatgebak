@@ -35,8 +35,7 @@ async function settle(execution: AuditedExecution, outcome: WriteOutcome, resour
     await resources.transaction.rollback();
     return outcome.response;
   }
-  await resources.audit.append(auditEntryFor(execution, outcome));
-  await resources.transaction.commit();
+  await resources.appendAuditEntryAndCommit(auditEntryFor(execution, outcome));
   return outcome.response;
 }
 
