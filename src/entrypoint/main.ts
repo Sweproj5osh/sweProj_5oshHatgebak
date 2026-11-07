@@ -1,10 +1,10 @@
 import { readTokenSecret } from './auth/token';
-import { composeInMemoryApplication } from './composition';
+import { composeInMemoryServer } from './composition';
 import { createHttpServer } from './server';
 
 const DEFAULT_PORT = 3000;
 
-const application = composeInMemoryApplication({ tokenSecret: readTokenSecret(process.env) });
+const application = composeInMemoryServer({ tokenSecret: readTokenSecret(process.env) });
 const port = Number(process.env['PORT'] ?? DEFAULT_PORT);
 
 createHttpServer(application.handle).listen(port, () => {

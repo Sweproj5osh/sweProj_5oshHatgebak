@@ -212,7 +212,8 @@ describe('entry point: audit entry and events commit together', () => {
     await handle(writeRequest('/example/requests', 'member', 'request-0001', { kind: 'price change', reason: 'Old prices' }));
     const [entry] = await audit.readByScope({ personId: 'chair-1', role: 'chair' });
     expect(entry).toMatchObject({
-      actor: { kind: 'person', personId: 'member-1', role: 'member' },
+      personId: 'member-1',
+      role: 'member',
       operation: 'example.member.fileRequest',
       requestId: 'request-0001',
       reason: 'Old prices',

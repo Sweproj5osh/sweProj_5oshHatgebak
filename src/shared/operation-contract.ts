@@ -139,10 +139,16 @@ export type ReadScope = 'open' | 'own' | 'staff-scoped';
 export interface ReadOperation extends OperationBase {
   readonly kind: 'read';
   readonly method: 'GET';
-  readonly scope: ReadScope;
+  /** Absent means `own` (the role table alone), the behaviour reads had before P10; see QUESTIONS.md. */
+  readonly scope?: ReadScope;
   readonly logged?: boolean;
   readonly audit?: ReadAuditDeclaration;
-  handle(context: ReadContext): Promise<ReadOutcome>;
+  /** A bare HttpResponse is still accepted from reads already on main; new reads return a ReadOutcome. */
+  handle(context: ReadContext): Promise<ReadOutcome | HttpResponse>;
+}
+
+export function toReadOutcome(answer: ReadOutcome | HttpResponse): ReadOutcome {
+  return 'status' in answer ? { response: answer } : answer;
 }
 
 export interface WriteOperation extends OperationBase, BodyDeclaration {

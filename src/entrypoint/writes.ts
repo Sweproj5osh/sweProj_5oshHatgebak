@@ -47,23 +47,27 @@ export async function handlePublicWrite(
   request: HttpRequest,
   dependencies: WriteDependencies,
 ): Promise<HttpResponse> {
-  const admitted = await admitWrite(request, operation.bodySchema, request.address, dependencies.responses);
+  const address = request.address;
+  if (address === undefined) {
+    return refuse(400, 'the client address is unknown, so this public operation cannot be rate-limited');
+  }
+  const admitted = await admitWrite(request, operation.bodySchema, address, dependencies.responses);
   if (!admitted.ok) {
     return admitted.error;
   }
   const { requestId, body } = admitted.value;
-  if ((await publicRateLimitVerdict(operation, request.address, body, dependencies.rateLimiter)) === 'over limit') {
+  if ((await publicRateLimitVerdict(operation, address, body, dependencies.rateLimiter)) === 'over limit') {
     return refuse(429, TOO_MANY_ATTEMPTS);
   }
   const response = await runAudited(
     {
       operationName: operation.name,
-      actor: { kind: 'anonymous', address: request.address },
+      actor: { kind: 'anonymous', address },
       requestId,
       input: body,
       redaction: operation.audit,
       run: (resources) =>
-        operation.handle({ address: request.address, requestId, body, transaction: resources.transaction, events: resources.events }),
+        operation.handle({ address, requestId, body, transaction: resources.transaction, events: resources.events }),
     },
     dependencies.resources,
   );

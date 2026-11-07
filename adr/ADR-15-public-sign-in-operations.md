@@ -12,7 +12,8 @@ limit)." A second door is the one thing the single entry point exists to prevent
 body validation, unit of work, redacted audit entry, and a per-phone and per-address rate limit that only this kind
 has. Only `requestSignInCode` and `signIn` may be public; a fitness function (F13) keeps the list at two."
 
-In code: `kind: 'public'`, no roles, no permission row. The audit entry's actor is `{ kind: 'anonymous', address }`;
+In code: `kind: 'public'`, no roles, no permission row. The audit entry's actor is `{ kind: 'anonymous', address }`,
+stored flat in the record as `address` where a person's entry has `personId` and `role`;
 the handler may name the subject through `subjectPersonIds`. Repeats are keyed by client address and request id. A
 `RateLimiter` port in `src/shared` with a sliding-window in-memory adapter limits 30 attempts per address and 5 per
 `rateLimitKey` value (the phone) per 10 minutes; beyond that the answer is 429 with a plain message. Lino registers the
@@ -25,8 +26,8 @@ two operations; Mahi removes her bypass.
 ## Consequences
 - Easier: one door; sign-in attempts are audited and rate-limited like everything else; the two-step committee login
   reuses the same kind.
-- Harder: the audit entry's actor is now a union (person or anonymous address), which the PostgreSQL schema must
-  follow; a shared rate-limiter store is needed once the server runs as several copies.
+- Harder: the audit record's `person_id` and `role` become nullable and an `address` column joins them, which needs a
+  migration; a shared rate-limiter store is needed once the server runs as several copies.
 
 ## Related
 ADR-08 (repeatable writes), ADR-10 (one person, one role per token), ADR-13, ADR-14.

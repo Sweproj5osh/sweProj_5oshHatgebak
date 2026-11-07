@@ -36,12 +36,13 @@ describe('public operations (P3, ADR-15)', () => {
     expect(response.status).toBe(202);
     const [entry] = await audit.readByScope({ personId: 'chair-1', role: 'chair' });
     expect(entry).toMatchObject({
-      actor: { kind: 'anonymous', address: TEST_ADDRESS },
+      address: TEST_ADDRESS,
       operation: 'requestSignInCode',
       requestId: 'request-0001',
       input: {},
       subjectPersonIds: ['person-for-that-phone'],
     });
+    expect(entry?.personId).toBeUndefined();
     expect(JSON.stringify(entry)).not.toContain(PHONE);
   });
 

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { canonicalJson } from '../../../shared/canonical-json';
 import type { Clock } from '../../../shared/clock';
 import { SerialQueue } from '../../../shared/serial-queue';
-import type { AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail } from '../public';
+import type { AuditActor, AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail } from '../public';
 import { isVisibleTo } from './read-scope';
 
 /** The previous hash of the very first entry. */
@@ -51,13 +51,20 @@ class HashChainedAuditTrail implements AuditTrail {
 }
 
 function chainAfter(previous: AuditRecord | undefined, entry: AuditEntry, recordedAt: Date): AuditRecord {
+  const { actor, ...fields } = entry;
   const unhashed = {
-    ...entry,
+    ...fields,
+    ...flattened(actor),
     id: previous === undefined ? 1 : previous.id + 1,
     recordedAt: recordedAt.toISOString(),
     prevHash: previous === undefined ? GENESIS_HASH : previous.hash,
   };
   return { ...unhashed, hash: hashOf(unhashed) };
+}
+
+/** The actor as the table stores it: two columns for a person, one for an anonymous caller. */
+function flattened(actor: AuditActor): Pick<AuditRecord, 'personId' | 'role' | 'address'> {
+  return actor.kind === 'person' ? { personId: actor.personId, role: actor.role } : { address: actor.address };
 }
 
 type HashedFields = Omit<AuditRecord, 'hash'>;

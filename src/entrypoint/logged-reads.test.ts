@@ -65,7 +65,8 @@ describe('logged reads (P9)', () => {
     const entries = await audit.readByScope({ personId: 'chair-1', role: 'chair' });
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      actor: { kind: 'person', personId: 'inspector-1', role: 'inspector' },
+      personId: 'inspector-1',
+      role: 'inspector',
       operation: 'personalData.readPlate',
       requestId: 'request-0001',
       input: { carRef: 'car-7' },

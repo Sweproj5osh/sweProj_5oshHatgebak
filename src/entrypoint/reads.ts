@@ -1,5 +1,5 @@
 import type { Actor } from '../shared/identifiers';
-import { refuse, type HttpResponse, type ReadOperation } from '../shared/operation-contract';
+import { refuse, toReadOutcome, type HttpResponse, type ReadOperation } from '../shared/operation-contract';
 import type { TableAccess } from '../shared/unit-of-work';
 import { scopeFromQuery, type AccessChecks } from './auth/access-checks';
 import { runAudited } from './audited-execution';
@@ -30,7 +30,7 @@ export async function handleRead(
   if (operation.logged === true) {
     return handleLoggedRead(operation, request, actor, dependencies.resources);
   }
-  const outcome = await operation.handle({ actor, query: request.query, database: dependencies.database });
+  const outcome = toReadOutcome(await operation.handle({ actor, query: request.query, database: dependencies.database }));
   return outcome.response;
 }
 
@@ -59,7 +59,7 @@ async function handleLoggedRead(
       requestId: requestId.value,
       input: request.query,
       redaction: operation.audit,
-      run: (unitOfWork) => operation.handle({ actor, query: request.query, database: unitOfWork.transaction }),
+      run: async (unitOfWork) => toReadOutcome(await operation.handle({ actor, query: request.query, database: unitOfWork.transaction })),
     },
     resources,
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Scope } from '../modules/accounts-and-access-control/public';
 import { ALL_ROLES, type PersonId } from '../shared/identifiers';
-import { respond, type ReadOperation } from '../shared/operation-contract';
+import { respond, type ReadOperation, type ReadScope } from '../shared/operation-contract';
 import type { AccessChecks } from './auth/access-checks';
 import { readRequest, testApplication, tokenFor } from './test-helpers';
 
@@ -23,7 +23,7 @@ function accessChecksAllowing(...allowed: readonly PersonId[]) {
   return { checks, asked };
 }
 
-function read(name: string, path: string, scope: ReadOperation['scope'], allowedRoles: ReadOperation['allowedRoles']): ReadOperation {
+function read(name: string, path: string, scope: ReadScope, allowedRoles: ReadOperation['allowedRoles']): ReadOperation {
   return {
     kind: 'read',
     name,

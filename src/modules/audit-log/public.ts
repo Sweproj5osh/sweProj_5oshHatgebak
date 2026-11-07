@@ -34,9 +34,15 @@ export interface AuditEntry {
   readonly subjectPersonIds?: readonly PersonId[];
 }
 
-/** A stored entry: the audit entry plus the server time and the hash chain fields. */
-export interface AuditRecord extends AuditEntry {
+/**
+ * A stored entry: the entry's fields with the actor laid flat as the table holds it (a person's `personId` and `role`,
+ * or an anonymous caller's `address`), plus the server time and the hash chain fields.
+ */
+export interface AuditRecord extends Omit<AuditEntry, 'actor'> {
   readonly id: number;
+  readonly personId?: PersonId;
+  readonly role?: Role;
+  readonly address?: string;
   readonly recordedAt: string;
   readonly prevHash: string;
   readonly hash: string;
