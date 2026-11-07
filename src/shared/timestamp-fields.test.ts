@@ -7,7 +7,12 @@ describe('looksLikeTimestampKey', () => {
     (key) => expect(looksLikeTimestampKey(key)).toBe(true),
   );
 
-  it.each(['siteId', 'format', 'seat', 'reason', 'plateCount', 'attendantId'])(
+  it.each(['closed_at', 'created_at', 'paid_at', 'CLOSED_AT', 'ClosedAT', 'AT', 'paidAt', 'PAID_TIME', 'epoch', 'startEpoch', 'start_epoch', 'DATE'])(
+    'flags %s whatever the case or the word separator',
+    (key) => expect(looksLikeTimestampKey(key)).toBe(true),
+  );
+
+  it.each(['siteId', 'format', 'seat', 'chat', 'reason', 'plateCount', 'attendantId', 'FORMAT', 'heat_map'])(
     'leaves %s alone',
     (key) => expect(looksLikeTimestampKey(key)).toBe(false),
   );
@@ -28,6 +33,11 @@ describe('findTimestampFields', () => {
   it('returns the dotted path of every offending key or value, at any depth', () => {
     const body = { siteId: 's1', car: { plate: 'x', enteredAt: 1 }, notes: [{ text: '2026-11-04T10:00:00Z' }] };
     expect(findTimestampFields(body)).toEqual(['car.enteredAt', 'notes[0].text']);
+  });
+
+  it('catches an epoch number under a snake_case or upper-case time name', () => {
+    expect(findTimestampFields({ paid_at: 1762538400 })).toEqual(['paid_at']);
+    expect(findTimestampFields({ CLOSED_AT: 1762538400000 })).toEqual(['CLOSED_AT']);
   });
 
   it('returns nothing for a clean body', () => {
