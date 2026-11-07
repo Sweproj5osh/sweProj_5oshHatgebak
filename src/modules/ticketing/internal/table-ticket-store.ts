@@ -69,6 +69,18 @@ export class TableTicketStore implements TicketStore {
       .map(({ ticket }) => ticket);
   }
 
+  async listOpenAt(tables: TableAccess, siteId: SiteId): Promise<readonly Ticket[]> {
+    const tickets = await tables.list<Ticket>(TICKETS_TABLE);
+    return tickets.filter((ticket) => ticket.state === 'open' && ticket.siteId === siteId);
+  }
+
+  async listClosedAt(tables: TableAccess, siteId: SiteId, from: Date, to: Date): Promise<readonly Ticket[]> {
+    const tickets = await tables.list<Ticket>(TICKETS_TABLE);
+    return tickets
+      .filter((ticket) => ticket.state === 'closed' && ticket.siteId === siteId && closedWithin(ticket, from, to))
+      .sort((a, b) => (a.closedAt ?? '').localeCompare(b.closedAt ?? ''));
+  }
+
   findById(tables: TableAccess, ticketId: TicketId): Promise<Ticket | undefined> {
     return tables.read<Ticket>(TICKETS_TABLE, ticketId);
   }
@@ -113,6 +125,11 @@ export class TableTicketStore implements TicketStore {
       return succeed(changed);
     });
   }
+}
+
+function closedWithin(ticket: Ticket, from: Date, to: Date): boolean {
+  const closedAt = Date.parse(ticket.closedAt ?? '');
+  return closedAt >= from.getTime() && closedAt < to.getTime();
 }
 
 function openTicketsAt(tickets: readonly Ticket[], siteId: SiteId): number {

@@ -1,4 +1,5 @@
-import type { Receipt, TicketReading, TicketReadingDependencies } from '../public';
+import type { SiteId } from '../../../shared/identifiers';
+import type { ClosedTicketSummary, Receipt, Ticket, TicketReading, TicketReadingDependencies } from '../public';
 
 export type TicketReadReason = 'unknown ticket' | 'ticket not closed';
 
@@ -30,6 +31,14 @@ export function createTicketReadingService(dependencies: TicketReadingDependenci
 
     ticketHistory: (tables, driverRef) => store.listByDriver(tables, driverRef),
 
+    async frequentSites(tables, driverRef) {
+      return sitesByVisits(await store.listByDriver(tables, driverRef));
+    },
+
+    async closedTicketsBetween(tables, siteId, from, to) {
+      return (await store.listClosedAt(tables, siteId, from, to)).flatMap(summaryOf);
+    },
+
     async receipt(tables, ticketId, reader): Promise<Receipt> {
       const ticket = await store.findById(tables, ticketId);
       if (ticket === undefined) {
@@ -50,4 +59,21 @@ export function createTicketReadingService(dependencies: TicketReadingDependenci
       };
     },
   };
+}
+
+/** Sites by number of visits, most visited first; the list arrives newest first, so equally visited sites keep the most recent first. */
+function sitesByVisits(ticketsNewestFirst: readonly Ticket[]): readonly SiteId[] {
+  const visits = new Map<SiteId, number>();
+  for (const ticket of ticketsNewestFirst) {
+    visits.set(ticket.siteId, (visits.get(ticket.siteId) ?? 0) + 1);
+  }
+  return [...visits.entries()].sort((a, b) => b[1] - a[1]).map(([siteId]) => siteId);
+}
+
+/** A closed ticket always carries its exit time and fee; the type leaves them optional because an open ticket has none. */
+function summaryOf(ticket: Ticket): ClosedTicketSummary[] {
+  if (ticket.closedAt === undefined || ticket.fee === undefined) {
+    return [];
+  }
+  return [{ ticketId: ticket.ticketId, closedAt: ticket.closedAt, fee: ticket.fee, paymentStatus: ticket.paymentStatus, assisted: ticket.assisted }];
 }

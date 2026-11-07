@@ -93,7 +93,26 @@ export interface TicketDesk {
   openAssistedTicket(unitOfWork: Transaction, command: OpenTicketCommand, attendant: ClockedInAttendant): Promise<Result<Ticket, OpenRefusal>>;
   closeTicket(unitOfWork: Transaction, requestId: RequestId, ticketId: TicketId, exitCode: string): Promise<Result<Ticket, CloseRefusal>>;
   changePaymentStatus(unitOfWork: Transaction, requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>>;
-  closeStaleTickets(unitOfWork: Transaction, siteId: SiteId, maximumHours: number): Promise<readonly TicketId[]>;
+  /**
+   * Closes every ticket at the site open for `maximumHours` or longer (a driver who never scanned out), at the server's
+   * now and at the price in force when it opened, capped as any stay is. The caller (the scheduler) owns the number of
+   * hours. A ticket that cannot be closed stays open and is named with its reason, never dropped silently.
+   */
+  closeStaleTickets(unitOfWork: Transaction, siteId: SiteId, maximumHours: number): Promise<StaleTicketSweep>;
+}
+
+export interface StaleTicketSweep {
+  readonly closed: readonly TicketId[];
+  readonly leftOpen: readonly { readonly ticketId: TicketId; readonly reason: CloseRefusal }[];
+}
+
+/** One closed ticket as the money check reads it (P28 #36): what was charged, whether it was paid, and who opened it. */
+export interface ClosedTicketSummary {
+  readonly ticketId: TicketId;
+  readonly closedAt: string;
+  readonly fee: number;
+  readonly paymentStatus: PaymentStatus;
+  readonly assisted: boolean;
 }
 
 export interface Receipt {
@@ -118,7 +137,10 @@ export interface TicketQuery {
   /** Assisted tickets opened at the site in the given Cairo calendar month (Africa/Cairo), open or closed. */
   assistedTicketCount(tables: TableAccess, siteId: SiteId, year: number, month: number): Promise<number>;
   receipt(tables: TableAccess, ticketId: TicketId, reader: PersonId): Promise<Receipt>;
+  /** The sites a driver parks at, most often first; equally often, the most recently used first. */
   frequentSites(tables: TableAccess, driverRef: PersonId): Promise<readonly SiteId[]>;
+  /** The tickets at a site closed from `from` (inclusive) to `to` (exclusive), for the cash reconciliation (P28 #36). */
+  closedTicketsBetween(tables: TableAccess, siteId: SiteId, from: Date, to: Date): Promise<readonly ClosedTicketSummary[]>;
 }
 
 /** Why the site registry refused a scanned code. An exit code shown at the entrance is "wrong kind". */
@@ -174,7 +196,7 @@ export interface AssistedClosing {
   ): Promise<Result<Ticket, CloseRefusal>>;
 }
 
-export type TicketClosing = Pick<TicketDesk, 'closeTicket'> & AssistedClosing;
+export type TicketClosing = Pick<TicketDesk, 'closeTicket' | 'closeStaleTickets'> & AssistedClosing;
 
 /** Task B8: close a ticket by the exit scan, freeze the exit time, and ask the fee calculator for the fee. */
 export function createTicketClosing(dependencies: TicketClosingDependencies): TicketClosing {
@@ -216,9 +238,9 @@ export interface TicketReadingDependencies {
   readonly fees: Pick<FeeCalculator, 'startedHours'>;
 }
 
-export type TicketReading = Pick<TicketQuery, 'ticketStatus' | 'ticketHistory' | 'receipt'>;
+export type TicketReading = Pick<TicketQuery, 'ticketStatus' | 'ticketHistory' | 'receipt' | 'frequentSites' | 'closedTicketsBetween'>;
 
-/** Tasks B12 and B13: a driver's tickets, one ticket's state, and the receipt with the plate from the logged join. */
+/** Tasks B12 and B13: a driver's tickets, one ticket's state, the receipt with the plate from the logged join, the driver's frequent sites and the closed tickets of a site. */
 export function createTicketReading(dependencies: TicketReadingDependencies): TicketReading {
   return createTicketReadingService(dependencies);
 }

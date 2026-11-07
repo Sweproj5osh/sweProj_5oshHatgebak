@@ -35,6 +35,9 @@ export interface TicketStore {
   findById(tables: TableAccess, ticketId: TicketId): Promise<Ticket | undefined>;
   /** A driver's tickets, newest first. */
   listByDriver(tables: TableAccess, driverRef: PersonId): Promise<readonly Ticket[]>;
+  listOpenAt(tables: TableAccess, siteId: SiteId): Promise<readonly Ticket[]>;
+  /** The site's tickets closed from `from` (inclusive) to `to` (exclusive), oldest close first. */
+  listClosedAt(tables: TableAccess, siteId: SiteId, from: Date, to: Date): Promise<readonly Ticket[]>;
   /**
    * Closes an open ticket with the frozen exit time and the fee, in one indivisible step. A request key already used
    * returns the ticket it closed; a ticket that is not open is refused.

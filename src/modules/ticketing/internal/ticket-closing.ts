@@ -1,6 +1,9 @@
 import { fail, succeed, type Result } from '../../../shared/result';
+import type { SiteId, TicketId } from '../../../shared/identifiers';
 import type { Transaction } from '../../../shared/unit-of-work';
-import type { ClockedInAttendant, CloseRefusal, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
+import type { ClockedInAttendant, CloseRefusal, StaleTicketSweep, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
+
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
  * Checks in a fixed order: an open ticket exists, the exit code is genuine and belongs to its site, the exit is not
@@ -9,6 +12,9 @@ import type { ClockedInAttendant, CloseRefusal, Ticket, TicketClosing, TicketClo
  *
  * An assisted ticket (task B10) is closed by an attendant clocked in at its site, who also names the car seen at the
  * exit; it must be the car that came in.
+ *
+ * A stale ticket (open for the caller's maximum or longer, nobody scanned out) is closed by the same settlement
+ * without a scan: the exit time is the server's now, the fee is the normal, capped fee at the price of its opening.
  */
 export function createTicketClosingService(dependencies: TicketClosingDependencies): TicketClosing {
   const { sites, store, clock, prices, fees } = dependencies;
@@ -44,8 +50,12 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
     if (assisted !== undefined && assisted.carRef !== ticket.carRef) {
       return fail('car does not match');
     }
+    return settle(unitOfWork, requestKey, ticket, clock.now());
+  }
+
+  /** Freezes the exit time, asks the fee of the price in force at the entry (FR4.3, Rule C) and closes in one step. */
+  async function settle(unitOfWork: Transaction, requestKey: string, ticket: Ticket, exit: Date): Promise<Result<Ticket, CloseRefusal>> {
     const entry = new Date(ticket.openedAt);
-    const exit = clock.now();
     if (exit.getTime() < entry.getTime()) {
       return fail('exit before entry');
     }
@@ -54,12 +64,30 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
       return fail('no price known');
     }
     const fee = await fees.computeFeeForCar({ carRef: ticket.carRef }, entry, exit, price.version);
-    return store.closeIfOpen(unitOfWork, { requestKey, ticketId, closedAt: exit.toISOString(), fee });
+    return store.closeIfOpen(unitOfWork, { requestKey, ticketId: ticket.ticketId, closedAt: exit.toISOString(), fee });
+  }
+
+  async function closeStaleTickets(unitOfWork: Transaction, siteId: SiteId, maximumHours: number): Promise<StaleTicketSweep> {
+    const now = clock.now();
+    const openedAtOrBefore = now.getTime() - maximumHours * MILLISECONDS_PER_HOUR;
+    const stale = (await store.listOpenAt(unitOfWork, siteId)).filter((ticket) => Date.parse(ticket.openedAt) <= openedAtOrBefore);
+    const closed: TicketId[] = [];
+    const leftOpen: { ticketId: TicketId; reason: CloseRefusal }[] = [];
+    for (const ticket of stale) {
+      const outcome = await settle(unitOfWork, `stale:${ticket.ticketId}`, ticket, now);
+      if (outcome.ok) {
+        closed.push(ticket.ticketId);
+      } else {
+        leftOpen.push({ ticketId: ticket.ticketId, reason: outcome.error });
+      }
+    }
+    return { closed, leftOpen };
   }
 
   return {
     closeTicket: (unitOfWork, requestId, ticketId, exitCode) => close(unitOfWork, requestId, ticketId, exitCode),
     closeAssistedTicket: (unitOfWork, requestId, ticketId, exitCode, attendant, carRef) =>
       close(unitOfWork, requestId, ticketId, exitCode, { attendant, carRef }),
+    closeStaleTickets,
   };
 }
