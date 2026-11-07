@@ -14,6 +14,7 @@ import type { TicketDesk, TicketQuery } from '../ticketing/public';
 import { payInAppOperation } from './internal/operations/pay-in-app';
 import { PaymentLedgerService } from './internal/payment-ledger';
 import { TableAccessPaymentStore } from './internal/adapters/table-access-payment-store';
+import { InFlightAttempts } from './internal/in-flight-attempts';
 
 /** The provider's answer to a charge. Anything else an adapter lets through is an adapter error (Rule B). */
 export type ChargeOutcome = 'paid' | 'declined' | 'pending';
@@ -89,8 +90,9 @@ export interface Payments {
 
 /** The composition root builds this module through this one function; nothing else constructs its internals. */
 export function createPayments(dependencies: PaymentsDependencies): Payments {
+  const inFlight = new InFlightAttempts();
   const ledgerBoundTo: Payments['ledgerBoundTo'] = (transaction, events) =>
-    new PaymentLedgerService(dependencies, new TableAccessPaymentStore(transaction), events);
+    new PaymentLedgerService({ ...dependencies, inFlight }, new TableAccessPaymentStore(transaction), events);
   return { ledgerBoundTo, operations: [payInAppOperation({ ledgerBoundTo })] };
 }
 

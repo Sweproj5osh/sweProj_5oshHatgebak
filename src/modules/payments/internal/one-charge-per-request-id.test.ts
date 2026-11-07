@@ -191,6 +191,35 @@ describe('C3 one charge per request id', () => {
     expect(retried.ok && retried.value.providerReference).toBeTruthy();
   });
 
+  it('two concurrent pays of one ticket under two request ids give one row and one charge: the ticket is locked per attempt', async () => {
+    const { clock, tickets, gateway, payments } = setUp();
+    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
+
+    const [first, second] = await Promise.all([
+      application.handle(writeRequest(PAY_PATH, 'driver', 'request-race-0001', { ticketId: 'ticket-1' })),
+      application.handle(writeRequest(PAY_PATH, 'driver', 'request-race-0002', { ticketId: 'ticket-1' })),
+    ]);
+
+    expect([first.status, second.status].sort()).toEqual([201, 409]);
+    expect(await application.database.list<StoredPayment>(PAYMENTS_TABLE)).toHaveLength(1);
+    expect(gateway.chargeCallCount()).toBe(1);
+    expect((await tickets.ticketStatus('ticket-1')).paymentStatus).toBe('paid');
+  });
+
+  it('a declined attempt releases the ticket, so the driver may try again under a new request id', async () => {
+    const { clock, tickets, gateway, payments } = setUp();
+    tickets.seed(closedUnpaidTicket('ticket-1', 12));
+    const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
+
+    expect((await application.handle(writeRequest(PAY_PATH, 'driver', 'request-declined-0001', { ticketId: 'ticket-1' }))).status).toBe(402);
+    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const retried = await application.handle(writeRequest(PAY_PATH, 'driver', 'request-declined-0002', { ticketId: 'ticket-1' }));
+
+    expect(retried.status).toBe(201);
+    expect(gateway.chargeCallCount()).toBe(2);
+  });
+
   afterAll(() => {
     console.log(`C3 report: entry point ${results['entry point']}; ledger ${results.ledger}`);
   });

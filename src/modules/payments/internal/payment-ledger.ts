@@ -6,6 +6,7 @@ import type { PaymentId, PersonId, SiteId, TicketId } from '../../../shared/iden
 import type { RequestId } from '../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../shared/result';
 import type { PaymentGateway, PaymentLedger, PaymentRecord, PayRefusal } from '../public';
+import type { InFlightAttempts } from './in-flight-attempts';
 import type { PaymentStore, StoredPayment } from './ports';
 import { askProvider, type ProviderAnswer } from './provider-answer';
 
@@ -30,6 +31,8 @@ export interface PaymentLedgerDependencies {
   readonly ticketDesk: Pick<TicketDesk, 'changePaymentStatus'>;
   readonly ticketQuery: Pick<TicketQuery, 'ticketStatus'>;
   readonly clock: Clock;
+  /** Shared by every ledger of the module: the per-ticket lock outlives one unit of work. */
+  readonly inFlight: InFlightAttempts;
 }
 
 /**
@@ -39,8 +42,10 @@ export interface PaymentLedgerDependencies {
  * together (Rule E).
  *
  * One attempt per ticket (P18): an attempt stays `pending` until the provider's final answer, and a ticket with a
- * pending attempt refuses a second charge. The 8-second timer is the ledger's, so every adapter is timed the same way;
- * the attempt row is written before the provider is asked, so a late answer finds its row at reconciliation.
+ * pending attempt refuses a second charge, whether that attempt is committed (the row) or still in flight in another
+ * unit of work (the per-ticket claim in `InFlightAttempts`). The 8-second timer is the ledger's, so every adapter is
+ * timed the same way; the attempt row is written before the provider is asked, so a late answer finds its row at
+ * reconciliation.
  *
  * One charge per request id (task C3) holds at two levels: the entry point answers a repeat from its stored
  * response without calling the ledger, and the ledger itself answers from the row the id already created, so even
@@ -61,6 +66,9 @@ export class PaymentLedgerService implements PaymentLedger {
     const refusal = await this.whyTicketCannotBeCharged(ticketId, payer);
     if (refusal !== undefined) {
       return fail(refusal);
+    }
+    if (!this.dependencies.inFlight.claim(ticketId, requestId)) {
+      return fail('payment pending, try again shortly');
     }
     const fee = (await this.dependencies.ticketQuery.ticketStatus(ticketId)).fee;
     if (fee === undefined) {
@@ -105,9 +113,11 @@ export class PaymentLedgerService implements PaymentLedger {
     }
     const attempts = await this.store.forTicket(ticketId);
     if (attempts.some((attempt) => attempt.state === 'pending')) {
+      this.dependencies.inFlight.release(ticketId);
       return 'payment pending, try again shortly';
     }
     if (attempts.some((attempt) => attempt.state === 'paid')) {
+      this.dependencies.inFlight.release(ticketId);
       return 'nothing to pay';
     }
     return undefined;
@@ -132,6 +142,7 @@ export class PaymentLedgerService implements PaymentLedger {
   private async recordAnswer(attempt: StoredPayment, answer: ProviderAnswer): Promise<Result<PaymentRecord, PayRefusal>> {
     switch (answer.kind) {
       case 'declined':
+        this.dependencies.inFlight.release(attempt.ticketId);
         return fail('declined');
       case 'paid':
         return succeed(toRecord(await this.recordPaid(attempt, answer.providerReference)));
