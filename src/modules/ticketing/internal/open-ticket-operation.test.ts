@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
 import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from '../../../entrypoint/handle-request';
-import { createTicketingOperations } from '../public';
 import { buildTicketingWorld, START } from './testing/ticketing-world';
 
 async function application() {
@@ -11,7 +9,7 @@ async function application() {
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
-    operations: [...foundationOperations, ...createTicketingOperations(world)],
+    moduleDependencies: world.dependencies,
   });
   return { ...world, app };
 }

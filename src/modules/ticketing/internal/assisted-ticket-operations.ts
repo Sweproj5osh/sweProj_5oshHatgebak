@@ -3,6 +3,7 @@ import type { Actor } from '../../../shared/identifiers';
 import type { ClockedInAttendant, TicketClosing, TicketOpening } from '../public';
 import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC } from './close-ticket-operation';
 import { STATUS_FOR_OPEN_REFUSAL } from './open-ticket-operation';
+import { SAMPLE_CAR, SAMPLE_ENTRY_CODE, SAMPLE_EXIT_CODE, SAMPLE_SITE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 
 /**
  * The two requests an attendant uses for a driver without a phone. The attendant is proven by the entry point: the
@@ -11,8 +12,8 @@ import { STATUS_FOR_OPEN_REFUSAL } from './open-ticket-operation';
  * body; the body schema has no optional field, so an empty text means no photo. The Staff App is where a photo is made
  * mandatory, because the photo store may fail without stopping parking (ADR-03).
  */
-export function createAssistedTicketOperations(opening: TicketOpening, closing: TicketClosing): readonly Operation[] {
-  return [openAssisted(opening), closeAssisted(closing)];
+export function createAssistedTicketOperations(opening: TicketOpening, closing: TicketClosing, seedSampleTicket: SampleSeeder): readonly Operation[] {
+  return [openAssisted(opening), closeAssisted(closing, seedSampleTicket)];
 }
 
 function openAssisted(opening: TicketOpening): WriteOperation {
@@ -24,7 +25,7 @@ function openAssisted(opening: TicketOpening): WriteOperation {
     allowedRoles: ['attendant'],
     bodySchema: { fields: { siteId: 'string', carRef: 'string', driverRef: 'string', entryCode: 'string', photoId: 'string' } },
     examples: {
-      valid: { siteId: 'site-1', carRef: 'car-1', driverRef: 'driver-9', entryCode: 'entry-site-1', photoId: 'photo-1' },
+      valid: { siteId: SAMPLE_SITE, carRef: SAMPLE_CAR, driverRef: 'driver-9', entryCode: SAMPLE_ENTRY_CODE, photoId: 'photo-1' },
       invalid: { siteId: 7 },
     },
     async handle({ actor, requestId, body, transaction }) {
@@ -42,7 +43,7 @@ function openAssisted(opening: TicketOpening): WriteOperation {
   };
 }
 
-function closeAssisted(closing: TicketClosing): WriteOperation {
+function closeAssisted(closing: TicketClosing, seedSampleTicket: SampleSeeder): WriteOperation {
   return {
     kind: 'write',
     name: 'ticketing.closeAssistedTicket',
@@ -51,9 +52,10 @@ function closeAssisted(closing: TicketClosing): WriteOperation {
     allowedRoles: ['attendant'],
     bodySchema: { fields: { ticketId: 'string', carRef: 'string', exitCode: 'string', photoId: 'string' } },
     examples: {
-      valid: { ticketId: 'ticket-1', carRef: 'car-1', exitCode: 'exit-site-1', photoId: 'photo-2' },
+      valid: { ticketId: SAMPLE_TICKET, carRef: SAMPLE_CAR, exitCode: SAMPLE_EXIT_CODE, photoId: 'photo-2' },
       invalid: { ticketId: 7 },
     },
+    fixture: seedSampleTicket,
     async handle({ actor, requestId, body, events, transaction }) {
       const closed = await closing.closeAssistedTicket(
         transaction,

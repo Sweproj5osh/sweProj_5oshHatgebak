@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { createTicketingOperations, type PaymentStatus } from '../public';
+import { operations, type PaymentStatus } from '../public';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 
 type World = Awaited<ReturnType<typeof buildTicketingWorld>>;
@@ -121,8 +121,8 @@ describe('B9 payment status on the ticket', () => {
 
   it('exposes no request that changes a payment status', async () => {
     const world = await buildTicketingWorld();
-    const names = createTicketingOperations(world).map((operation) => operation.name);
-    expect(names.filter((name) => /payment|status|waive|dispute/i.test(name))).toEqual([]);
+    const writes = operations(world.dependencies).filter((operation) => operation.kind === 'write').map((operation) => operation.name);
+    expect(writes.filter((name) => /payment|status|waive|dispute/i.test(name))).toEqual([]);
     expect(composeInMemoryApplication).toBeDefined();
   });
 

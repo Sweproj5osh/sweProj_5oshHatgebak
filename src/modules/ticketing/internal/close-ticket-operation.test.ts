@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
-import { createTicketingOperations } from '../public';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
 async function application() {
@@ -11,7 +9,7 @@ async function application() {
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
-    operations: [...foundationOperations, ...createTicketingOperations(world)],
+    moduleDependencies: world.dependencies,
   });
   const opened = await app.handle(writeRequest('/tickets/open', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
   const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;

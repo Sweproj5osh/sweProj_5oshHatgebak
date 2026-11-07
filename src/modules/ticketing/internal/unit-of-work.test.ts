@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
 import { refuse, type WriteOperation } from '../../../shared/operation-contract';
-import { createTicketingOperations, type TicketPaymentStatus } from '../public';
+import type { TicketPaymentStatus } from '../public';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 
 const HOUR = 60 * 60 * 1000;
@@ -50,7 +49,8 @@ describe('ticket writes live inside the caller\'s unit of work (P1)', () => {
     const app = composeInMemoryApplication({
       tokenSecret: TEST_TOKEN_SECRET,
       clock: world.clock,
-      operations: [...foundationOperations, ...createTicketingOperations(world), paymentThatFailsAfterMarkingPaid(world.payments)],
+      moduleDependencies: world.dependencies,
+      additionalOperations: [paymentThatFailsAfterMarkingPaid(world.payments)],
     });
     const opened = await app.handle(writeRequest('/tickets/open', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
     expect(opened.status, JSON.stringify(opened.body)).toBe(201);

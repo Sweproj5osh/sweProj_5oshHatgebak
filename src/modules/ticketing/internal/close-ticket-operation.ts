@@ -1,5 +1,6 @@
 import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
 import type { CloseRefusal, TicketClosing } from '../public';
+import { SAMPLE_EXIT_CODE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 import type { TicketStore } from './ticket-store';
 
 export const STATUS_FOR_CLOSE_REFUSAL: Readonly<Record<CloseRefusal, number>> = {
@@ -20,7 +21,7 @@ export const TICKET_CLOSED_TOPIC = 'ticket.closed';
  * clock's; a refusal rolls the unit of work back, so it leaves no audit entry and no event. A success leaves one audit
  * entry (appended by the entry point) and one "ticket closed" event, stored only when the unit of work commits.
  */
-export function createCloseTicketOperation(closing: TicketClosing, store: TicketStore): Operation {
+export function createCloseTicketOperation(closing: TicketClosing, store: TicketStore, seedSampleTicket: SampleSeeder): Operation {
   const operation: WriteOperation = {
     kind: 'write',
     name: 'ticketing.closeTicket',
@@ -28,7 +29,8 @@ export function createCloseTicketOperation(closing: TicketClosing, store: Ticket
     path: '/tickets/close',
     allowedRoles: ['driver'],
     bodySchema: { fields: { ticketId: 'string', exitCode: 'string' } },
-    examples: { valid: { ticketId: 'ticket-1', exitCode: 'exit-site-1' }, invalid: { ticketId: 7 } },
+    examples: { valid: { ticketId: SAMPLE_TICKET, exitCode: SAMPLE_EXIT_CODE }, invalid: { ticketId: 7 } },
+    fixture: seedSampleTicket,
     async handle({ actor, requestId, body, events, transaction }) {
       const ticketId = String(body['ticketId']);
       const held = await store.findById(transaction, ticketId);

@@ -1,7 +1,8 @@
 /**
- * Ticketing — owner: Teammate B (Area 3). Must-stay-on set.
+ * Ticketing — owner: Karim (Teammate B, Area 3). Must-stay-on set.
  * Open and close by scan, assisted tickets, one open ticket per car, no ticket when full, exit time frozen by the
- * server. Needs SiteRegistry, FeeCalculator, AuditTrail (Q12a: not Authorization or LicenceStatus).
+ * server. Needs the site registry, the fee calculator and price list, car ownership and the plate lookup, all through
+ * narrow ports the composition root fills (Q12a: not Authorization or LicenceStatus; Rule D).
  */
 import type { Operation } from '../../shared/operation-contract';
 import type { FeeCalculator, PriceList } from '../committee-prices/public';
@@ -14,6 +15,7 @@ import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
 import { createAssistedTicketOperations } from './internal/assisted-ticket-operations';
+import { openSampleTicket } from './internal/sample-rows';
 import { createTicketClosingService } from './internal/ticket-closing';
 import { createReadOperations } from './internal/reading-operations';
 import { createTicketCountsService } from './internal/ticket-counts';
@@ -188,6 +190,14 @@ export interface PlateLookup {
   }): Promise<Result<string, 'refused' | 'not resolvable'>>;
 }
 
+/**
+ * Whose car it is. A driver may open a ticket only for a car registered to them (integrity, rank 1); the identity area
+ * holds the cars, so the composition root fills this one question from Lino's PersonalData.
+ */
+export interface CarOwnership {
+  carBelongsTo(carRef: CarReference, personId: PersonId): Promise<boolean>;
+}
+
 export interface TicketReadingDependencies {
   readonly store: TicketStore;
   readonly plates: PlateLookup;
@@ -214,20 +224,28 @@ export function createTicketPaymentStatus(dependencies: { readonly store: Ticket
   return createTicketPaymentStatusService(dependencies.store);
 }
 
-export interface TicketingOperationDependencies {
-  readonly opening: TicketOpening;
-  readonly closing: TicketClosing;
-  readonly store: TicketStore;
-  /** Without it the read requests are not registered. */
-  readonly reading?: TicketReading;
+/** What `operations(dependencies)` needs: the fields of the composition root's `ModuleDependencies` this module reads (P4). */
+export interface TicketingDependencies {
+  readonly carOwnership: CarOwnership;
+  readonly clock: Clock;
+  readonly fees: FeeCalculator;
+  readonly plates: PlateLookup;
+  readonly prices: PriceList;
+  readonly sites: TicketingSites;
+  readonly tickets: TicketStore;
 }
 
-/** The requests this module answers, for the composition root to register. */
-export function createTicketingOperations(dependencies: TicketingOperationDependencies): readonly Operation[] {
+/** The requests this module answers; the composition root calls this once and registers the result (P4). */
+export function operations(dependencies: TicketingDependencies): readonly Operation[] {
+  const { sites, clock, prices, fees, plates, tickets: store } = dependencies;
+  const opening = createTicketOpeningService({ sites, store, clock });
+  const closing = createTicketClosingService({ sites, store, clock, prices, fees });
+  const reading = createTicketReadingService({ store, plates, fees });
+  const counts = createTicketCountsService({ sites, store });
   return [
-    createOpenTicketOperation(dependencies.opening),
-    createCloseTicketOperation(dependencies.closing, dependencies.store),
-    ...createAssistedTicketOperations(dependencies.opening, dependencies.closing),
-    ...(dependencies.reading === undefined ? [] : createReadOperations(dependencies.reading)),
+    createOpenTicketOperation(opening),
+    createCloseTicketOperation(closing, store, openSampleTicket({ clock, prices }, false)),
+    ...createAssistedTicketOperations(opening, closing, openSampleTicket({ clock, prices }, true)),
+    ...createReadOperations(reading, counts),
   ];
 }

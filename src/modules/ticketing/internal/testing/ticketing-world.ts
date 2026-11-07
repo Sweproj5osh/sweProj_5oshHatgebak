@@ -13,6 +13,7 @@ import {
   type ClockedInAttendant,
   type OpenTicketCommand,
   type PaymentStatus,
+  type TicketingDependencies,
   type SiteCodeProblem,
   type TicketingSites,
 } from '../../public';
@@ -48,6 +49,21 @@ export class FakePlates {
     }
     const plate = this.plates.get(request.carRef);
     return plate === undefined ? fail('not resolvable') : succeed(plate);
+  }
+}
+
+/** The identity area's car register: a car belongs to exactly the person it was registered to. */
+export class FakeCarOwnership {
+  private readonly ownerByCar = new Map<string, string>();
+
+  register(carRef: string, ownerRef: string): this {
+    this.ownerByCar.set(carRef, ownerRef);
+    return this;
+  }
+
+  async carBelongsTo(carRef: string, personId: string): Promise<boolean> {
+    await Promise.resolve();
+    return this.ownerByCar.get(carRef) === personId;
   }
 }
 
@@ -144,6 +160,8 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const sites = new FakeSites().withCapacity('site-1', capacity);
   const store = new TableTicketStore();
   const clock = new FixedClock(START);
+  const plates = new FakePlates().withPlate('car-a', 'ABC 123');
+  const cars = new FakeCarOwnership();
   let counter = 0;
   const opening = createTicketOpening({ sites, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
   const prices = createPriceList({ isApproved: () => true });
@@ -154,6 +172,7 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
   const closing = createTicketClosing({ sites, store, clock, prices, fees });
   const payments = createTicketPaymentStatus({ store });
+  const dependencies: TicketingDependencies = { carOwnership: cars, clock, fees, plates, prices, sites, tickets: store };
 
   async function transact<Value>(work: (transaction: Transaction) => Promise<Value>): Promise<Value> {
     const transaction = database.begin();
@@ -177,6 +196,10 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
     payments,
     prices,
     fees,
+    plates,
+    cars,
+    /** The ports as `operations(dependencies)` and the composition root's `moduleDependencies` option take them. */
+    dependencies,
     transact,
     openTicket: (command: OpenTicketCommand) => transact((transaction) => opening.openTicket(transaction, command)),
     openAssistedTicket: (command: OpenTicketCommand, attendant: ClockedInAttendant) =>
