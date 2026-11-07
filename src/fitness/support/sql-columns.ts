@@ -6,13 +6,14 @@ export interface DeclaredColumn {
 
 const CREATE_TABLE = /create\s+table\s+(?:if\s+not\s+exists\s+)?([\w".]+)\s*\(/gi;
 const ADD_COLUMN = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?([\w".]+)\s+add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?("?\w+"?)/gi;
+const RENAME_COLUMN = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?([\w".]+)\s+rename\s+(?:column\s+)?"?\w+"?\s+to\s+("?\w+"?)/gi;
 const CONSTRAINT_KEYWORDS = ['constraint', 'primary', 'unique', 'foreign', 'check', 'exclude', 'like'];
 const DEFAULT_SCHEMA = 'public';
 
-/** Every column declared by CREATE TABLE or ALTER TABLE ... ADD COLUMN in one migration file. */
+/** Every column declared by CREATE TABLE, ALTER TABLE ... ADD COLUMN or ALTER TABLE ... RENAME COLUMN ... TO in one migration file. */
 export function columnsDeclaredIn(sql: string): DeclaredColumn[] {
   const withoutComments = sql.replace(/--[^\n]*/g, '');
-  return [...createdColumns(withoutComments), ...addedColumns(withoutComments)];
+  return [...createdColumns(withoutComments), ...addedColumns(withoutComments), ...renamedColumns(withoutComments)];
 }
 
 function createdColumns(sql: string): DeclaredColumn[] {
@@ -28,6 +29,14 @@ function createdColumns(sql: string): DeclaredColumn[] {
 
 function addedColumns(sql: string): DeclaredColumn[] {
   return [...sql.matchAll(ADD_COLUMN)].map((match) => ({
+    ...splitQualifiedName(match[1] ?? ''),
+    column: unquote(match[2] ?? ''),
+  }));
+}
+
+/** A column renamed INTO a personal name is as much a violation as one created with it. */
+function renamedColumns(sql: string): DeclaredColumn[] {
+  return [...sql.matchAll(RENAME_COLUMN)].map((match) => ({
     ...splitQualifiedName(match[1] ?? ''),
     column: unquote(match[2] ?? ''),
   }));

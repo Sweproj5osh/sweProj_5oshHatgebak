@@ -52,12 +52,14 @@ describe('each fitness function fails on its planted violation', () => {
     expect(result.violations[0]).toContain('ticketing reaches may-fail module notifications');
   });
 
-  it('F10 catches plate and phone columns outside personal_data, in CREATE TABLE and ALTER TABLE', async () => {
+  it('F10 catches personal columns in CREATE TABLE, ALTER TABLE ADD, a quoted camelCase name and RENAME COLUMN ... TO', async () => {
     const result = await f10PersonalDataColumnsStayInTheirSchema(fixture('f10-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations.map((violation) => violation.split(': ')[1]?.split(' ')[0])).toEqual([
       'ticketing.tickets.plate',
       'ticketing.tickets.driver_phone',
+      'ticketing.receipts.driverName',
+      'ticketing.tickets.plate',
     ]);
   });
 
@@ -101,6 +103,12 @@ describe('SQL column scanner', () => {
     expect(columnsDeclaredIn(sql)).toEqual([
       { schema: 'personal_data', table: 'people', column: 'id' },
       { schema: 'personal_data', table: 'people', column: 'full_name' },
+    ]);
+  });
+
+  it('reads the new name of a renamed column', () => {
+    expect(columnsDeclaredIn('ALTER TABLE ticketing.tickets RENAME COLUMN car_ref TO plate;')).toEqual([
+      { schema: 'ticketing', table: 'tickets', column: 'plate' },
     ]);
   });
 
