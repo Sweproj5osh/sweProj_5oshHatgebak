@@ -1,7 +1,8 @@
 import type { AuditActor, AuditEntry } from '../modules/audit-log/public';
-import { refuse, type AuditRedaction, type HttpResponse, type WriteOutcome } from '../shared/operation-contract';
+import type { AuditRedaction, HttpResponse, WriteOutcome } from '../shared/operation-contract';
 import type { RequestId } from '../shared/request-id';
 import { redactForAudit, type AuditInput } from './audit-redaction';
+import { internalFailure } from './internal-failure';
 import type { UnitOfWorkResources, UnitOfWorkResourcesFactory } from './unit-of-work-resources';
 
 /** One action that changes state and must leave exactly one audit entry: a write, a public write, a logged read. */
@@ -25,7 +26,7 @@ export async function runAudited(execution: AuditedExecution, factory: UnitOfWor
     return await settle(execution, outcome, resources);
   } catch (error) {
     await resources.transaction.rollback();
-    return refuse(500, `${execution.operationName} failed and was rolled back`, { cause: describe(error) });
+    return internalFailure(execution.operationName, error);
   }
 }
 
@@ -48,8 +49,4 @@ function auditEntryFor(execution: AuditedExecution, outcome: WriteOutcome): Audi
     requestId: execution.requestId,
     ...detail,
   };
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -2,6 +2,7 @@ import type { Actor } from '../shared/identifiers';
 import { refuse, respond, type HttpResponse, type TelemetryOperation } from '../shared/operation-contract';
 import type { RateLimiter } from '../shared/rate-limiter';
 import type { HttpRequest } from './http';
+import { internalFailure } from './internal-failure';
 import { TELEMETRY_READINGS_PER_PERSON, TOO_MANY_ATTEMPTS } from './rate-limits';
 import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
 import { admitBody } from './intake';
@@ -37,6 +38,6 @@ export async function handleTelemetry(
     return respond(204, undefined);
   } catch (error) {
     await transaction.rollback();
-    return refuse(500, `${operation.name} failed and was rolled back`, { cause: error instanceof Error ? error.message : String(error) });
+    return internalFailure(operation.name, error);
   }
 }

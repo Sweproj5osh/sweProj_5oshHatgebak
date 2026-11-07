@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { respond, type AuditDetail, type AuditRedaction, type WriteOperation } from '../shared/operation-contract';
 import { testApplication, writeRequest } from './test-helpers';
 
@@ -40,11 +40,13 @@ describe('declared audit redaction (P2, ADR-14)', () => {
     expect(JSON.stringify(entry)).not.toContain('ABC 123');
   });
 
-  it('replace without the promised reference is a programming error: 500, rolled back, no entry', async () => {
+  it('replace without the promised reference is a programming error: 500, rolled back, no entry, cause in the server log', async () => {
+    const serverLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { response, entry } = await auditInputAfter(addCar({ replace: { plate: 'carRef' } }));
     expect(response.status).toBe(500);
-    expect(JSON.stringify(response.body)).toContain('carRef');
+    expect(serverLog.mock.calls.join('\n')).toContain('returned no "carRef"');
     expect(entry).toBeUndefined();
+    serverLog.mockRestore();
   });
 
   it('no rule: the body is copied whole, as before', async () => {
