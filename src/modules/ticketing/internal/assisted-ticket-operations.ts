@@ -1,16 +1,19 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, WriteOperation } from '../../../entrypoint/operations/operation';
-import type { TicketClosing, TicketOpening } from '../public';
-import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC } from './close-ticket-operation';
+import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
+import type { Actor } from '../../../shared/identifiers';
+import type { ClockedInAttendant, TicketClosing, TicketOpening } from '../public';
+import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC, feeAuditDetail } from './close-ticket-operation';
 import { STATUS_FOR_OPEN_REFUSAL } from './open-ticket-operation';
+import { SAMPLE_CAR, SAMPLE_ENTRY_CODE, SAMPLE_EXIT_CODE, SAMPLE_SITE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 
 /**
- * The two requests an attendant uses for a driver without a phone. The photo reference is recorded in the audit
- * entry through the request body; the body schema has no optional field, so an empty text means no photo. The Staff
- * App is where a photo is made mandatory, because the photo store may fail without stopping parking (ADR-03).
+ * The two requests an attendant uses for a driver without a phone. The attendant is proven by the entry point: the
+ * token names them and `actor.boundSiteId` is the site their clock-in bound the session to (P26 Q4); both requests are
+ * refused unless that site is the ticket's. The photo reference is recorded in the audit entry through the request
+ * body; the body schema has no optional field, so an empty text means no photo. The Staff App is where a photo is made
+ * mandatory, because the photo store may fail without stopping parking (ADR-03).
  */
-export function createAssistedTicketOperations(opening: TicketOpening, closing: TicketClosing): readonly Operation[] {
-  return [openAssisted(opening), closeAssisted(closing)];
+export function createAssistedTicketOperations(opening: TicketOpening, closing: TicketClosing, seedSampleTicket: SampleSeeder): readonly Operation[] {
+  return [openAssisted(opening), closeAssisted(closing, seedSampleTicket)];
 }
 
 function openAssisted(opening: TicketOpening): WriteOperation {
@@ -22,14 +25,15 @@ function openAssisted(opening: TicketOpening): WriteOperation {
     allowedRoles: ['attendant'],
     bodySchema: { fields: { siteId: 'string', carRef: 'string', driverRef: 'string', entryCode: 'string', photoId: 'string' } },
     examples: {
-      valid: { siteId: 'site-1', carRef: 'car-1', driverRef: 'driver-9', entryCode: 'entry-site-1', photoId: 'photo-1' },
+      valid: { siteId: SAMPLE_SITE, carRef: SAMPLE_CAR, driverRef: 'driver-9', entryCode: SAMPLE_ENTRY_CODE, photoId: 'photo-1' },
       invalid: { siteId: 7 },
     },
-    async handle({ actor, requestId, body }) {
+    async handle({ actor, requestId, body, transaction }) {
       const driverRef = String(body['driverRef']);
       const opened = await opening.openAssistedTicket(
+        transaction,
         { requestId, driverRef, carRef: String(body['carRef']), siteId: String(body['siteId']), entryCode: String(body['entryCode']) },
-        actor.personId,
+        clockedInAttendant(actor),
       );
       if (!opened.ok) {
         return { response: refuse(STATUS_FOR_OPEN_REFUSAL[opened.error], opened.error) };
@@ -39,7 +43,7 @@ function openAssisted(opening: TicketOpening): WriteOperation {
   };
 }
 
-function closeAssisted(closing: TicketClosing): WriteOperation {
+function closeAssisted(closing: TicketClosing, seedSampleTicket: SampleSeeder): WriteOperation {
   return {
     kind: 'write',
     name: 'ticketing.closeAssistedTicket',
@@ -48,15 +52,17 @@ function closeAssisted(closing: TicketClosing): WriteOperation {
     allowedRoles: ['attendant'],
     bodySchema: { fields: { ticketId: 'string', carRef: 'string', exitCode: 'string', photoId: 'string' } },
     examples: {
-      valid: { ticketId: 'ticket-1', carRef: 'car-1', exitCode: 'exit-site-1', photoId: 'photo-2' },
+      valid: { ticketId: SAMPLE_TICKET, carRef: SAMPLE_CAR, exitCode: SAMPLE_EXIT_CODE, photoId: 'photo-2' },
       invalid: { ticketId: 7 },
     },
-    async handle({ actor, requestId, body, events }) {
+    fixture: seedSampleTicket,
+    async handle({ actor, requestId, body, events, transaction }) {
       const closed = await closing.closeAssistedTicket(
+        transaction,
         requestId,
         String(body['ticketId']),
         String(body['exitCode']),
-        actor.personId,
+        clockedInAttendant(actor),
         String(body['carRef']),
       );
       if (!closed.ok) {
@@ -67,7 +73,11 @@ function closeAssisted(closing: TicketClosing): WriteOperation {
         topic: TICKET_CLOSED_TOPIC,
         payload: { ticketId: value.ticketId, siteId: value.siteId, driverRef: value.driverRef, closedAt: value.closedAt, fee: value.fee },
       });
-      return { response: respond(200, { ticket: value }), audit: { subjectPersonIds: [value.driverRef] } };
+      return { response: respond(200, { ticket: value }), audit: { ...feeAuditDetail(value), subjectPersonIds: [value.driverRef] } };
     },
   };
+}
+
+function clockedInAttendant(actor: Actor): ClockedInAttendant {
+  return actor.boundSiteId === undefined ? { attendantId: actor.personId } : { attendantId: actor.personId, boundSiteId: actor.boundSiteId };
 }

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createPriceList, type PriceLookup, type PriceVersion } from '../../modules/committee-prices/public';
+import { createPriceList, type PriceLookup, type PriceVersion } from '../public';
 
 /**
  * Task B3: dated price versions. The price list returns the version valid at a given moment and accepts a new version
- * only when the approvals area vouches for it. The tests live outside src/modules/committee-prices for the same reason
- * as the fee calculator tests: fitness function F1 forbids that folder from importing the test runner.
+ * only when the approvals area vouches for it.
  */
 
 function priceVersion(overrides: Partial<PriceVersion> = {}): PriceVersion {
@@ -194,6 +193,9 @@ describe('B3 accepting new versions only from the approvals area', () => {
       ['a negative later-hour fee', { eachLaterHourFee: -5 }],
       ['a negative daily cap', { dailyCap: -50 }],
       ['a fee that is not a whole number of pounds', { firstHourFee: 10.5 }],
+      ['a later-hour fee that is not a whole number of pounds', { eachLaterHourFee: 2.5 }],
+      ['a cap that is not a whole number of pounds', { dailyCap: 49.99 }],
+      ['an infinite cap', { dailyCap: Number.POSITIVE_INFINITY }],
       ['a fee that is not a number', { dailyCap: Number.NaN }],
     ];
 

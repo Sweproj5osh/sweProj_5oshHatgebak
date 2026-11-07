@@ -113,7 +113,7 @@ describe('F5 runs an operation\'s fixture before its sample request', () => {
 });
 
 async function expectOneAuditRowForTheValidExample(application: InMemoryApplication, operation: AuditedWrite): Promise<void> {
-  await operation.fixture?.(application.database);
+  await fixtureOf(application, operation)?.(application.database);
   const response = await application.handle(sampleRequest(operation, 'request-valid-1', operation.examples.valid));
   expect(response.status, JSON.stringify(response.body)).toBeLessThan(400);
   const rows = await application.audit.readByScope({ personId: 'chair-1', role: 'chair' });
@@ -125,6 +125,12 @@ async function expectNoAuditRowForTheInvalidExample(application: InMemoryApplica
   const response = await application.handle(sampleRequest(operation, 'request-invalid-1', operation.examples.invalid));
   expect(response.status).toBeGreaterThanOrEqual(400);
   expect(await application.audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(0);
+}
+
+/** The fixture of the application that answers the request: a fixture may close over that composition's own state (a module's price list, for example). */
+function fixtureOf(application: InMemoryApplication, operation: AuditedWrite): AuditedWrite['fixture'] {
+  const composedHere = application.registry.find(operation.method, operation.path);
+  return composedHere !== undefined && 'fixture' in composedHere ? composedHere.fixture : undefined;
 }
 
 function sampleRequest(operation: AuditedWrite, requestId: string, body: unknown): HttpRequest {

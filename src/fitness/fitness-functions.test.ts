@@ -28,10 +28,12 @@ describe('fitness functions pass on this repository', () => {
 });
 
 describe('each fitness function fails on its planted violation', () => {
-  it('F1 catches committee-prices importing ticketing and node:crypto', async () => {
+  it('F1 catches a production file of committee-prices importing ticketing and node:crypto, and skips the test file beside it', async () => {
     const result = await f1CommitteePricesIsPure(fixture('f1-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations).toHaveLength(2);
+    expect(result.violations.every((violation) => violation.startsWith('src/modules/committee-prices/internal/leaky-fee-calculator.ts'))).toBe(true);
+    expect(result.checked).toBe(1);
   });
 
   it('F2 catches an import of another module\'s internal file', async () => {

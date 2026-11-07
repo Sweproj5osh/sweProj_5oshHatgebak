@@ -2,29 +2,29 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { createTicketingOperations, type PaymentStatus } from '../public';
+import { operations, type PaymentStatus } from '../public';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 
 type World = Awaited<ReturnType<typeof buildTicketingWorld>>;
 
 async function closedTicket(world: World, carRef = 'car-a') {
-  const opened = await world.opening.openTicket(openCommand({ carRef }));
+  const opened = await world.openTicket(openCommand({ carRef }));
   if (!opened.ok) throw new Error('open failed');
   world.clock.advanceByMilliseconds(60 * 60 * 1000);
-  const closed = await world.closing.closeTicket(`close-${carRef}`, opened.value.ticketId, 'exit-site-1');
+  const closed = await world.closeTicket(`close-${carRef}`, opened.value.ticketId, 'exit-site-1');
   if (!closed.ok) throw new Error('close failed');
   return closed.value;
 }
 
 async function openTicketOnly(world: World, carRef = 'car-open') {
-  const opened = await world.opening.openTicket(openCommand({ carRef }));
+  const opened = await world.openTicket(openCommand({ carRef }));
   if (!opened.ok) throw new Error('open failed');
   return opened.value;
 }
 
 let counter = 0;
 const change = (world: World, ticketId: string, to: PaymentStatus | string, requestId = `payment-request-${(counter += 1)}`) =>
-  world.payments.changePaymentStatus(requestId, ticketId, to as PaymentStatus);
+  world.changePaymentStatus(requestId, ticketId, to as PaymentStatus);
 
 describe('B9 payment status on the ticket', () => {
   it('marks a closed ticket paid and leaves its state closed', async () => {
@@ -39,7 +39,7 @@ describe('B9 payment status on the ticket', () => {
     for (const to of ['paid', 'disputed', 'waived']) {
       expect(await change(world, ticket.ticketId, to)).toEqual({ ok: false, error: 'ticket not closed' });
     }
-    expect((await world.store.findById(ticket.ticketId))?.paymentStatus).toBe('unpaid');
+    expect((await world.findById(ticket.ticketId))?.paymentStatus).toBe('unpaid');
   });
 
   it('allows unpaid to disputed, and unpaid to waived', async () => {
@@ -67,7 +67,7 @@ describe('B9 payment status on the ticket', () => {
     for (const to of ['disputed', 'waived', 'unpaid']) {
       expect(await change(world, ticket.ticketId, to)).toEqual({ ok: false, error: 'status change not allowed' });
     }
-    expect((await world.store.findById(ticket.ticketId))?.paymentStatus).toBe('paid');
+    expect((await world.findById(ticket.ticketId))?.paymentStatus).toBe('paid');
   });
 
   it('never moves a waived ticket', async () => {
@@ -90,7 +90,7 @@ describe('B9 payment status on the ticket', () => {
     const ticket = await closedTicket(world);
     const invented = ['left', 'unpaid'].join(' ');
     expect(await change(world, ticket.ticketId, invented)).toEqual({ ok: false, error: 'status change not allowed' });
-    expect((await world.store.findById(ticket.ticketId))?.paymentStatus).toBe('unpaid');
+    expect((await world.findById(ticket.ticketId))?.paymentStatus).toBe('unpaid');
   });
 
   it('refuses an unknown ticket', async () => {
@@ -108,16 +108,21 @@ describe('B9 payment status on the ticket', () => {
   it('lets exactly one of two simultaneous changes win', async () => {
     const world = await buildTicketingWorld();
     const ticket = await closedTicket(world);
-    const results = await Promise.all([change(world, ticket.ticketId, 'paid'), change(world, ticket.ticketId, 'waived')]);
+    const results = await world.transact((transaction) =>
+      Promise.all([
+        world.payments.changePaymentStatus(transaction, 'payment-race-1', ticket.ticketId, 'paid'),
+        world.payments.changePaymentStatus(transaction, 'payment-race-2', ticket.ticketId, 'waived'),
+      ]),
+    );
     expect(results.filter((result) => result.ok)).toHaveLength(1);
-    const status = (await world.store.findById(ticket.ticketId))?.paymentStatus;
+    const status = (await world.findById(ticket.ticketId))?.paymentStatus;
     expect(['paid', 'waived']).toContain(status);
   });
 
   it('exposes no request that changes a payment status', async () => {
     const world = await buildTicketingWorld();
-    const names = createTicketingOperations(world).map((operation) => operation.name);
-    expect(names.filter((name) => /payment|status|waive|dispute/i.test(name))).toEqual([]);
+    const writes = operations(world.dependencies).filter((operation) => operation.kind === 'write').map((operation) => operation.name);
+    expect(writes.filter((name) => /payment|status|waive|dispute/i.test(name))).toEqual([]);
     expect(composeInMemoryApplication).toBeDefined();
   });
 

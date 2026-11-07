@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
-import { createTicketingOperations } from '../public';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
-async function application() {
-  const world = await buildTicketingWorld();
+async function application(options: Parameters<typeof buildTicketingWorld>[1] = {}) {
+  const world = await buildTicketingWorld(5, options);
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
-    operations: [...foundationOperations, ...createTicketingOperations(world)],
+    moduleDependencies: world.dependencies,
   });
   const opened = await app.handle(writeRequest('/tickets/open', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
   const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;
@@ -35,6 +33,15 @@ describe('closing a ticket through the entry point', () => {
     expect(rows.map((row) => row.operation)).toEqual(['ticketing.openTicket', 'ticketing.closeTicket']);
     const events = await app.outbox.undelivered();
     expect(events.map((event) => event.topic)).toEqual(['ticket.closed']);
+  });
+
+  it('writes a failed resident lookup into the audit entry\'s reason, and charges the normal fee', async () => {
+    const { app, ticketId } = await application({ residentLookupFails: true });
+    const response = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId)));
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ ticket: { fee: 15 } });
+    const closeEntry = (await auditRows(app)).find((row) => row.operation === 'ticketing.closeTicket');
+    expect(closeEntry?.reason).toBe('resident check failed, normal fee charged: registrations unavailable');
   });
 
   it('leaves no audit entry and no event for a refused close', async () => {
@@ -64,7 +71,7 @@ describe('closing a ticket through the entry point', () => {
       body: closeBody(ticketId),
     });
     expect(response.status).toBe(403);
-    expect((await store.findById(ticketId))?.state).toBe('open');
+    expect((await store.findById(app.database, ticketId))?.state).toBe('open');
   });
 
   it('rejects a body that carries a time', async () => {

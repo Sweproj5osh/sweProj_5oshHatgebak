@@ -99,7 +99,7 @@ export interface Payments {
 export function createPayments(dependencies: PaymentsDependencies): Payments {
   const inFlight = new InFlightAttempts();
   const ledgerBoundTo: Payments['ledgerBoundTo'] = (transaction, events) =>
-    new PaymentLedgerService({ ...dependencies, inFlight }, new TableAccessPaymentStore(transaction), events);
+    new PaymentLedgerService({ ...dependencies, inFlight }, new TableAccessPaymentStore(transaction), events, transaction);
   return { ledgerBoundTo, operations: [payInAppOperation({ ledgerBoundTo })] };
 }
 

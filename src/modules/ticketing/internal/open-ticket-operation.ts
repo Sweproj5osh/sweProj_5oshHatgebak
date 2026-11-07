@@ -1,6 +1,6 @@
-import { refuse, respond } from '../../../entrypoint/http';
-import type { Operation, WriteOperation } from '../../../entrypoint/operations/operation';
+import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
 import type { OpenRefusal, TicketOpening } from '../public';
+import { SAMPLE_CAR, SAMPLE_ENTRY_CODE, SAMPLE_SITE } from './sample-rows';
 
 export const STATUS_FOR_OPEN_REFUSAL: Readonly<Record<OpenRefusal, number>> = {
   'forged code': 403,
@@ -8,7 +8,8 @@ export const STATUS_FOR_OPEN_REFUSAL: Readonly<Record<OpenRefusal, number>> = {
   'site closed': 409,
   'car already parked': 409,
   'site full': 409,
-  'attendant not assigned to this site': 403,
+  'attendant not clocked in at this site': 403,
+  'car not registered to this driver': 403,
 };
 
 /**
@@ -24,9 +25,9 @@ export function createOpenTicketOperation(opening: TicketOpening): Operation {
     path: '/tickets/open',
     allowedRoles: ['driver'],
     bodySchema: { fields: { siteId: 'string', carRef: 'string', entryCode: 'string' } },
-    examples: { valid: { siteId: 'site-1', carRef: 'car-1', entryCode: 'entry-site-1' }, invalid: { siteId: 7 } },
-    async handle({ actor, requestId, body }) {
-      const opened = await opening.openTicket({
+    examples: { valid: { siteId: SAMPLE_SITE, carRef: SAMPLE_CAR, entryCode: SAMPLE_ENTRY_CODE }, invalid: { siteId: 7 } },
+    async handle({ actor, requestId, body, transaction }) {
+      const opened = await opening.openTicket(transaction, {
         requestId,
         driverRef: actor.personId,
         carRef: String(body['carRef']),

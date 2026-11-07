@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
-import { createTicketingOperations } from '../public';
-import { buildTicketingWorld } from './testing/ticketing-world';
+import { buildTicketingWorld, clockedIn } from './testing/ticketing-world';
 
-async function application() {
+/** The attendant of the test token (`attendant-1`) is clocked in at site-1 unless a test binds them elsewhere. */
+async function application(boundSites: Readonly<Record<string, string>> = { 'attendant-1': 'site-1' }) {
   const world = await buildTicketingWorld();
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
-    operations: [...foundationOperations, ...createTicketingOperations(world)],
+    accessChecks: clockedIn(boundSites),
+    moduleDependencies: world.dependencies,
   });
   return { ...world, app };
 }
@@ -37,12 +37,19 @@ describe('assisted tickets through the entry point', () => {
     expect(await audit(app)).toHaveLength(0);
   });
 
-  it('leaves no audit entry for a refusal', async () => {
-    const { app, assignments } = await application();
-    assignments.assign('attendant-1', 'site-9');
+  it('refuses an attendant whose session is bound to another site, and leaves no audit entry', async () => {
+    const { app } = await application({ 'attendant-1': 'site-9' });
     const response = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
     expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'attendant not clocked in at this site' });
     expect(await audit(app)).toHaveLength(0);
+  });
+
+  it('refuses an attendant who has not clocked in anywhere', async () => {
+    const { app } = await application({});
+    const response = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'attendant not clocked in at this site' });
   });
 
   it('closes it with one more audit entry and one "ticket closed" event, and refuses a wrong car without either', async () => {

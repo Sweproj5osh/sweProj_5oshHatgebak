@@ -1,8 +1,22 @@
+import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../../../committee-prices/public';
 import { FixedClock } from '../../../../shared/clock';
-import type { SiteId } from '../../../../shared/identifiers';
+import type { SiteId, TicketId } from '../../../../shared/identifiers';
+import type { RequestId } from '../../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../../shared/result';
-import { createTicketClosing, createTicketOpening, createTicketPaymentStatus, InMemoryTicketStore, type OpenTicketCommand, type SiteCodeProblem, type TicketingSites } from '../../public';
+import type { Transaction } from '../../../../shared/unit-of-work';
+import {
+  createTicketClosing,
+  createTicketOpening,
+  createTicketPaymentStatus,
+  TableTicketStore,
+  type ClockedInAttendant,
+  type OpenTicketCommand,
+  type PaymentStatus,
+  type TicketingDependencies,
+  type SiteCodeProblem,
+  type TicketingSites,
+} from '../../public';
 
 export interface PlateRequest {
   readonly carRef: string;
@@ -38,19 +52,42 @@ export class FakePlates {
   }
 }
 
-/** Who works where: an attendant is assigned to at most one site. */
-export class FakeAssignments {
-  private readonly sites = new Map<string, string>();
+/**
+ * The identity area's car register. A registered car belongs to exactly the person it was registered to; a car nobody
+ * registered belongs to whoever asks, so the many tests that invent car references need no registration step. A test
+ * about ownership registers the car it names.
+ */
+export class FakeCarOwnership {
+  private readonly ownerByCar = new Map<string, string>();
 
-  assign(attendantId: string, siteId: string): this {
-    this.sites.set(attendantId, siteId);
+  register(carRef: string, ownerRef: string): this {
+    this.ownerByCar.set(carRef, ownerRef);
     return this;
   }
 
-  async isAssignedTo(attendantId: string, siteId: string): Promise<boolean> {
+  async carBelongsTo(carRef: string, personId: string): Promise<boolean> {
     await Promise.resolve();
-    return this.sites.get(attendantId) === siteId;
+    const owner = this.ownerByCar.get(carRef);
+    return owner === undefined || owner === personId;
   }
+}
+
+/** The attendants as the entry point would prove them: clocked in at site-1, at site-2, or nowhere. */
+export const ATTENDANT_AT_SITE_1: ClockedInAttendant = { attendantId: 'attendant-1', boundSiteId: 'site-1' };
+export const ATTENDANT_AT_SITE_2: ClockedInAttendant = { attendantId: 'attendant-2', boundSiteId: 'site-2' };
+export const ATTENDANT_CLOCKED_OUT: ClockedInAttendant = { attendantId: 'attendant-unknown' };
+
+/**
+ * Access checks for the in-memory application: everyone is live, and each named person's session is bound to the site
+ * given here (the stand-in for Lino's clock-in, P26 Q4). The shape is `AccessChecks` from the entry point, left
+ * unnamed so this support file imports nothing from `src/entrypoint` (F2).
+ */
+export function clockedIn(boundSites: Readonly<Record<string, string>>) {
+  return {
+    may: async () => true,
+    liveStatus: async () => 'active' as const,
+    boundSite: async (personId: string) => boundSites[personId],
+  };
 }
 
 /** A site registry stand-in: codes are "entry-<site>" and "exit-<site>", and each site is open or closed by hand. */
@@ -116,24 +153,80 @@ export interface WorldOptions {
   readonly withPrice?: boolean;
   /** Cars registered as residents at site-1. */
   readonly residents?: readonly string[];
+  /** Whether the resident lookup fails instead of answering (the identity area down). */
+  readonly residentLookupFails?: boolean;
 }
 
+/**
+ * The ticketing module over an in-memory database, with its ports faked. Each wrapper below (`openTicket`, `closeTicket`,
+ * …) runs one call in its own unit of work and commits, as one request through the entry point would (ADR-13); a test
+ * that needs several calls in one transaction uses `transact` directly.
+ */
 export async function buildTicketingWorld(capacity = 5, options: WorldOptions = {}) {
+  const database = new InMemoryDatabase();
   const sites = new FakeSites().withCapacity('site-1', capacity);
-  const store = new InMemoryTicketStore();
+  const store = new TableTicketStore();
   const clock = new FixedClock(START);
+  const plates = new FakePlates().withPlate('car-a', 'ABC 123');
+  const cars = new FakeCarOwnership();
   let counter = 0;
-  const assignments = new FakeAssignments().assign('attendant-1', 'site-1').assign('attendant-2', 'site-2');
-  const opening = createTicketOpening({ sites, store, clock, assignments, newTicketId: () => `ticket-${(counter += 1)}` });
+  const opening = createTicketOpening({ sites, carOwnership: cars, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
   const prices = createPriceList({ isApproved: () => true });
   if (options.withPrice !== false) {
     await prices.applyApprovedVersion(PRICE, 'approval-1');
   }
   const residents = options.residents ?? [];
-  const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
-  const closing = createTicketClosing({ sites, store, clock, prices, fees, assignments });
+  const fees = createFeeCalculator({
+    isResident: (carRef, siteId) => {
+      if (options.residentLookupFails === true) {
+        throw new Error('registrations unavailable');
+      }
+      return siteId === 'site-1' && residents.includes(carRef);
+    },
+  });
+  const closing = createTicketClosing({ sites, store, clock, prices, fees });
   const payments = createTicketPaymentStatus({ store });
-  return { sites, store, clock, opening, closing, payments, prices, assignments, fees };
+  const dependencies: TicketingDependencies = { carOwnership: cars, clock, fees, plates, prices, sites, tickets: store };
+
+  async function transact<Value>(work: (transaction: Transaction) => Promise<Value>): Promise<Value> {
+    const transaction = database.begin();
+    try {
+      const value = await work(transaction);
+      await transaction.commit();
+      return value;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  return {
+    database,
+    sites,
+    store,
+    clock,
+    opening,
+    closing,
+    payments,
+    prices,
+    fees,
+    plates,
+    cars,
+    /** The ports as `operations(dependencies)` and the composition root's `moduleDependencies` option take them. */
+    dependencies,
+    transact,
+    openTicket: (command: OpenTicketCommand) => transact((transaction) => opening.openTicket(transaction, command)),
+    openAssistedTicket: (command: OpenTicketCommand, attendant: ClockedInAttendant) =>
+      transact((transaction) => opening.openAssistedTicket(transaction, command, attendant)),
+    closeTicket: (requestId: RequestId, ticketId: TicketId, exitCode: string) =>
+      transact((transaction) => closing.closeTicket(transaction, requestId, ticketId, exitCode)),
+    closeAssistedTicket: (requestId: RequestId, ticketId: TicketId, exitCode: string, attendant: ClockedInAttendant, carRef: string) =>
+      transact((transaction) => closing.closeAssistedTicket(transaction, requestId, ticketId, exitCode, attendant, carRef)),
+    changePaymentStatus: (requestId: RequestId, ticketId: TicketId, to: PaymentStatus) =>
+      transact((transaction) => payments.changePaymentStatus(transaction, requestId, ticketId, to)),
+    findById: (ticketId: TicketId) => store.findById(database, ticketId),
+    countOpen: (siteId: SiteId) => store.countOpen(database, siteId),
+  };
 }
 
 let requestCounter = 0;

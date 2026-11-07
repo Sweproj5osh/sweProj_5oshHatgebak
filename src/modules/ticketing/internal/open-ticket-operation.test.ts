@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
 import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from '../../../entrypoint/handle-request';
-import { createTicketingOperations } from '../public';
 import { buildTicketingWorld, START } from './testing/ticketing-world';
 
 async function application() {
@@ -11,7 +9,7 @@ async function application() {
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
-    operations: [...foundationOperations, ...createTicketingOperations(world)],
+    moduleDependencies: world.dependencies,
   });
   return { ...world, app };
 }
@@ -58,6 +56,15 @@ describe('opening a ticket through the entry point', () => {
     const second = await app.handle(writeRequest('/tickets/open', 'driver', 'request-id-1', body));
     expect(second).toEqual(first);
     expect(await auditRows(app)).toHaveLength(1);
+  });
+
+  it('answers 403 and leaves no audit entry when the car is registered to someone else', async () => {
+    const { app, cars } = await application();
+    cars.register('car-a', 'driver-2');
+    const response = await app.handle(writeRequest('/tickets/open', 'driver', 'request-id-1', body));
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'car not registered to this driver' });
+    expect(await auditRows(app)).toHaveLength(0);
   });
 
   it('does not let an attendant open a driver ticket', async () => {
