@@ -8,6 +8,8 @@ export interface HttpRequest {
   readonly query: Readonly<Record<string, string>>;
   /** Header names lower-cased. */
   readonly headers: Readonly<Record<string, string>>;
+  /** The client's network address, as the socket reports it: the only identity a public operation has (ADR-15). */
+  readonly address: string;
   /** The parsed JSON body, or undefined when the request carried none. */
   readonly body?: unknown;
 }

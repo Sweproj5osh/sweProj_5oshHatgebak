@@ -1,6 +1,7 @@
 import { InMemoryAuditLogStore } from '../adapters/in-memory/in-memory-audit-log-store';
 import { InMemoryDatabase } from '../adapters/in-memory/in-memory-database';
 import { InMemoryOutboxStore } from '../adapters/in-memory/in-memory-outbox-store';
+import { InMemorySlidingWindowRateLimiter } from '../adapters/in-memory/in-memory-rate-limiter';
 import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-store';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/audit-log/public';
 import { SystemClock, type Clock } from '../shared/clock';
@@ -11,7 +12,7 @@ import { PermissionTable } from './auth/permission-table';
 import { createRequestHandler, type RequestHandler } from './handle-request';
 import { foundationOperations } from './operations/foundation-operations';
 import { OperationRegistry } from './operations/registry';
-import type { WriteResourcesFactory } from './write-resources';
+import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
 
 /** What the modules' `operations(dependencies)` exports need. Each owner adds the fields their module needs (P4). */
 export interface ModuleDependencies {
@@ -64,7 +65,7 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
   const registry = composeRegistry({ audit }, options.additionalOperations);
   const permissions = new PermissionTable(registry.all());
-  const writeResources: WriteResourcesFactory = {
+  const resources: UnitOfWorkResourcesFactory = {
     begin() {
       const transaction = database.begin();
       return {
@@ -78,8 +79,9 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
     registry,
     permissions,
     tokenSecret: options.tokenSecret,
-    writeResources,
+    resources,
     responses: new InMemoryResponseStore(),
+    rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
   });
   return {
     handle,

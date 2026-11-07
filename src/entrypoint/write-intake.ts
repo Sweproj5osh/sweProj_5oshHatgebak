@@ -1,0 +1,55 @@
+import { validateBody, type BodySchema, type ValidBody } from '../shared/body-schema';
+import { refuse, type HttpResponse } from '../shared/operation-contract';
+import { isWellFormedRequestId, REQUEST_ID_HEADER, type RequestId } from '../shared/request-id';
+import { fail, succeed, type Result } from '../shared/result';
+import { findTimestampFields } from '../shared/timestamp-fields';
+import type { HttpRequest } from './http';
+import { responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
+
+export const TIMESTAMPS_ARE_SET_BY_THE_SERVER = 'timestamps are set by the server';
+
+/** A write the pipeline has admitted: well-formed request id, clean body, not a repeat. */
+export interface AdmittedWrite {
+  readonly requestId: RequestId;
+  readonly body: ValidBody;
+  readonly responseKey: string;
+}
+
+/**
+ * The checks every write passes before any unit of work opens, in order: request id → server clock rule → body schema
+ * → repeat check (Rule H, Rule I). The failure side carries the answer to send instead: a refusal, or the stored
+ * response of an earlier identical write.
+ */
+export async function admitWrite(
+  request: HttpRequest,
+  schema: BodySchema,
+  responseOwner: string,
+  responses: ResponseStore,
+): Promise<Result<AdmittedWrite, HttpResponse>> {
+  const requestId = request.headers[REQUEST_ID_HEADER];
+  if (!isWellFormedRequestId(requestId)) {
+    return fail(refuse(400, `every write needs a well-formed ${REQUEST_ID_HEADER} header (8 to 128 letters, digits, - or _)`));
+  }
+  const timestampFields = findTimestampFields(request.body);
+  if (timestampFields.length > 0) {
+    return fail(refuse(400, TIMESTAMPS_ARE_SET_BY_THE_SERVER, { fields: timestampFields }));
+  }
+  const body = validateBody(schema, request.body);
+  if (!body.ok) {
+    return fail(refuse(400, 'body does not match the operation schema', { problems: body.error }));
+  }
+  const responseKey = responseKeyFor(responseOwner, requestId);
+  const earlier = await responses.find(responseKey);
+  if (earlier !== undefined) {
+    return fail(earlier);
+  }
+  return succeed({ requestId, body: body.value, responseKey });
+}
+
+/** Only a committed write's response is stored, so a refusal or a rolled-back failure is re-evaluated on retry. */
+export async function rememberIfCommitted(admitted: AdmittedWrite, response: HttpResponse, responses: ResponseStore): Promise<HttpResponse> {
+  if (response.status < 400) {
+    await responses.save(admitted.responseKey, response);
+  }
+  return response;
+}

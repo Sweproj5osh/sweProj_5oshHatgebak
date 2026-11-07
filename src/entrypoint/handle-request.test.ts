@@ -4,7 +4,7 @@ import { REQUEST_ID_HEADER } from '../shared/request-id';
 import { composeInMemoryApplication } from './composition';
 import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
 import { respond, type WriteOperation } from '../shared/operation-contract';
-import { readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
+import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
 
 function application() {
   return composeInMemoryApplication({
@@ -34,7 +34,7 @@ describe('entry point: token and permission table (Z4)', () => {
   it('refuses a request without a token with 401', async () => {
     const { handle } = application();
     const started = performance.now();
-    const response = await handle({ method: 'POST', path: '/example/approvals', query: {}, headers: {}, body: chairApproval });
+    const response = await handle({ method: 'POST', path: '/example/approvals', query: {}, headers: {}, address: TEST_ADDRESS, body: chairApproval });
     console.log(`Z4 report: refused-request latency ${(performance.now() - started).toFixed(2)} ms`);
     expect(response.status).toBe(401);
   });
@@ -46,6 +46,7 @@ describe('entry point: token and permission table (Z4)', () => {
       path: '/example/approvals',
       query: {},
       headers: { authorization: 'Bearer forged.token' },
+      address: TEST_ADDRESS,
       body: chairApproval,
     });
     expect(response.status).toBe(401);
@@ -119,6 +120,7 @@ describe('entry point: repeatable writes (Z5)', () => {
       path: '/example/approvals',
       query: {},
       headers: { authorization: `Bearer ${tokenFor('chair')}` },
+      address: TEST_ADDRESS,
       body: chairApproval,
     });
     expect(response.status).toBe(400);
@@ -200,8 +202,7 @@ describe('entry point: audit entry and events commit together', () => {
     await handle(writeRequest('/example/requests', 'member', 'request-0001', { kind: 'price change', reason: 'Old prices' }));
     const [entry] = await audit.readByScope({ personId: 'chair-1', role: 'chair' });
     expect(entry).toMatchObject({
-      personId: 'member-1',
-      role: 'member',
+      actor: { kind: 'person', personId: 'member-1', role: 'member' },
       operation: 'example.member.fileRequest',
       requestId: 'request-0001',
       reason: 'Old prices',

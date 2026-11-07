@@ -12,8 +12,7 @@ function trailOver(database: InMemoryDatabase): AuditTrail {
 
 function entry(overrides: Partial<AuditEntry> = {}): AuditEntry {
   return {
-    personId: 'attendant-7',
-    role: 'attendant',
+    actor: { kind: 'person', personId: 'attendant-7', role: 'attendant' },
     operation: 'payments.tickCash',
     input: { ticketId: 't-1' },
     requestId: 'request-0001',
@@ -68,12 +67,11 @@ describe('hash-chained audit trail', () => {
   it('reads by scope: member sees own district, Chair sees all, attendant sees entries naming them', async () => {
     const trail = trailOver(new InMemoryDatabase());
     await trail.append(entry({ operation: 'd1-by-attendant-7', districtId: 'district-1' }));
-    await trail.append(entry({ operation: 'd2-by-member', personId: 'member-2', role: 'member', districtId: 'district-2' }));
+    await trail.append(entry({ operation: 'd2-by-member', actor: { kind: 'person', personId: 'member-2', role: 'member' }, districtId: 'district-2' }));
     await trail.append(
       entry({
         operation: 'd2-licence-of-attendant-7',
-        personId: 'chair-1',
-        role: 'chair',
+        actor: { kind: 'person', personId: 'chair-1', role: 'chair' },
         districtId: 'district-2',
         subjectPersonIds: ['attendant-7'],
       }),

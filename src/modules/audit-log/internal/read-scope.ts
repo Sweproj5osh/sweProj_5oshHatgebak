@@ -8,6 +8,10 @@ export function isVisibleTo(reader: AuditReader, record: AuditRecord): boolean {
     case 'member':
       return reader.districtId !== undefined && record.districtId === reader.districtId;
     default:
-      return record.personId === reader.personId || (record.subjectPersonIds ?? []).includes(reader.personId);
+      return isActionOf(reader, record) || (record.subjectPersonIds ?? []).includes(reader.personId);
   }
+}
+
+function isActionOf(reader: AuditReader, record: AuditRecord): boolean {
+  return record.actor.kind === 'person' && record.actor.personId === reader.personId;
 }

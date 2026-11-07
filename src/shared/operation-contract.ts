@@ -26,7 +26,7 @@ export function refuse(status: number, message: string, details?: unknown): Http
 }
 
 /**
- * One operation = one route + the roles allowed + a handler. Module owners register their operations through their
+ * One operation = one route + who may call it + a handler. Module owners register their operations through their
  * module's `operations(dependencies)` export; the pipeline does the token, permission, request-id, clock and repeat
  * checks before the handler runs.
  */
@@ -45,6 +45,15 @@ export interface WriteContext {
   readonly requestId: RequestId;
   readonly body: ValidBody;
   /** The unit of work: the module's own tables, the audit entry and the events commit or roll back together (ADR-13). */
+  readonly transaction: Transaction;
+  readonly events: EventPublisher;
+}
+
+/** What a public operation receives: nobody is signed in, so the client address stands for the caller (ADR-15). */
+export interface PublicWriteContext {
+  readonly address: string;
+  readonly requestId: RequestId;
+  readonly body: ValidBody;
   readonly transaction: Transaction;
   readonly events: EventPublisher;
 }
@@ -77,10 +86,22 @@ export interface WriteOutcome {
   readonly audit?: AuditDetail;
 }
 
-export interface OperationBase {
+interface RouteBase {
   readonly name: string;
   readonly path: string;
+}
+
+export interface OperationBase extends RouteBase {
   readonly allowedRoles: readonly Role[];
+}
+
+/** What every operation that takes a body declares, so the pipeline validates it and the F5 harness can call it. */
+export interface BodyDeclaration {
+  readonly bodySchema: BodySchema;
+  /** Sample bodies for the audit-coverage harness (F5): one that passes validation, one that does not. */
+  readonly examples: { readonly valid: ValidBody; readonly invalid: unknown };
+  /** Seeds whatever rows `examples.valid` needs to succeed; the F5 harness runs it before the sample request. */
+  fixture?(database: TableAccess): Promise<void>;
 }
 
 export interface ReadOperation extends OperationBase {
@@ -89,16 +110,32 @@ export interface ReadOperation extends OperationBase {
   handle(context: ReadContext): Promise<HttpResponse>;
 }
 
-export interface WriteOperation extends OperationBase {
+export interface WriteOperation extends OperationBase, BodyDeclaration {
   readonly kind: 'write';
   readonly method: Exclude<HttpMethod, 'GET'>;
-  readonly bodySchema: BodySchema;
   readonly audit?: AuditRedaction;
-  /** Sample bodies for the audit-coverage harness (F5): one that passes validation, one that does not. */
-  readonly examples: { readonly valid: ValidBody; readonly invalid: unknown };
-  /** Seeds whatever rows `examples.valid` needs to succeed; the F5 harness runs it before the sample request. */
-  fixture?(database: TableAccess): Promise<void>;
   handle(context: WriteContext): Promise<WriteOutcome>;
 }
 
-export type Operation = ReadOperation | WriteOperation;
+/**
+ * A write accepted without a token (P3, ADR-15): request id, server-clock rule, body validation, unit of work,
+ * redacted audit entry and events as for every write, plus the rate limits only this kind has. Fitness function F13
+ * keeps the list of public operations at `requestSignInCode` and `signIn`.
+ */
+export interface PublicWriteOperation extends RouteBase, BodyDeclaration {
+  readonly kind: 'public';
+  readonly method: Exclude<HttpMethod, 'GET'>;
+  readonly audit?: AuditRedaction;
+  /** The body field whose value is rate-limited beside the client address (for sign-in: the phone). */
+  readonly rateLimitKey?: string;
+  handle(context: PublicWriteContext): Promise<WriteOutcome>;
+}
+
+export type Operation = ReadOperation | WriteOperation | PublicWriteOperation;
+
+/** Every kind but `public` names the roles that may call it; the permission table holds exactly those. */
+export type RoleGuardedOperation = Exclude<Operation, PublicWriteOperation>;
+
+export function requiresARole(operation: Operation): operation is RoleGuardedOperation {
+  return operation.kind !== 'public';
+}

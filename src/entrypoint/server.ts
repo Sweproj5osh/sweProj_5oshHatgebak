@@ -26,6 +26,7 @@ async function toHttpRequest(incoming: IncomingMessage): Promise<HttpRequest> {
     path: url.pathname,
     query: Object.fromEntries(url.searchParams),
     headers: lowerCaseHeaders(incoming),
+    address: clientAddressOf(incoming),
     ...(rawBody === '' ? {} : { body: JSON.parse(rawBody) as unknown }),
   };
 }
@@ -35,6 +36,14 @@ function parseMethod(method: string | undefined): HttpMethod {
     return method as HttpMethod;
   }
   throw new Error(`unsupported method ${method ?? '(none)'}`);
+}
+
+function clientAddressOf(incoming: IncomingMessage): string {
+  const address = incoming.socket.remoteAddress;
+  if (address === undefined) {
+    throw new Error('the connection closed before its address could be read');
+  }
+  return address;
 }
 
 function lowerCaseHeaders(incoming: IncomingMessage): Record<string, string> {

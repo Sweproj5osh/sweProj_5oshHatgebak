@@ -5,10 +5,24 @@
 import type { DistrictId, PersonId, Role } from '../../shared/identifiers';
 import type { RequestId } from '../../shared/request-id';
 
-/** What a write operation hands to the audit log: who, role, what, inputs, why, approver, request id. */
-export interface AuditEntry {
+/** A signed-in person acting through the entry point. */
+export interface PersonAuditActor {
+  readonly kind: 'person';
   readonly personId: PersonId;
   readonly role: Role;
+}
+
+/** A caller of a public operation (sign-in, ADR-15): nobody is signed in yet, so the client address stands for them. */
+export interface AnonymousAuditActor {
+  readonly kind: 'anonymous';
+  readonly address: string;
+}
+
+export type AuditActor = PersonAuditActor | AnonymousAuditActor;
+
+/** What the pipeline hands to the audit log for one action: who, what, inputs (redacted), why, approver, request id. */
+export interface AuditEntry {
+  readonly actor: AuditActor;
   readonly operation: string;
   readonly input: unknown;
   readonly reason?: string;
