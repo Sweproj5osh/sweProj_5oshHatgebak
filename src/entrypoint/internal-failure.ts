@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { refuse, type HttpResponse } from '../shared/operation-contract';
+import { respond, type HttpResponse } from '../shared/operation-contract';
 
 export const INTERNAL_ERROR = 'internal error';
 
@@ -11,7 +11,7 @@ export const INTERNAL_ERROR = 'internal error';
 export function internalFailure(operationName: string, error: unknown): HttpResponse {
   const correlationId = randomUUID();
   console.error(`[${correlationId}] ${operationName} failed and was rolled back: ${describe(error)}`);
-  return refuse(500, INTERNAL_ERROR, { correlationId });
+  return respond(500, { error: INTERNAL_ERROR, correlationId });
 }
 
 function describe(error: unknown): string {
