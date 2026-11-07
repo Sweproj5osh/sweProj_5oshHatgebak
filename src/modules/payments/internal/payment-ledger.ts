@@ -63,19 +63,15 @@ export class PaymentLedgerService implements PaymentLedger {
     if (alreadyRecorded !== undefined) {
       return this.repeatOf(alreadyRecorded, ticketId, payer);
     }
-    const refusal = await this.whyTicketCannotBeCharged(ticketId, payer);
-    if (refusal !== undefined) {
-      return fail(refusal);
+    const feeDue = await this.feeDueFor(ticketId, payer);
+    if (!feeDue.ok) {
+      return feeDue;
     }
     if (!this.dependencies.inFlight.claim(ticketId, requestId)) {
       return fail('payment pending, try again shortly');
     }
-    const fee = (await this.dependencies.ticketQuery.ticketStatus(ticketId)).fee;
-    if (fee === undefined) {
-      throw new Error(`Ticket ${ticketId} is closed but carries no fee`);
-    }
-    const attempt = await this.recordPendingAttempt(requestId, ticketId, payer, fee);
-    const answer = await askProvider(() => this.dependencies.gateway.charge(fee, requestId), PROVIDER_TIMEOUT_MILLISECONDS);
+    const attempt = await this.recordPendingAttempt(requestId, ticketId, payer, feeDue.value);
+    const answer = await askProvider(() => this.dependencies.gateway.charge(feeDue.value, requestId), PROVIDER_TIMEOUT_MILLISECONDS);
     return this.recordAnswer(attempt, answer);
   }
 
@@ -120,18 +116,24 @@ export class PaymentLedgerService implements PaymentLedger {
     return succeed(toRecord(recorded));
   }
 
-  /** The ticket's own state first, then the attempts already recorded against it (P18). */
-  private async whyTicketCannotBeCharged(ticketId: TicketId, payer: PersonId): Promise<PayRefusal | undefined> {
+  /** The fee this payer owes on the ticket now, or why nothing may be charged: the ticket's own state first, then the attempts already recorded against it (P18). */
+  private async feeDueFor(ticketId: TicketId, payer: PersonId): Promise<Result<number, PayRefusal>> {
     const ticket = await this.dependencies.ticketQuery.ticketStatus(ticketId);
     if (ticket.driverRef !== payer) {
-      return 'not your ticket';
+      return fail('not your ticket');
     }
     if (ticket.state !== 'closed' || ticket.fee === undefined) {
-      return 'ticket not closed';
+      return fail('ticket not closed');
     }
     if (ticket.paymentStatus !== 'unpaid') {
-      return 'nothing to pay';
+      return fail('nothing to pay');
     }
+    const recordedRefusal = await this.whyRecordedAttemptsBlock(ticketId);
+    return recordedRefusal === undefined ? succeed(ticket.fee) : fail(recordedRefusal);
+  }
+
+  /** A committed attempt guards the ticket from here on, so the in-process claim is released as redundant. */
+  private async whyRecordedAttemptsBlock(ticketId: TicketId): Promise<PayRefusal | undefined> {
     const attempts = await this.store.forTicket(ticketId);
     if (attempts.some((attempt) => attempt.state === 'pending')) {
       this.dependencies.inFlight.release(ticketId);
