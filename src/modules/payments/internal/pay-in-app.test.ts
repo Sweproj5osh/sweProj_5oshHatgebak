@@ -1,16 +1,8 @@
 import { performance } from 'node:perf_hooks';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
-import type { PersonId, TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
 import {
-  createFakePaymentGateway,
-  createPayments,
   operations,
   PAY_LATER_OR_PAY_CASH,
   PAYMENTS_TABLE,
@@ -21,115 +13,25 @@ import {
   type PaymentRecord,
 } from '../public';
 import type { StoredPayment } from './ports';
+import { buildPaymentsWorld, closedTicket, DRIVER, openTicket, PAY_PATH } from './test-support/payments-test-world';
 
 /**
  * Task C2: paying in the app. Charge through the port with the request id as the idempotency key, record the
  * result, mark the ticket paid, publish "ticket paid". Every test goes through the entry point, so the token, the
  * role, the request id, the audit entry and the outbox are all exercised.
  */
-const PAY_PATH = '/payments/app';
-const DRIVER: PersonId = 'driver-1';
-const CAR: CarReference = 'car-1';
-
-/** A stand-in for Teammate B's Ticketing, holding tickets in a map; only the two calls payments makes are real. */
-class FakeTickets implements TicketDesk, TicketQuery {
-  private readonly tickets = new Map<TicketId, Ticket>();
-
-  seed(ticket: Ticket): void {
-    this.tickets.set(ticket.ticketId, ticket);
-  }
-
-  async ticketStatus(ticketId: TicketId): Promise<Ticket> {
-    const ticket = this.tickets.get(ticketId);
-    if (ticket === undefined) {
-      throw new Error(`No ticket ${ticketId}`);
-    }
-    return ticket;
-  }
-
-  async changePaymentStatus(_requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>> {
-    const ticket = this.tickets.get(ticketId);
-    if (ticket === undefined) {
-      return fail('no such ticket');
-    }
-    const changed = { ...ticket, paymentStatus: to };
-    this.tickets.set(ticketId, changed);
-    return succeed(changed);
-  }
-
-  openTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  openAssistedTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  closeTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  closeStaleTickets(): never {
-    throw new Error('not needed by payments');
-  }
-
-  ticketHistory(): never {
-    throw new Error('not needed by payments');
-  }
-
-  freeSpaces(): never {
-    throw new Error('not needed by payments');
-  }
-
-  assistedTicketCount(): never {
-    throw new Error('not needed by payments');
-  }
-
-  receipt(): never {
-    throw new Error('not needed by payments');
-  }
-
-  frequentSites(): never {
-    throw new Error('not needed by payments');
-  }
-}
-
-function closedTicket(ticketId: TicketId, fee: number, overrides: Partial<Ticket> = {}): Ticket {
-  return {
-    ticketId,
-    siteId: 'site-1',
-    driverRef: DRIVER,
-    carRef: CAR,
-    state: 'closed',
-    paymentStatus: 'unpaid',
-    openedAt: '2026-11-06T08:00:00.000Z',
-    closedAt: '2026-11-06T10:00:00.000Z',
-    fee,
-    assisted: false,
-    ...overrides,
-  };
-}
-
 function setUp(overrides: { readonly gateway?: PaymentGateway } = {}) {
-  const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
-  const tickets = new FakeTickets();
-  const gateway = createFakePaymentGateway();
-  const payments = createPayments({
-    gateway: overrides.gateway ?? gateway,
-    ticketDesk: tickets,
-    ticketQuery: tickets,
-    clock,
-  });
+  const world = buildPaymentsWorld(overrides);
   const application = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
-    clock,
-    operations: [...foundationOperations, ...payments.operations],
+    clock: world.clock,
+    additionalOperations: world.payments.operations,
   });
   const pay = (requestId: string, ticketId: string) =>
     application.handle(writeRequest(PAY_PATH, 'driver', requestId, { ticketId }));
   const paymentRows = () => application.database.list<StoredPayment>(PAYMENTS_TABLE);
   const auditRows = () => application.audit.readByScope({ personId: 'chair-1', role: 'chair' });
-  return { tickets, gateway, application, payments, pay, paymentRows, auditRows };
+  return { ...world, application, pay, paymentRows, auditRows };
 }
 
 function paymentIn(response: { body: unknown }): PaymentRecord {
@@ -364,16 +266,7 @@ describe('C2 paying in the app', () => {
 
   it('refuses to pay a ticket that is still open', async () => {
     const { tickets, pay, paymentRows } = setUp();
-    tickets.seed({
-      ticketId: 'ticket-1',
-      siteId: 'site-1',
-      driverRef: DRIVER,
-      carRef: CAR,
-      state: 'open',
-      paymentStatus: 'unpaid',
-      openedAt: '2026-11-06T08:00:00.000Z',
-      assisted: false,
-    });
+    tickets.seed(openTicket('ticket-1'));
 
     const response = await pay('request-pay-0004', 'ticket-1');
 
@@ -430,13 +323,12 @@ describe('C2 paying in the app', () => {
   });
 
   it('registers through operations(dependencies) beside the composed registry, as the composition root will call it (P4)', async () => {
-    const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
-    const tickets = new FakeTickets();
+    const { clock, tickets, gateway } = buildPaymentsWorld();
     tickets.seed(closedTicket('ticket-1', 11));
     const application = composeInMemoryApplication({
       tokenSecret: TEST_TOKEN_SECRET,
       clock,
-      additionalOperations: operations({ gateway: createFakePaymentGateway(), ticketDesk: tickets, ticketQuery: tickets, clock }),
+      additionalOperations: operations({ gateway, ticketDesk: tickets, ticketQuery: tickets, clock }),
     });
 
     expect(application.registry.writes().map((operation) => operation.name)).toContain('payments.payInApp');

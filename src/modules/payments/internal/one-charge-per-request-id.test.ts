@@ -2,123 +2,26 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
 import { InMemoryOutboxStore } from '../../../adapters/in-memory/in-memory-outbox-store';
 import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
-import type { PersonId, TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../ticketing/public';
-import { createFakePaymentGateway, createPayments, PAYMENTS_TABLE } from '../public';
+import { PAYMENTS_TABLE } from '../public';
 import type { StoredPayment } from './ports';
+import { buildPaymentsWorld, closedTicket, DRIVER, PAY_PATH } from './test-support/payments-test-world';
 
 /**
  * Task C3: one charge per request id. Two pays with one id give one payment row and one call to the provider.
  * Checked at both levels: through the entry point (its stored response answers the repeat) and straight at the
  * ledger (the row the id already created answers the repeat).
  */
-const PAY_PATH = '/payments/app';
-const DRIVER: PersonId = 'driver-1';
-const CAR: CarReference = 'car-1';
 const ONE_ID: RequestId = 'request-repeat-0001';
-
-/** A stand-in for Teammate B's Ticketing: tickets in a map, only the two calls payments makes are real. */
-class FakeTickets implements TicketDesk, TicketQuery {
-  private readonly tickets = new Map<TicketId, Ticket>();
-
-  seed(ticket: Ticket): void {
-    this.tickets.set(ticket.ticketId, ticket);
-  }
-
-  async ticketStatus(ticketId: TicketId): Promise<Ticket> {
-    const ticket = this.tickets.get(ticketId);
-    if (ticket === undefined) {
-      throw new Error(`No ticket ${ticketId}`);
-    }
-    return ticket;
-  }
-
-  async changePaymentStatus(_requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>> {
-    const ticket = this.tickets.get(ticketId);
-    if (ticket === undefined) {
-      return fail('no such ticket');
-    }
-    const changed = { ...ticket, paymentStatus: to };
-    this.tickets.set(ticketId, changed);
-    return succeed(changed);
-  }
-
-  openTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  openAssistedTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  closeTicket(): never {
-    throw new Error('not needed by payments');
-  }
-
-  closeStaleTickets(): never {
-    throw new Error('not needed by payments');
-  }
-
-  ticketHistory(): never {
-    throw new Error('not needed by payments');
-  }
-
-  freeSpaces(): never {
-    throw new Error('not needed by payments');
-  }
-
-  assistedTicketCount(): never {
-    throw new Error('not needed by payments');
-  }
-
-  receipt(): never {
-    throw new Error('not needed by payments');
-  }
-
-  frequentSites(): never {
-    throw new Error('not needed by payments');
-  }
-}
-
-function closedUnpaidTicket(ticketId: TicketId, fee: number): Ticket {
-  return {
-    ticketId,
-    siteId: 'site-1',
-    driverRef: DRIVER,
-    carRef: CAR,
-    state: 'closed',
-    paymentStatus: 'unpaid',
-    openedAt: '2026-11-06T08:00:00.000Z',
-    closedAt: '2026-11-06T10:00:00.000Z',
-    fee,
-    assisted: false,
-  };
-}
-
-function setUp() {
-  const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
-  const tickets = new FakeTickets();
-  const gateway = createFakePaymentGateway();
-  const payments = createPayments({ gateway, ticketDesk: tickets, ticketQuery: tickets, clock });
-  return { clock, tickets, gateway, payments };
-}
 
 const results: Record<'entry point' | 'ledger', 'PASS' | 'FAIL'> = { 'entry point': 'FAIL', ledger: 'FAIL' };
 
 describe('C3 one charge per request id', () => {
   it('through the entry point: two pays with one id give identical answers, one row and one charge', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
-    const application = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      clock,
-      operations: [...foundationOperations, ...payments.operations],
-    });
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
+    const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
 
     const first = await application.handle(writeRequest(PAY_PATH, 'driver', ONE_ID, { ticketId: 'ticket-1' }));
     const second = await application.handle(writeRequest(PAY_PATH, 'driver', ONE_ID, { ticketId: 'ticket-1' }));
@@ -134,8 +37,8 @@ describe('C3 one charge per request id', () => {
   });
 
   it('at the ledger itself: a repeat of a committed pay returns the recorded payment without a second charge', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
     const database = new InMemoryDatabase();
     const outbox = new InMemoryOutboxStore(database, clock);
 
@@ -156,8 +59,8 @@ describe('C3 one charge per request id', () => {
   });
 
   it('stages the payment row inside the write\'s unit of work: nothing is committed until the unit of work commits (ADR-13)', async () => {
-    const { clock, tickets, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const { clock, tickets, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
     const database = new InMemoryDatabase();
     const outbox = new InMemoryOutboxStore(database, clock);
 
@@ -171,15 +74,15 @@ describe('C3 one charge per request id', () => {
   });
 
   it('a pay that was rolled back leaves no row, so the same id on retry charges once and lands once', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
     const database = new InMemoryDatabase();
     const outbox = new InMemoryOutboxStore(database, clock);
 
     const abandoned = database.begin();
     await payments.ledgerBoundTo(abandoned, outbox.publisherBoundTo(abandoned.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
     await abandoned.rollback();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    tickets.seed(closedTicket('ticket-1', 11));
 
     const retry = database.begin();
     const retried = await payments.ledgerBoundTo(retry, outbox.publisherBoundTo(retry.tables)).payInApp(ONE_ID, 'ticket-1', DRIVER);
@@ -192,9 +95,9 @@ describe('C3 one charge per request id', () => {
   });
 
   it('P19 at the ledger: the same id for another ticket of the same payer is refused, not answered with the earlier payment', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
-    tickets.seed(closedUnpaidTicket('ticket-2', 11));
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
+    tickets.seed(closedTicket('ticket-2', 11));
     const database = new InMemoryDatabase();
     const outbox = new InMemoryOutboxStore(database, clock);
 
@@ -209,9 +112,9 @@ describe('C3 one charge per request id', () => {
   });
 
   it('P19 through the entry point: another payer reusing the id reaches the ledger (another response key) and is refused with 409', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
-    tickets.seed({ ...closedUnpaidTicket('ticket-2', 11), driverRef: 'driver-2' });
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
+    tickets.seed({ ...closedTicket('ticket-2', 11), driverRef: 'driver-2' });
     const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
 
     expect((await application.handle(writeRequest(PAY_PATH, 'driver', ONE_ID, { ticketId: 'ticket-1' }))).status).toBe(201);
@@ -231,8 +134,8 @@ describe('C3 one charge per request id', () => {
   });
 
   it('two concurrent pays of one ticket under two request ids give one row and one charge: the ticket is locked per attempt', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 11));
     const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
 
     const [first, second] = await Promise.all([
@@ -247,12 +150,12 @@ describe('C3 one charge per request id', () => {
   });
 
   it('a declined attempt releases the ticket, so the driver may try again under a new request id', async () => {
-    const { clock, tickets, gateway, payments } = setUp();
-    tickets.seed(closedUnpaidTicket('ticket-1', 12));
+    const { clock, tickets, gateway, payments } = buildPaymentsWorld();
+    tickets.seed(closedTicket('ticket-1', 12));
     const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, additionalOperations: payments.operations });
 
     expect((await application.handle(writeRequest(PAY_PATH, 'driver', 'request-declined-0001', { ticketId: 'ticket-1' }))).status).toBe(402);
-    tickets.seed(closedUnpaidTicket('ticket-1', 11));
+    tickets.seed(closedTicket('ticket-1', 11));
     const retried = await application.handle(writeRequest(PAY_PATH, 'driver', 'request-declined-0002', { ticketId: 'ticket-1' }));
 
     expect(retried.status).toBe(201);
