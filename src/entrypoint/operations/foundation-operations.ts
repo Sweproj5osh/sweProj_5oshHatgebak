@@ -4,8 +4,10 @@ import { respond } from '../../shared/operation-contract';
 /**
  * The foundation's own operations: five example writes, one per role. They exist so that the entry-point,
  * repeatable-write and audit-coverage tests mean something before the module owners register their real operations;
- * each one publishes one event and returns its audit detail, nothing more.
+ * each one writes one row through the unit of work, publishes one event and returns its audit detail, nothing more.
  */
+export const EXAMPLE_ACTIONS_TABLE = 'foundation_example_actions';
+
 export const exampleDriverOpensTicket = exampleWrite({
   name: 'example.driver.openTicket',
   path: '/example/tickets',
@@ -78,6 +80,7 @@ function exampleWrite(spec: ExampleWriteSpec): WriteOperation {
     bodySchema: { fields: spec.fields },
     examples: { valid: spec.validBody, invalid: {} },
     async handle(context: WriteContext) {
+      await context.transaction.insert(EXAMPLE_ACTIONS_TABLE, context.requestId, { operation: spec.name, ...context.body });
       context.events.publish({ topic: spec.eventTopic, payload: context.body });
       const reason = context.body['reason'];
       return {

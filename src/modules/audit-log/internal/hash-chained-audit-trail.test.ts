@@ -7,7 +7,7 @@ import { createHashChainedAuditTrail, GENESIS_HASH, type AuditEntry, type AuditR
 const clock = new FixedClock(new Date('2026-11-04T10:00:00Z'));
 
 function trailOver(database: InMemoryDatabase): AuditTrail {
-  return createHashChainedAuditTrail(new InMemoryAuditLogStore(database), clock);
+  return createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
 }
 
 function entry(overrides: Partial<AuditEntry> = {}): AuditEntry {
@@ -52,7 +52,7 @@ describe('hash-chained audit trail', () => {
     const records = await appendThree(trailOver(original));
     const tamperedCopy = new InMemoryDatabase();
     records.forEach((record, index) =>
-      tamperedCopy.insert('audit_log', index === 1 ? { ...record, operation: 'two-but-edited' } : record),
+      tamperedCopy.tables.insert('audit_log', String(record.id), index === 1 ? { ...record, operation: 'two-but-edited' } : record),
     );
     expect(await trailOver(tamperedCopy).verifyChain()).toBe(false);
   });
@@ -61,7 +61,7 @@ describe('hash-chained audit trail', () => {
     const original = new InMemoryDatabase();
     const records = await appendThree(trailOver(original));
     const shortenedCopy = new InMemoryDatabase();
-    records.filter((record) => record.id !== 2).forEach((record) => shortenedCopy.insert('audit_log', record));
+    records.filter((record) => record.id !== 2).forEach((record) => shortenedCopy.tables.insert('audit_log', String(record.id), record));
     expect(await trailOver(shortenedCopy).verifyChain()).toBe(false);
   });
 

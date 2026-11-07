@@ -43,7 +43,7 @@ describe('outbox', () => {
   it('writes nothing when the publishing transaction rolls back', async () => {
     const { database, outbox } = setUp();
     const transaction = database.begin();
-    outbox.publisherBoundTo(transaction).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
+    outbox.publisherBoundTo(transaction.tables).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
     await transaction.rollback();
     expect(outbox.allEvents()).toHaveLength(0);
   });
@@ -51,7 +51,7 @@ describe('outbox', () => {
   it('writes one row when the publishing transaction commits', async () => {
     const { database, outbox } = setUp();
     const transaction = database.begin();
-    outbox.publisherBoundTo(transaction).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
+    outbox.publisherBoundTo(transaction.tables).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
     await transaction.commit();
     expect(outbox.allEvents()).toHaveLength(1);
     expect(await outbox.undelivered()).toHaveLength(1);
@@ -96,6 +96,6 @@ describe('outbox', () => {
 
 async function publishCommitted(database: InMemoryDatabase, outbox: InMemoryOutboxStore, topic: string) {
   const transaction = database.begin();
-  outbox.publisherBoundTo(transaction).publish({ topic, payload: { topic } });
+  outbox.publisherBoundTo(transaction.tables).publish({ topic, payload: { topic } });
   await transaction.commit();
 }

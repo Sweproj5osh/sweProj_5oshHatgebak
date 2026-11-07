@@ -7,7 +7,7 @@ import type { BodySchema, ValidBody } from './body-schema';
 import type { EventPublisher } from './events/event';
 import type { Actor, DistrictId, PersonId, Role } from './identifiers';
 import type { RequestId } from './request-id';
-import type { UnitOfWork } from './unit-of-work';
+import type { Transaction } from './unit-of-work';
 
 /** Plain data crossing the boundary between the HTTP adapter and the pipeline. No framework types. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -44,7 +44,8 @@ export interface WriteContext {
   readonly actor: Actor;
   readonly requestId: RequestId;
   readonly body: ValidBody;
-  readonly transaction: UnitOfWork;
+  /** The unit of work: the module's own tables, the audit entry and the events commit or roll back together (ADR-13). */
+  readonly transaction: Transaction;
   readonly events: EventPublisher;
 }
 

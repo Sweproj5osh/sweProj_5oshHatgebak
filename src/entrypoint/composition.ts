@@ -36,7 +36,7 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
   const clock = options.clock ?? new SystemClock();
   const database = new InMemoryDatabase();
   const outbox = new InMemoryOutboxStore(database, clock);
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database), clock);
+  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
   const operations = [...auditLogOperations({ audit }), ...foundationOperations, ...(options.additionalOperations ?? [])];
   const registry = new OperationRegistry(operations);
   const permissions = new PermissionTable(operations);
@@ -45,8 +45,8 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
       const transaction = database.begin();
       return {
         transaction,
-        audit: createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction), clock),
-        events: outbox.publisherBoundTo(transaction),
+        audit: createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction.tables), clock),
+        events: outbox.publisherBoundTo(transaction.tables),
       };
     },
   };
