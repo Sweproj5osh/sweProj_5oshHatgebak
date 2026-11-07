@@ -1,154 +1,116 @@
 import { describe, expect, it } from 'vitest';
-import { FixedClock } from '../../../shared/clock';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
-import { TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
+import { TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../entrypoint/test-helpers';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
+import { buildTicketingWorld, TICKETING_WORLD_START } from '../../test-support/ticketing-world';
 import { DriverScanClient } from './driver-scan-client';
 import { HttpTicketScanApi } from './http-ticket-scan-api';
-import {
-  createStandInDriverTicketOperations,
-  createStandInTicketDeskState,
-} from '../../test-support/stand-in-driver-ticket-operations';
 
-function buildStack(drops: AnswerDrops = { remaining: 0 }) {
-  const ticketState = createStandInTicketDeskState();
-  const app = composeInMemoryApplication({
-    tokenSecret: TEST_TOKEN_SECRET,
-    clock: new FixedClock(new Date('2026-11-05T12:00:00Z')),
-    operations: [...foundationOperations, ...createStandInDriverTicketOperations(ticketState)],
-  });
+/** The token the test helpers mint for a driver names this person. */
+const DRIVER_OF_THE_TOKEN = 'driver-1';
+const CAR = 'car-a';
+const scanAt = (siteId: string) => ({ siteId, carRef: CAR, entryCode: `entry-${siteId}` });
 
-  const api = new HttpTicketScanApi({
-    handle: answerDroppingHandle(app.handle, drops),
-    token: () => tokenFor('driver'),
-  });
-
+/** Karim's real ticketing operations from main, composed on the real pipeline; only the ports to other modules are fakes. */
+async function buildStack(drops: AnswerDrops = { remaining: 0 }) {
+  const world = await buildTicketingWorld({ sites: { 'site-1': 5, 'site-2': 5 } });
+  const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, clock: world.clock, additionalOperations: world.operations });
+  const api = new HttpTicketScanApi({ handle: answerDroppingHandle(app.handle, drops), token: () => tokenFor('driver') });
   let requestSerial = 1;
-  const client = new DriverScanClient({
-    api,
-    createRequestId: () => `scan-req-${String(requestSerial++).padStart(4, '0')}`,
-  });
-
-  return { client, ticketState, audit: app.audit };
+  const client = new DriverScanClient({ api, createRequestId: () => `scan-req-${String(requestSerial++).padStart(4, '0')}` });
+  const driverEntries = async () => (await app.audit.readByScope({ personId: DRIVER_OF_THE_TOKEN, role: 'driver' })).map((entry) => entry.operation);
+  return { client, world, driverEntries, app };
 }
 
-describe('D3 Driver App scanning over the HTTP entry point', () => {
-  it('scan twice quickly opens one ticket and one audit entry', async () => {
-    const { client, ticketState, audit } = buildStack();
+describe('D3 Driver App scanning over the HTTP entry point, against Karim\'s ticketing operations', () => {
+  it('scan twice quickly opens one ticket and leaves one audit entry', async () => {
+    const { client, world, driverEntries } = await buildStack();
 
-    const [first, second] = await Promise.all([
-      client.scanEntry('site-7', 'entry-site-7'),
-      client.scanEntry('site-7', 'entry-site-7'),
-    ]);
+    const [first, second] = await Promise.all([client.scanEntry(scanAt('site-1')), client.scanEntry(scanAt('site-1'))]);
 
-    expect(first.ok).toBe(true);
-    expect(second.ok).toBe(true);
+    expect(first.ok && second.ok).toBe(true);
     if (first.ok && second.ok) {
-      expect(first.value.ticketId).toBe(second.value.ticketId);
+      expect(first.value).toMatchObject({ ticketId: 'ticket-1', siteId: 'site-1', carRef: CAR, driverRef: DRIVER_OF_THE_TOKEN, state: 'open', paymentStatus: 'unpaid', openedAt: TICKETING_WORLD_START.toISOString() });
+      expect(second.value.ticketId).toBe(first.value.ticketId);
     }
-    expect(ticketState.ticketsOpened).toBe(1);
+    expect(await world.openTicketsAt('site-1')).toBe(1);
+    expect(await driverEntries()).toEqual(['ticketing.openTicket']);
 
-    const entries = await audit.readByScope({ personId: 'driver-1', role: 'driver' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.operation).toBe('driver.openTicket');
-
-    console.log(`D3 report: duplicate tickets in test = ${ticketState.ticketsOpened - 1}`);
+    console.log(`D3 report: duplicate tickets in test = ${(await world.openTicketsAt('site-1')) - 1}`);
   });
 
   it('airplane mode mid-scan then retry uses the kept request id and still one ticket', async () => {
-    const { client, ticketState, audit } = buildStack({ remaining: 1 });
+    const { client, world, driverEntries } = await buildStack({ remaining: 1 });
 
-    const lost = await client.scanEntry('site-9', 'entry-site-9');
+    const lost = await client.scanEntry(scanAt('site-1'));
     expect(lost).toEqual({ ok: false, error: 'connection lost', requestId: 'scan-req-0001' });
     expect(client.pendingEntryRequestId()).toBe('scan-req-0001');
-    expect(ticketState.ticketsOpened).toBe(1);
+    expect(await world.openTicketsAt('site-1')).toBe(1);
 
-    const retry = await client.scanEntry('site-9', 'entry-site-9');
-    expect(retry.ok).toBe(true);
-    if (retry.ok) {
-      expect(retry.value.ticketId).toBe('ticket-1');
-    }
-    expect(ticketState.ticketsOpened).toBe(1);
+    const retry = await client.scanEntry(scanAt('site-1'));
+
+    expect(retry.ok && retry.value.ticketId).toBe('ticket-1');
+    expect(await world.openTicketsAt('site-1')).toBe(1);
     expect(client.pendingEntryRequestId()).toBeUndefined();
+    expect(await driverEntries()).toEqual(['ticketing.openTicket']);
 
-    const entries = await audit.readByScope({ personId: 'driver-1', role: 'driver' });
-    expect(entries).toHaveLength(1);
-
-    console.log(`D3 report: duplicate tickets after airplane retry = ${ticketState.ticketsOpened - 1}`);
+    console.log(`D3 report: duplicate tickets after airplane retry = ${(await world.openTicketsAt('site-1')) - 1}`);
   });
 
-  it('closes from the exit code through the entry point', async () => {
-    const { client, ticketState, audit } = buildStack();
+  it('closes from the exit code: the exit time and the fee are the server\'s, and the state word is "closed"', async () => {
+    const { client, world, driverEntries } = await buildStack();
+    await client.scanEntry(scanAt('site-1'));
+    world.clock.advanceByMilliseconds(30 * 60 * 1000);
 
-    const opened = await client.scanEntry('site-4', 'entry-site-4');
-    expect(opened.ok).toBe(true);
+    const closed = await client.scanExit('exit-site-1');
 
-    const closed = await client.scanExit('exit-site-4');
-    expect(closed.ok).toBe(true);
-    if (closed.ok) {
-      expect(closed.value.status).toBe('closed');
-    }
+    expect(closed.ok && closed.value).toMatchObject({ ticketId: 'ticket-1', state: 'closed', closedAt: world.clock.now().toISOString(), fee: world.price.firstHourFee });
     expect(client.activeTicket()).toBeUndefined();
-    expect(ticketState.ticketsOpened).toBe(1);
-
-    const entries = await audit.readByScope({ personId: 'driver-1', role: 'driver' });
-    expect(entries).toHaveLength(2);
-    expect(entries.map((entry) => entry.operation)).toEqual([
-      'driver.openTicket',
-      'driver.closeTicket',
-    ]);
+    expect(await world.openTicketsAt('site-1')).toBe(0);
+    expect(await driverEntries()).toEqual(['ticketing.openTicket', 'ticketing.closeTicket']);
   });
 
-    it('shows a forged code as a refusal and leaves no ticket and no audit entry', async () => {
-    const { client, ticketState, audit } = buildStack();
+  it('shows a forged code as the server refusal and leaves no ticket and no audit entry', async () => {
+    const { client, world, driverEntries } = await buildStack();
 
-    const result = await client.scanEntry('site-2', 'not-a-real-code');
+    const result = await client.scanEntry({ siteId: 'site-1', carRef: CAR, entryCode: 'not-a-real-code' });
 
     expect(result).toEqual({ ok: false, error: 'forged code' });
-    expect(ticketState.ticketsOpened).toBe(0);
+    expect(await world.openTicketsAt('site-1')).toBe(0);
     expect(client.pendingEntryRequestId()).toBeUndefined();
-    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(0);
+    expect(await driverEntries()).toEqual([]);
   });
 
   it('refuses a second ticket for a car already parked, and the refusal leaves no second audit entry', async () => {
-    const { client, ticketState, audit } = buildStack();
-    await client.scanEntry('site-3', 'entry-site-3');
+    const { client, driverEntries } = await buildStack();
+    await client.scanEntry(scanAt('site-1'));
 
-    const second = await client.scanEntry('site-5', 'entry-site-5');
+    const second = await client.scanEntry(scanAt('site-2'));
 
     expect(second).toEqual({ ok: false, error: 'car already parked' });
-    expect(ticketState.ticketsOpened).toBe(1);
-    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(1);
+    expect(await driverEntries()).toEqual(['ticketing.openTicket']);
   });
 
-  it('refuses an exit scan with the entry code of the site, and the ticket stays open', async () => {
-    const { client, ticketState, audit } = buildStack();
-    await client.scanEntry('site-4', 'entry-site-4');
+  it('refuses an exit scan made with the entry code with Karim\'s word for a code of the wrong kind, and the ticket stays open', async () => {
+    const { client, world, driverEntries } = await buildStack();
+    await client.scanEntry(scanAt('site-1'));
 
-    const wrong = await client.scanExit('entry-site-4');
+    const wrong = await client.scanExit('entry-site-1');
 
-    expect(wrong).toEqual({ ok: false, error: 'wrong site' });
+    expect(wrong).toEqual({ ok: false, error: 'forged code' });
     expect(client.activeTicket()).toBe('ticket-1');
-    expect(ticketState.openByDriver.size).toBe(1);
-    expect(await audit.readByScope({ personId: 'driver-1', role: 'driver' })).toHaveLength(1);
+    expect(await world.openTicketsAt('site-1')).toBe(1);
+    expect(await driverEntries()).toEqual(['ticketing.openTicket']);
   });
 
   it('shows "not signed in" when the server does not accept the token', async () => {
-    const ticketState = createStandInTicketDeskState();
-    const app = composeInMemoryApplication({
-      tokenSecret: TEST_TOKEN_SECRET,
-      clock: new FixedClock(new Date('2026-11-06T12:00:00Z')),
-      operations: [...foundationOperations, ...createStandInDriverTicketOperations(ticketState)],
-    });
+    const world = await buildTicketingWorld({ sites: { 'site-1': 5 } });
+    const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, clock: world.clock, additionalOperations: world.operations });
     const client = new DriverScanClient({
       api: new HttpTicketScanApi({ handle: app.handle, token: () => 'not-a-token' }),
       createRequestId: () => 'scan-req-0099',
     });
 
-    const result = await client.scanEntry('site-1', 'entry-site-1');
-
-    expect(result).toEqual({ ok: false, error: 'not signed in' });
-    expect(ticketState.ticketsOpened).toBe(0);
+    expect(await client.scanEntry(scanAt('site-1'))).toEqual({ ok: false, error: 'not signed in' });
+    expect(await world.openTicketsAt('site-1')).toBe(0);
   });
 });

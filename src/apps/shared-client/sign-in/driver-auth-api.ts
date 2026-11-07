@@ -12,13 +12,32 @@ export interface SignInSuccess {
   readonly token: string;
 }
 
-/** "wrong code" also answers an unknown phone, so the screen never reveals who is registered. */
-export type SignInRefusal = 'wrong code' | 'locked' | 'code expired' | 'account not live';
+/**
+ * Lino's `SignInRefusal`: "wrong code" also answers an unknown phone, so the screen never reveals who is registered;
+ * the last three belong to the committee's second step (task A15) and a driver never sees them, but the app carries
+ * whatever word the server chose.
+ */
+export type SignInRefusal =
+  | 'wrong code'
+  | 'locked'
+  | 'code expired'
+  | 'account not live'
+  | 'second step required'
+  | 'wrong password'
+  | 'password not set';
 export type SaveCarRefusal = 'invalid plate' | 'not a driver';
 /** "not signed in": the server did not accept the token, so the app must show the sign-in screen again. */
 export type DriverAuthRefusal = SignInRefusal | SaveCarRefusal | 'not signed in';
 
-export const SIGN_IN_REFUSALS: readonly SignInRefusal[] = ['wrong code', 'locked', 'code expired', 'account not live'];
+export const SIGN_IN_REFUSALS: readonly SignInRefusal[] = [
+  'wrong code',
+  'locked',
+  'code expired',
+  'account not live',
+  'second step required',
+  'wrong password',
+  'password not set',
+];
 export const SAVE_CAR_REFUSALS: readonly SaveCarRefusal[] = ['invalid plate', 'not a driver'];
 
 export function isSignInRefusal(candidate: unknown): candidate is SignInRefusal {

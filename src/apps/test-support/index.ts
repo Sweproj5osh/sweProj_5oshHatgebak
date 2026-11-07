@@ -13,7 +13,7 @@ export {
 } from './stand-in-driver-auth-operations';
 export { InMemoryDriverAuthApi, type InMemoryDriverAuthApiOptions } from './in-memory-driver-auth-api';
 export { InMemoryTicketScanApi } from './in-memory-ticket-scan-api';
-export { createStandInDriverTicketOperations, createStandInTicketDeskState, type StandInTicketDeskState } from './stand-in-driver-ticket-operations';
+export { buildTicketingWorld, TICKETING_WORLD_START, WORLD_PRICE, type TicketingWorld, type TicketingWorldOptions } from './ticketing-world';
 export { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
 export { InMemoryDriverMapApi, type SiteMapEntry } from './in-memory-driver-map-api';
 export { InMemoryDriverPaymentApi } from './in-memory-driver-payment-api';

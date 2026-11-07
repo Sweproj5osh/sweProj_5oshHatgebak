@@ -7,16 +7,10 @@
  * A request id is kept only while the retry is for the same scan. A different code or site is a different request
  * and gets a new id, so a retry can never silently send an older scan in place of the one the driver just made.
  */
-import type { SiteId, TicketId } from '../../../shared/identifiers';
+import type { TicketId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
 import { ServerTransportError } from '../server-call';
-import {
-  TicketScanRefusedError,
-  type ClosedTicketScan,
-  type OpenedTicketScan,
-  type TicketScanApi,
-  type TicketScanRefusal,
-} from './ticket-scan-api';
+import { TicketScanRefusedError, type OpenTicketScanInput, type ScannedTicket, type TicketScanApi, type TicketScanRefusal } from './ticket-scan-api';
 
 export type DriverScanClientSuccess<T> = { readonly ok: true; readonly value: T };
 export type DriverScanClientRefusal = { readonly ok: false; readonly error: TicketScanRefusal };
@@ -30,6 +24,9 @@ export interface DriverScanClientOptions {
   /** Creates a new client request id when a scan starts and none is pending for the same scan. */
   readonly createRequestId: () => RequestId;
 }
+
+/** What the driver scanned: the site, the car they chose from their cars, and the code printed at the entrance. */
+export type EntryScan = Omit<OpenTicketScanInput, 'requestId'>;
 
 /** One write that has been sent and not yet answered, with the scan it was sent for. */
 interface PendingRequest {
@@ -49,8 +46,8 @@ export class DriverScanClient {
   private pendingOpen: PendingRequest | undefined;
   private pendingClose: PendingRequest | undefined;
   private activeTicketId: TicketId | undefined;
-  private inFlightEntry: InFlight<OpenedTicketScan> | undefined;
-  private inFlightExit: InFlight<ClosedTicketScan> | undefined;
+  private inFlightEntry: InFlight<ScannedTicket> | undefined;
+  private inFlightExit: InFlight<ScannedTicket> | undefined;
 
   constructor(options: DriverScanClientOptions) {
     this.api = options.api;
@@ -77,15 +74,15 @@ export class DriverScanClient {
    * in-flight call and the same request id. A transport failure keeps that request id so a retry cannot create a
    * second ticket. A scan of a different code waits for the running one, then is sent on its own.
    */
-  scanEntry(siteId: SiteId, entryCode: string): Promise<DriverScanClientResult<OpenedTicketScan>> {
-    const input = `${siteId}\u0000${entryCode}`;
+  scanEntry(scan: EntryScan): Promise<DriverScanClientResult<ScannedTicket>> {
+    const input = `${scan.siteId}\u0000${scan.carRef}\u0000${scan.entryCode}`;
     const running = this.inFlightEntry;
     if (running?.input === input) {
       return running.result;
     }
 
-    const start = () => this.runEntryScan(siteId, entryCode, input);
-    const result: Promise<DriverScanClientResult<OpenedTicketScan>> = (
+    const start = () => this.runEntryScan(scan, input);
+    const result: Promise<DriverScanClientResult<ScannedTicket>> = (
       running === undefined ? start() : running.result.then(start, start)
     ).finally(() => {
       if (this.inFlightEntry?.result === result) {
@@ -100,7 +97,7 @@ export class DriverScanClient {
    * Close the active ticket from an exit code. Keeps one request id across connection-loss retries.
    * With no open ticket there is nothing to send, so the answer is the same refusal the server would give.
    */
-  scanExit(exitCode: string): Promise<DriverScanClientResult<ClosedTicketScan>> {
+  scanExit(exitCode: string): Promise<DriverScanClientResult<ScannedTicket>> {
     const ticketId = this.activeTicketId;
     if (ticketId === undefined) {
       return Promise.resolve({ ok: false, error: 'no open ticket' });
@@ -113,7 +110,7 @@ export class DriverScanClient {
     }
 
     const start = () => this.runExitScan(ticketId, exitCode, input);
-    const result: Promise<DriverScanClientResult<ClosedTicketScan>> = (
+    const result: Promise<DriverScanClientResult<ScannedTicket>> = (
       running === undefined ? start() : running.result.then(start, start)
     ).finally(() => {
       if (this.inFlightExit?.result === result) {
@@ -124,16 +121,12 @@ export class DriverScanClient {
     return result;
   }
 
-  private async runEntryScan(
-    siteId: SiteId,
-    entryCode: string,
-    input: string,
-  ): Promise<DriverScanClientResult<OpenedTicketScan>> {
+  private async runEntryScan(scan: EntryScan, input: string): Promise<DriverScanClientResult<ScannedTicket>> {
     const pending = this.keepOrCreate(this.pendingOpen, input);
     this.pendingOpen = pending;
 
     try {
-      const opened = await this.api.openTicket({ requestId: pending.requestId, siteId, entryCode });
+      const opened = await this.api.openTicket({ requestId: pending.requestId, ...scan });
       this.activeTicketId = opened.ticketId;
       this.pendingOpen = undefined;
       return { ok: true, value: opened };
@@ -146,11 +139,7 @@ export class DriverScanClient {
     }
   }
 
-  private async runExitScan(
-    ticketId: TicketId,
-    exitCode: string,
-    input: string,
-  ): Promise<DriverScanClientResult<ClosedTicketScan>> {
+  private async runExitScan(ticketId: TicketId, exitCode: string, input: string): Promise<DriverScanClientResult<ScannedTicket>> {
     const pending = this.keepOrCreate(this.pendingClose, input);
     this.pendingClose = pending;
 

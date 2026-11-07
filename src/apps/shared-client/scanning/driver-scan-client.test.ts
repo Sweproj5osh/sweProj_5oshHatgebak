@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { DriverScanClient } from './driver-scan-client';
 import { InMemoryTicketScanApi } from '../../test-support/in-memory-ticket-scan-api';
 
+const CAR = 'car-1';
+
+function scanAt(siteId: string) {
+  return { siteId, carRef: CAR, entryCode: `entry-${siteId}` };
+}
+
+const SCAN_AT_SITE_7 = scanAt('site-7');
+
 function clientWith(api: InMemoryTicketScanApi, requestIds: string[]): DriverScanClient {
   let index = 0;
   return new DriverScanClient({
@@ -23,15 +31,15 @@ describe('D3 Driver App scanning', () => {
     const client = clientWith(api, ['scan-req-0001']);
 
     const [first, second] = await Promise.all([
-      client.scanEntry('site-7', 'entry-site-7'),
-      client.scanEntry('site-7', 'entry-site-7'),
+      client.scanEntry(SCAN_AT_SITE_7),
+      client.scanEntry(SCAN_AT_SITE_7),
     ]);
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (first.ok && second.ok) {
       expect(first.value.ticketId).toBe(second.value.ticketId);
-      expect(first.value.status).toBe('opened');
+      expect(first.value.state).toBe('open');
     }
     expect(api.ticketsOpenedCount()).toBe(1);
     expect(client.activeTicket()).toBe('ticket-1');
@@ -46,12 +54,12 @@ describe('D3 Driver App scanning', () => {
 
     api.dropNextAnswers(1);
 
-    const lost = await client.scanEntry('site-9', 'entry-site-9');
+    const lost = await client.scanEntry(scanAt('site-9'));
     expect(lost).toEqual({ ok: false, error: 'connection lost', requestId: 'scan-req-0002' });
     expect(client.pendingEntryRequestId()).toBe('scan-req-0002');
     expect(api.ticketsOpenedCount()).toBe(1);
 
-    const retry = await client.scanEntry('site-9', 'entry-site-9');
+    const retry = await client.scanEntry(scanAt('site-9'));
     expect(retry.ok).toBe(true);
     if (retry.ok) {
       expect(retry.value.ticketId).toBe('ticket-1');
@@ -66,7 +74,7 @@ describe('D3 Driver App scanning', () => {
     const api = new InMemoryTicketScanApi();
     const client = clientWith(api, ['scan-req-0003', 'scan-req-0004']);
 
-    const opened = await client.scanEntry('site-4', 'entry-site-4');
+    const opened = await client.scanEntry(scanAt('site-4'));
     expect(opened.ok).toBe(true);
 
     api.dropNextAnswers(1);
@@ -78,7 +86,7 @@ describe('D3 Driver App scanning', () => {
     const closed = await client.scanExit('exit-site-4');
     expect(closed.ok).toBe(true);
     if (closed.ok) {
-      expect(closed.value.status).toBe('closed');
+      expect(closed.value.state).toBe('closed');
       expect(closed.value.ticketId).toBe('ticket-1');
     }
     expect(client.activeTicket()).toBeUndefined();
@@ -90,7 +98,7 @@ describe('D3 Driver App scanning', () => {
     const api = new InMemoryTicketScanApi();
     const client = clientWith(api, ['scan-req-0005']);
 
-    const forged = await client.scanEntry('site-2', 'not-a-real-code');
+    const forged = await client.scanEntry({ siteId: 'site-2', carRef: CAR, entryCode: 'not-a-real-code' });
 
     expect(forged).toEqual({ ok: false, error: 'forged code' });
     expect(client.pendingEntryRequestId()).toBeUndefined();
@@ -101,7 +109,7 @@ describe('D3 Driver App scanning', () => {
   it('refuses an exit scan at another site and keeps the ticket open', async () => {
     const api = new InMemoryTicketScanApi();
     const client = clientWith(api, ['scan-req-0006', 'scan-req-0007']);
-    await client.scanEntry('site-4', 'entry-site-4');
+    await client.scanEntry(scanAt('site-4'));
 
     const wrong = await client.scanExit('entry-site-4');
 
@@ -123,10 +131,10 @@ describe('D3 Driver App scanning', () => {
     const client = clientWith(api, ['scan-req-0008', 'scan-req-0009']);
     api.dropNextAnswers(1);
 
-    const lost = await client.scanEntry('site-9', 'entry-site-9');
+    const lost = await client.scanEntry(scanAt('site-9'));
     expect(lost).toEqual({ ok: false, error: 'connection lost', requestId: 'scan-req-0008' });
 
-    const other = await client.scanEntry('site-8', 'entry-site-8');
+    const other = await client.scanEntry(scanAt('site-8'));
 
     expect(other).toEqual({ ok: false, error: 'car already parked' });
     expect(api.ticketsOpenedCount()).toBe(1);
@@ -138,8 +146,8 @@ describe('D3 Driver App scanning', () => {
     const client = clientWith(api, ['scan-req-0010', 'scan-req-0011']);
 
     const [first, second] = await Promise.all([
-      client.scanEntry('site-7', 'entry-site-7'),
-      client.scanEntry('site-6', 'entry-site-6'),
+      client.scanEntry(SCAN_AT_SITE_7),
+      client.scanEntry(scanAt('site-6')),
     ]);
 
     expect(first.ok).toBe(true);
