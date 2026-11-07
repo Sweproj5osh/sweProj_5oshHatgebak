@@ -7,7 +7,7 @@ import { buildTicketingWorld } from '../../test-support/ticketing-world';
 import { DriverScanClient } from '../scanning/driver-scan-client';
 import { HttpTicketScanApi } from '../scanning/http-ticket-scan-api';
 import type { ServerRequest } from '../server-call';
-import { DriverPaymentClient } from './driver-payment-client';
+import { DriverPaymentRefusedError } from './driver-payment-api';
 import { HttpDriverPaymentApi } from './http-driver-payment-api';
 
 const PAYMENT = { paymentId: 'payment-1', ticketId: 'ticket-1', amount: 11, method: 'app', state: 'paid' };
@@ -25,13 +25,11 @@ function recordingApi(answer: HttpResponse) {
   return { api, requests };
 }
 
-function pipelineClient(ticketsClosedUnpaid: readonly { ticketId: string; fee: number }[], providerTimesOutFor: readonly string[] = []) {
+function pipelineApi(ticketsClosedUnpaid: readonly { ticketId: string; fee: number }[], providerTimesOutFor: readonly string[] = []) {
   const payments = createStandInPaymentState(ticketsClosedUnpaid, providerTimesOutFor);
   const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: createStandInPaymentOperations(payments) });
   const api = new HttpDriverPaymentApi({ handle: app.handle, token: () => tokenFor('driver') });
-  let serial = 1;
-  const client = new DriverPaymentClient({ api, createRequestId: () => `d4-http-req-${String(serial++).padStart(4, '0')}` });
-  return { client, payments, audit: app.audit };
+  return { api, payments, audit: app.audit };
 }
 
 describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
@@ -53,31 +51,30 @@ describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
   });
 
   it('is accepted by a server that declares Amina\'s schema { ticketId }: the pipeline would refuse any extra field with 400', async () => {
-    const { client, audit } = pipelineClient([{ ticketId: 'ticket-1', fee: 11 }]);
+    const { api, audit } = pipelineApi([{ ticketId: 'ticket-1', fee: 11 }]);
 
-    const paid = await client.pay('ticket-1');
+    const paid = await api.pay('ticket-1', 'd4-http-req-0001');
 
-    expect(paid).toEqual({ ok: true, value: { payment: PAYMENT } });
+    expect(paid).toEqual({ payment: PAYMENT });
     const entries = await audit.readByScope({ personId: 'driver-1', role: 'driver' });
     expect(entries.map((entry) => [entry.operation, entry.input])).toEqual([['payments.payInApp', { ticketId: 'ticket-1' }]]);
   });
 
   it('reads the 202 answer of a pending attempt: the attempt plus "pay later or pay cash", not a refusal and not paid', async () => {
-    const { client } = pipelineClient([{ ticketId: 'ticket-2', fee: 19 }], ['ticket-2']);
+    const { api } = pipelineApi([{ ticketId: 'ticket-2', fee: 19 }], ['ticket-2']);
 
-    const answer = await client.pay('ticket-2');
+    const answer = await api.pay('ticket-2', 'd4-http-req-0002');
 
     expect(answer).toEqual({
-      ok: true,
-      value: { payment: { paymentId: 'payment-1', ticketId: 'ticket-2', amount: 19, method: 'app', state: 'pending' }, message: 'pay later or pay cash' },
+      payment: { paymentId: 'payment-1', ticketId: 'ticket-2', amount: 19, method: 'app', state: 'pending' },
+      message: 'pay later or pay cash',
     });
-    expect(client.pendingPaymentRequestId()).toBeUndefined();
   });
 
   it('shows Amina\'s 409 refusals by their word', async () => {
-    const { client } = pipelineClient([]);
+    const { api } = pipelineApi([]);
 
-    expect(await client.pay('ticket-nobody-closed')).toEqual({ ok: false, error: 'ticket not closed' });
+    await expect(api.pay('ticket-nobody-closed', 'd4-http-req-0003')).rejects.toEqual(new DriverPaymentRefusedError('ticket not closed'));
   });
 
   it('the receipt is a GET with the request id header, because showing the plate is a logged read (P9)', async () => {
@@ -102,17 +99,14 @@ describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
     const token = () => tokenFor('driver');
     let scanSerial = 1;
     const scans = new DriverScanClient({ api: new HttpTicketScanApi({ handle: app.handle, token }), createRequestId: () => `d4-scan-${String(scanSerial++).padStart(4, '0')}` });
-    const payments = new DriverPaymentClient({ api: new HttpDriverPaymentApi({ handle: app.handle, token }), createRequestId: () => 'd4-receipt-0001' });
+    const payments = new HttpDriverPaymentApi({ handle: app.handle, token });
     await scans.scanEntry({ siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' });
     world.clock.advanceByMilliseconds(45 * 60 * 1000);
     const closed = await scans.scanExit('exit-site-1');
 
-    const receipt = await payments.receipt('ticket-1');
+    const receipt = await payments.receipt('ticket-1', 'd4-receipt-0001');
 
     expect(closed.ok).toBe(true);
-    expect(receipt).toEqual({
-      ok: true,
-      value: { ticketId: 'ticket-1', siteId: 'site-1', openedAt: '2026-11-09T08:00:00.000Z', closedAt: '2026-11-09T08:45:00.000Z', hours: 1, fee: world.price.firstHourFee, plate: 'ABC123' },
-    });
+    expect(receipt).toEqual({ ticketId: 'ticket-1', siteId: 'site-1', openedAt: '2026-11-09T08:00:00.000Z', closedAt: '2026-11-09T08:45:00.000Z', hours: 1, fee: world.price.firstHourFee, plate: 'ABC123' });
   });
 });

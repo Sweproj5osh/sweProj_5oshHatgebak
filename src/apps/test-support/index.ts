@@ -15,7 +15,5 @@ export { InMemoryDriverAuthApi, type InMemoryDriverAuthApiOptions } from './in-m
 export { InMemoryTicketScanApi } from './in-memory-ticket-scan-api';
 export { buildTicketingWorld, TICKETING_WORLD_START, WORLD_PRICE, type TicketingWorld, type TicketingWorldOptions } from './ticketing-world';
 export { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
-export { InMemoryDriverMapApi, type SiteMapEntry } from './in-memory-driver-map-api';
-export { InMemoryDriverPaymentApi } from './in-memory-driver-payment-api';
 export { createStandInAttendanceOperations, createStandInAttendanceState, type StandInAttendanceState } from './stand-in-attendance-operations';
 export { createStandInPaymentOperations, createStandInPaymentState, type StandInPaymentState } from './stand-in-payment-operations';
