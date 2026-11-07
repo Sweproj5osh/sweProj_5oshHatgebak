@@ -7,7 +7,10 @@ import { runWhenInvokedDirectly } from './support/run-as-script';
 
 /**
  * F11 (ADR-08, Rule I, P6): no declared body schema in the composed registry has a field whose name looks like a
- * timestamp, and a `localDateTime` field appears only on operations whose roles are all committee roles.
+ * timestamp, and a `localDateTime` field appears only on operations whose roles are all committee roles. A field
+ * declared `localDateTime` is exempt from the name rule (Q7): its kind already says what it is and the committee rule
+ * already fences it, so `closedFrom: 'localDateTime'` and `startDate: 'localDateTime'` pass while `startDate: 'number'`
+ * still fails.
  */
 export const f11WriteSchemasCarryNoTimestamp = defineFitnessFunction(
   'F11',
@@ -25,9 +28,9 @@ function declaresABody(operation: DeclaredOperation): boolean {
 }
 
 function timestampKeyViolations(write: DeclaredOperation): string[] {
-  return fieldNamesOf(write)
-    .filter(looksLikeTimestampKey)
-    .map((field) => `${write.name} declares the field "${field}", which looks like a timestamp`);
+  return Object.entries(write.bodySchema?.fields ?? {})
+    .filter(([field, kind]) => kind !== LOCAL_DATE_TIME_KIND && looksLikeTimestampKey(field))
+    .map(([field]) => `${write.name} declares the field "${field}", which looks like a timestamp`);
 }
 
 function calendarOutsideCommitteeViolations(write: DeclaredOperation): string[] {

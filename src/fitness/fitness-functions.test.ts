@@ -63,11 +63,12 @@ describe('each fitness function fails on its planted violation', () => {
     ]);
   });
 
-  it('F11 catches a closedAt field and a localDateTime outside the committee, and allows the committee\'s closure', async () => {
+  it('F11 catches closedAt, a numeric startDate and a localDateTime outside the committee; a committee localDateTime named startDate passes (Q7)', async () => {
     const result = await f11WriteSchemasCarryNoTimestamp(fixture('f11-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations).toEqual([
       'bad.closeTicket declares the field "closedAt", which looks like a timestamp',
+      'bad.chairDeclaresANumericDate declares the field "startDate", which looks like a timestamp',
       'bad.driverDeclaresWhenParked declares the localDateTime field "parkedFrom", but only committee operations (roles member, chair) may take a calendar time',
     ]);
   });
