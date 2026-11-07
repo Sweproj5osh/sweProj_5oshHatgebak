@@ -87,10 +87,11 @@ export interface AccessFactsStore {
 /**
  * The one outstanding one-time code for one phone (task A1), keyed by the phone so that the wrong-code count and the
  * lock-out survive a new code request (P23). Only a keyed hash of the code is kept. Times come from the server clock.
+ * A phone nobody registered yet has no person: completing the sign-in registers it as a driver (P3).
  */
 export interface SignInChallenge {
   readonly phone: string;
-  readonly personId: PersonId;
+  readonly personId?: PersonId;
   readonly codeHash: string;
   readonly expiresAt: string;
   readonly failedAttempts: number;

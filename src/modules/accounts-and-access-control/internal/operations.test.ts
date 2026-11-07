@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { verifyToken } from '../../../entrypoint/auth/token';
 import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
 import type { HttpRequest } from '../../../entrypoint/http';
 import { loggedReadRequest, publicRequest, readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
@@ -109,10 +110,24 @@ describe('A1 sign-in through the entry point (P3, ADR-15)', () => {
     expect((await signIn(DRIVER_PHONE, await codeSentTo(DRIVER_PHONE))).status).toBe(200);
   });
 
-  it('answers an unknown phone like a known one when a code is requested, and "wrong code" at sign-in', async () => {
+  it('registers a phone nobody knows as a driver at sign-in (201, a driver token), and finds the same person again (200), with the phone replaced in the entry (P3)', async () => {
     expect((await requestCode('01099999999')).status).toBe(202);
-    expect(application.signInCodes.count()).toBe(0);
     expect(await signIn('01099999999', '123456')).toEqual({ status: 401, body: { error: 'wrong code' } });
+    const first = await signIn('01099999999', application.signInCodes.lastCodeSentTo('+201099999999') ?? '');
+    expect(first.status).toBe(201);
+    const claims = verifyToken((first.body as { token: string }).token, TEST_TOKEN_SECRET, clock.now());
+    expect(claims).toMatchObject({ ok: true, value: { role: 'driver' } });
+    const personId = claims.ok ? claims.value.personId : '';
+    expect(await application.handle(readRequest('/cars', (first.body as { token: string }).token))).toEqual({ status: 200, body: { cars: [] } });
+
+    const again = await signIn('01099999999', await codeSentTo('+201099999999'));
+    expect(again.status).toBe(200);
+    expect(verifyToken((again.body as { token: string }).token, TEST_TOKEN_SECRET, clock.now())).toMatchObject({ ok: true, value: { personId, role: 'driver' } });
+
+    const entries = (await application.audit.readByScope({ personId: chair, role: 'chair' })).filter((entry) => entry.operation === 'signIn');
+    expect(entries.map((entry) => entry.input)).toEqual([{ personId }, { personId }]);
+    expect(entries.map((entry) => entry.subjectPersonIds)).toEqual([[personId], [personId]]);
+    expect(JSON.stringify(entries)).not.toContain('1099999999');
   });
 
   it('needs a password as the second step for a member, set through the audited write that drops the password (A15, P2)', async () => {

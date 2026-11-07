@@ -15,7 +15,7 @@ let driver: PersonId;
 
 async function signInWithRightCode(phone: string) {
   await world.accounts.signIn.requestSignInCode(phone);
-  return world.accounts.signIn.signIn(phone, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? 'no code was sent');
+  return world.accounts.signIn.signIn(world.database, phone, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? 'no code was sent');
 }
 
 function wrongCodeFor(phone: string): string {
@@ -51,17 +51,17 @@ describe('A1 the task sheet cases', () => {
 
   it('refuses a wrong code', async () => {
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, wrongCodeFor(DRIVER_PHONE))).toEqual({ ok: false, error: 'wrong code' });
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, wrongCodeFor(DRIVER_PHONE))).toEqual({ ok: false, error: 'wrong code' });
   });
 
   it('locks the person out for a while after three wrong codes, even against the right code', async () => {
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
     const rightCode = world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '';
     const wrongCode = wrongCodeFor(DRIVER_PHONE);
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'wrong code' });
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'wrong code' });
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'locked' });
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, rightCode)).toEqual({ ok: false, error: 'locked' });
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'wrong code' });
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'wrong code' });
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, wrongCode)).toEqual({ ok: false, error: 'locked' });
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, rightCode)).toEqual({ ok: false, error: 'locked' });
 
     const codesBefore = world.codeSender.count();
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
@@ -76,24 +76,36 @@ describe('A1 the rest of sign-in', () => {
   it('uses each code once', async () => {
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
     const code = world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '';
-    expect((await world.accounts.signIn.signIn(DRIVER_PHONE, code)).ok).toBe(true);
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, code)).toEqual({ ok: false, error: 'wrong code' });
+    expect((await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, code)).ok).toBe(true);
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, code)).toEqual({ ok: false, error: 'wrong code' });
   });
 
   it('refuses a code older than its lifetime by the server clock', async () => {
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
     world.clock.advanceByMilliseconds(SIGN_IN_POLICY.codeLifetimeMinutes * 60_000);
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '')).toEqual({
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '')).toEqual({
       ok: false,
       error: 'code expired',
     });
   });
 
-  it('gives an unknown phone the same answer as a wrong code and sends it nothing', async () => {
+  it('registers a phone nobody knows as a driver when its code is confirmed, once; a malformed phone gets nothing (P3)', async () => {
     await world.accounts.signIn.requestSignInCode('01199999999');
-    expect(world.codeSender.count()).toBe(0);
-    expect(await world.accounts.signIn.signIn('01199999999', '123456')).toEqual({ ok: false, error: 'wrong code' });
-    expect(await world.accounts.signIn.signIn('not a phone', '123456')).toEqual({ ok: false, error: 'wrong code' });
+    expect(world.codeSender.count()).toBe(1);
+    expect(await world.accounts.signIn.signIn(world.database, '01199999999', '000000')).toMatchObject({ ok: false });
+    const first = await world.accounts.signIn.signIn(world.database, '01199999999', world.codeSender.lastCodeSentTo('+201199999999') ?? '');
+    expect(first).toMatchObject({ ok: true, value: { registered: true } });
+    const personId = first.ok ? first.value.personId : '';
+    expect(await world.accounts.authorization.roleOf(personId)).toBe('driver');
+    expect(await world.stores.personalData.detailsOf(world.database, personId)).toEqual({ personRef: personId, displayName: '', phone: '+201199999999' });
+
+    await world.accounts.signIn.requestSignInCode('01199999999');
+    const again = await world.accounts.signIn.signIn(world.database, '01199999999', world.codeSender.lastCodeSentTo('+201199999999') ?? '');
+    expect(again).toMatchObject({ ok: true, value: { personId, registered: false } });
+
+    await world.accounts.signIn.requestSignInCode('not a phone');
+    expect(world.codeSender.count()).toBe(2);
+    expect(await world.accounts.signIn.signIn(world.database, 'not a phone', '123456')).toEqual({ ok: false, error: 'wrong code' });
   });
 
   it('puts a member\'s district in the token', async () => {
@@ -109,7 +121,7 @@ describe('A1 the rest of sign-in', () => {
     await world.accounts.signIn.setCommitteePassword(member.value, member.value, 'a long enough password');
     await world.accounts.signIn.requestSignInCode('01111111111');
     const code = world.codeSender.lastCodeSentTo('+201111111111') ?? '';
-    const outcome = await world.accounts.signIn.signInWithSecondStep('01111111111', code, 'a long enough password');
+    const outcome = await world.accounts.signIn.signInWithSecondStep(world.database, '01111111111', code, 'a long enough password');
     if (!outcome.ok) {
       throw new Error(outcome.error);
     }
@@ -129,14 +141,14 @@ describe('A1 the rest of sign-in', () => {
       throw new Error(attendant.error);
     }
     await world.accounts.signIn.requestSignInCode('01222222222');
-    expect(await world.accounts.signIn.signIn('01222222222', world.codeSender.lastCodeSentTo('+201222222222') ?? '')).toEqual({
+    expect(await world.accounts.signIn.signIn(world.database, '01222222222', world.codeSender.lastCodeSentTo('+201222222222') ?? '')).toEqual({
       ok: false,
       error: 'account not live',
     });
 
     await world.stores.people.setStatus(world.database, driver, 'suspended');
     await world.accounts.signIn.requestSignInCode(DRIVER_PHONE);
-    expect(await world.accounts.signIn.signIn(DRIVER_PHONE, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '')).toEqual({
+    expect(await world.accounts.signIn.signIn(world.database, DRIVER_PHONE, world.codeSender.lastCodeSentTo(DRIVER_PHONE) ?? '')).toEqual({
       ok: false,
       error: 'account not live',
     });

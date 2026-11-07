@@ -47,7 +47,7 @@ export function accountsOperations({ accounts, signInCodeSecret }: AccountsOpera
 export const REQUEST_SIGN_IN_CODE_PATH = '/sign-in/code';
 export const SIGN_IN_PATH = '/sign-in';
 
-/** An unknown phone is answered exactly like a known one, so the door never says who is registered. */
+/** Any Egyptian mobile number is answered the same way and gets a code: the door never says who is registered (P3). */
 function requestSignInCode(accounts: AccountsAndAccessControl): PublicWriteOperation {
   return {
     kind: 'public',
@@ -70,7 +70,8 @@ const SAMPLE_SIGN_IN = { personId: 'person-sign-in-sample', phone: '+20109876543
 
 /**
  * One operation signs everyone in (F13 allows no third public name): drivers, attendants and inspectors send an empty
- * password; members and the Chair send theirs as the second step (task A15).
+ * password; members and the Chair send theirs as the second step (task A15). A phone nobody registered becomes a
+ * driver inside this write's unit of work (P3), answered 201; the audit entry carries the person reference, never the phone.
  */
 function signIn(accounts: AccountsAndAccessControl, signInCodeSecret: string): PublicWriteOperation {
   return {
@@ -79,7 +80,7 @@ function signIn(accounts: AccountsAndAccessControl, signInCodeSecret: string): P
     method: 'POST',
     path: SIGN_IN_PATH,
     bodySchema: { fields: { phone: 'string', code: 'string', password: 'string' } },
-    audit: { omit: ['phone', 'code', 'password'] },
+    audit: { omit: ['code', 'password'], replace: { phone: 'personId' } },
     rateLimitKey: 'phone',
     examples: { valid: { phone: SAMPLE_SIGN_IN.phone, code: SAMPLE_SIGN_IN.code, password: '' }, invalid: { phone: 1 } },
     async fixture(database) {
@@ -92,15 +93,22 @@ function signIn(accounts: AccountsAndAccessControl, signInCodeSecret: string): P
         failedAttempts: 0,
       });
     },
-    async handle({ body }) {
+    async handle({ body, transaction }) {
       const phone = String(body['phone']);
       const code = String(body['code']);
       const password = String(body['password']);
-      const signedIn = password === '' ? await accounts.signIn.signIn(phone, code) : await accounts.signIn.signInWithSecondStep(phone, code, password);
+      const signedIn =
+        password === ''
+          ? await accounts.signIn.signIn(transaction, phone, code)
+          : await accounts.signIn.signInWithSecondStep(transaction, phone, code, password);
       if (!signedIn.ok) {
         return { response: refuse(SIGN_IN_REFUSAL_STATUS[signedIn.error], signedIn.error) };
       }
-      return { response: respond(200, { token: signedIn.value.token }), audit: { subjectPersonIds: [signedIn.value.personId] } };
+      const { token, personId, registered } = signedIn.value;
+      return {
+        response: respond(registered ? 201 : 200, { token }),
+        audit: { subjectPersonIds: [personId], references: { personId } },
+      };
     },
   };
 }

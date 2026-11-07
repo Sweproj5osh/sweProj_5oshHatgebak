@@ -37,6 +37,9 @@ export interface PersonalDataDependencies {
   readonly clock: Clock;
 }
 
+/** A self-registered driver has given no name; the empty string is the one value that cannot be mistaken for one. */
+const NO_NAME_GIVEN_YET = '';
+
 /** The operation name the scope rules are asked about for every plate read, whichever route serves the plate. */
 export const PLATE_READ_OPERATION = 'personalData.readPlate';
 export const REGISTER_RESIDENCY_OPERATION = 'personalData.registerResidency';
@@ -66,6 +69,17 @@ export class PersonalDataService implements PersonalData {
   /** The one-time set-up of the first Chair, run by the system operator, never reachable through a request. */
   async bootstrapChair(phone: string, displayName: string): Promise<Result<PersonId, CreatePersonRefusal>> {
     return this.register('chair', phone, displayName);
+  }
+
+  /**
+   * A driver who signed in with a phone nobody registered (P3): a person with that phone and no name yet, created inside
+   * the sign-in's unit of work. The phone was normalised and found free by the sign-in before the code was confirmed.
+   */
+  async registerDriverByPhone(transaction: TableAccess, phone: string): Promise<PersonId> {
+    const personId = `person-${randomUUID()}`;
+    await this.dependencies.people.add(transaction, { personId, role: 'driver', status: 'active', erased: false });
+    await this.dependencies.personalData.addDetails(transaction, { personRef: personId, displayName: NO_NAME_GIVEN_YET, phone });
+    return personId;
   }
 
   /** Saving the same plate twice for one driver returns the car already saved. */

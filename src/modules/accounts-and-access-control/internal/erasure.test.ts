@@ -58,7 +58,9 @@ describe('A5 the rest of erasure', () => {
     expect(await world.accounts.personalData.ownCars(driver)).toEqual([]);
     expect(await world.accounts.authorization.liveStatus(driver)).toBe('revoked');
     await world.accounts.signIn.requestSignInCode('01011111111');
-    expect(await world.accounts.signIn.signIn('01011111111', world.codeSender.lastCodeSentTo('+201011111111') ?? '')).toEqual({ ok: false, error: 'wrong code' });
+    const signedIn = await world.accounts.signIn.signIn(world.database, '01011111111', world.codeSender.lastCodeSentTo('+201011111111') ?? '');
+    expect(signedIn).toMatchObject({ ok: true, value: { registered: true } });
+    expect(signedIn.ok && signedIn.value.personId).not.toBe(driver);
   });
 
   it('lets the phone number be registered again by someone new', async () => {

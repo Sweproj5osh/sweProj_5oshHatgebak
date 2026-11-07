@@ -21,6 +21,8 @@ export interface SignInDependencies {
   readonly tokenIssuer: TokenIssuer;
   /** Keys the hash kept in place of each code (P23). */
   readonly codeHashSecret: string;
+  /** Creates the driver a phone nobody registered becomes when its code is confirmed, inside the sign-in's unit of work. */
+  registerDriver(transaction: TableAccess, phone: string): Promise<PersonId>;
   readonly clock: Clock;
 }
 
@@ -33,10 +35,10 @@ export interface SignInDependencies {
 export class SignInService implements SignIn {
   constructor(private readonly dependencies: SignInDependencies) {}
 
+  /** Any Egyptian mobile number gets a code: a registered person's, or a future driver's (P3). A malformed phone gets nothing. */
   async requestSignInCode(phone: string): Promise<Result<void, 'locked'>> {
     const normalisedPhone = normalisePhone(phone);
-    const personId = normalisedPhone.ok ? await this.dependencies.personalData.personWithPhone(this.database, normalisedPhone.value) : undefined;
-    if (!normalisedPhone.ok || personId === undefined) {
+    if (!normalisedPhone.ok) {
       return succeed(undefined);
     }
     const now = this.dependencies.clock.now();
@@ -45,9 +47,10 @@ export class SignInService implements SignIn {
       return fail('locked');
     }
     const code = newOneTimeCode();
+    const personId = await this.dependencies.personalData.personWithPhone(this.database, normalisedPhone.value);
     await this.dependencies.challenges.save(this.database, {
       phone: normalisedPhone.value,
-      personId,
+      ...(personId === undefined ? {} : { personId }),
       codeHash: hashOfCode(this.dependencies.codeHashSecret, normalisedPhone.value, code),
       expiresAt: minutesAfter(now, SIGN_IN_POLICY.codeLifetimeMinutes).toISOString(),
       failedAttempts: failedAttemptsCarriedOver(earlier),
@@ -56,12 +59,12 @@ export class SignInService implements SignIn {
     return succeed(undefined);
   }
 
-  async signIn(phone: string, code: string): Promise<Result<SignedIn, SignInRefusal>> {
-    return this.signInWith(phone, code, undefined);
+  async signIn(transaction: TableAccess, phone: string, code: string): Promise<Result<SignedIn, SignInRefusal>> {
+    return this.signInWith(transaction, phone, code, undefined);
   }
 
-  async signInWithSecondStep(phone: string, code: string, password: string): Promise<Result<SignedIn, SignInRefusal>> {
-    return this.signInWith(phone, code, password);
+  async signInWithSecondStep(transaction: TableAccess, phone: string, code: string, password: string): Promise<Result<SignedIn, SignInRefusal>> {
+    return this.signInWith(transaction, phone, code, password);
   }
 
   /** The person themself sets or changes their password; the Chair sets a member's first one or resets it. */
@@ -83,9 +86,9 @@ export class SignInService implements SignIn {
     return succeed(undefined);
   }
 
-  private async signInWith(phone: string, code: string, password: string | undefined): Promise<Result<SignedIn, SignInRefusal>> {
+  private async signInWith(transaction: TableAccess, phone: string, code: string, password: string | undefined): Promise<Result<SignedIn, SignInRefusal>> {
     const normalisedPhone = normalisePhone(phone);
-    const challenge = normalisedPhone.ok ? await this.dependencies.challenges.find(this.database, normalisedPhone.value) : undefined;
+    const challenge = normalisedPhone.ok ? await this.dependencies.challenges.find(transaction, normalisedPhone.value) : undefined;
     if (challenge === undefined) {
       return fail('wrong code');
     }
@@ -99,12 +102,15 @@ export class SignInService implements SignIn {
     if (!codeMatches(this.dependencies.codeHashSecret, challenge.phone, code, challenge.codeHash)) {
       return this.recordFailedAttempt(challenge, now, 'wrong code');
     }
-    const secondStep = await this.checkSecondStep(challenge.personId, password);
-    if (secondStep !== undefined) {
-      return secondStep === 'wrong password' ? this.recordFailedAttempt(challenge, now, 'wrong password') : fail(secondStep);
+    if (challenge.personId !== undefined) {
+      const secondStep = await this.checkSecondStep(challenge.personId, password);
+      if (secondStep !== undefined) {
+        return secondStep === 'wrong password' ? this.recordFailedAttempt(challenge, now, 'wrong password') : fail(secondStep);
+      }
     }
-    await this.dependencies.challenges.remove(this.database, challenge.phone);
-    return this.issueToken(challenge.personId);
+    const personId = challenge.personId ?? (await this.dependencies.registerDriver(transaction, challenge.phone));
+    await this.dependencies.challenges.remove(transaction, challenge.phone);
+    return this.issueToken(transaction, personId, challenge.personId === undefined);
   }
 
   /** undefined when no second step is needed or the password is right; the code stays usable otherwise. */
@@ -123,6 +129,10 @@ export class SignInService implements SignIn {
     return (await passwordMatches(password, stored)) ? undefined : 'wrong password';
   }
 
+  /**
+   * A refused write rolls its unit of work back, and a wrong code is a refusal; the count must outlive it, or three
+   * wrong codes would never lock anyone out. So the count is written to the committed tables, beside the unit of work.
+   */
   private async recordFailedAttempt(
     challenge: SignInChallenge,
     now: Date,
@@ -142,16 +152,16 @@ export class SignInService implements SignIn {
   }
 
   /** The token names one person and one role, plus a member's district; every claim is set here by the server. */
-  private async issueToken(personId: PersonId): Promise<Result<SignedIn, SignInRefusal>> {
-    const person = await this.dependencies.people.find(this.database, personId);
-    if (person === undefined || (await this.dependencies.authorization.liveStatus(personId)) !== 'active') {
+  private async issueToken(transaction: TableAccess, personId: PersonId, registered: boolean): Promise<Result<SignedIn, SignInRefusal>> {
+    const person = await this.dependencies.people.find(transaction, personId);
+    if (person === undefined || (registered ? person.status !== 'active' : (await this.dependencies.authorization.liveStatus(personId)) !== 'active')) {
       return fail('account not live');
     }
     const districtId = person.role === 'member' ? await this.dependencies.authorization.memberDistrictOf(personId) : undefined;
     const token = this.dependencies.tokenIssuer.issue(
       districtId === undefined ? { personId, role: person.role } : { personId, role: person.role, districtId },
     );
-    return succeed({ token, personId });
+    return succeed({ token, personId, registered });
   }
 
   private get database(): TableAccess {

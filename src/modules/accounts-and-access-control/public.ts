@@ -182,22 +182,25 @@ export type SignInRefusal =
 
 export type PasswordRefusal = 'not a committee member' | 'not allowed' | 'password too short' | 'password too long';
 
-/** A fresh token and the person it names, so the sign-in's audit entry can name its subject. */
+/** A fresh token and the person it names, so the sign-in's audit entry can name its subject; `registered` when the sign-in created the driver. */
 export interface SignedIn {
   readonly token: string;
   readonly personId: PersonId;
+  readonly registered: boolean;
 }
 
 /**
- * Sign-in by phone and one-time code (task A1). The code goes out through the SignInCodeSender port. Members and the
+ * Sign-in by phone and one-time code (task A1). The code goes out through the SignInCodeSender port to any Egyptian
+ * mobile number; a phone nobody registered becomes a driver the moment its code is confirmed, inside the sign-in's
+ * unit of work (P3: no third public operation, F13). Staff are created only through createPerson. Members and the
  * Chair need a second step, their password (task A15): with the code alone they are answered "second step required"
  * and the code stays usable for the second step. Wrong codes are counted per phone; three lock the phone out, and a
  * locked phone is refused a new code until the lock-out ends (P23).
  */
 export interface SignIn {
   requestSignInCode(phone: string): Promise<Result<void, 'locked'>>;
-  signIn(phone: string, code: string): Promise<Result<SignedIn, SignInRefusal>>;
-  signInWithSecondStep(phone: string, code: string, password: string): Promise<Result<SignedIn, SignInRefusal>>;
+  signIn(transaction: TableAccess, phone: string, code: string): Promise<Result<SignedIn, SignInRefusal>>;
+  signInWithSecondStep(transaction: TableAccess, phone: string, code: string, password: string): Promise<Result<SignedIn, SignInRefusal>>;
   setCommitteePassword(actor: PersonId, personId: PersonId, password: string): Promise<Result<void, PasswordRefusal>>;
 }
 
@@ -284,6 +287,7 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
     codeSender: signInCodeSender,
     tokenIssuer,
     codeHashSecret: signInCodeSecret,
+    registerDriver: (transaction, phone) => personalData.registerDriverByPhone(transaction, phone),
     clock,
   });
   return {
