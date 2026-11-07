@@ -4,8 +4,10 @@ One file per decision that is expensive to change later. Every record has the sa
 the forces), Decision (what we chose), Alternatives rejected (and why each lost), Consequences (what becomes easier, what
 becomes harder), Related (the decisions it depends on). Status is Accepted unless marked otherwise.
 
-All twelve were decided by Zeyad Khaled on 4 November 2026, one question at a time, following the eleven-question
-walkthrough recorded in `uml/architecture_walkthrough_decisions.md`, section 16. Ranked qualities are from ADR-01.
+ADR-01 to ADR-12 were decided by Zeyad Khaled on 4 November 2026, one question at a time, following the
+eleven-question walkthrough recorded in `uml/architecture_walkthrough_decisions.md`, section 16. ADR-13 to ADR-15 were
+decided on 7 November 2026, the review day of the teammates' first pull requests (section 17, P1 to P3). Ranked
+qualities are from ADR-01.
 
 | # | Decision |
 |---|---|
@@ -21,3 +23,6 @@ walkthrough recorded in `uml/architecture_walkthrough_decisions.md`, section 16.
 | [ADR-10](ADR-10-append-only-hash-chained-audit-log.md) | Append-only, hash-chained audit log with scoped read access |
 | [ADR-11](ADR-11-providers-behind-frozen-ports.md) | Providers sit behind ports frozen before any provider is chosen |
 | [ADR-12](ADR-12-system-issued-deposit-receipt.md) | The system issues the cash-deposit receipt; the inspector confirms |
+| [ADR-13](ADR-13-unit-of-work-reaches-the-modules.md) | The unit of work reaches the modules: `UnitOfWork & TableAccess`, first parameter of every cross-module write |
+| [ADR-14](ADR-14-declared-audit-redaction.md) | Audit entries carry no personal data; each write declares `omit` or `replace`; F12 |
+| [ADR-15](ADR-15-public-sign-in-operations.md) | Sign-in is a `public` operation kind through the single entry point, rate-limited; F13 |

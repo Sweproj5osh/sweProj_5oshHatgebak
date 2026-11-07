@@ -31,7 +31,7 @@ modules, public interfaces, owners and sets is in [MODULES.md](MODULES.md).
 npm ci                 # install (Node.js 24)
 npm run typecheck      # TypeScript, strict mode
 npm test               # Vitest: every test runs on in-memory adapters, no database needed
-npm run fitness        # the static fitness functions F1, F2, F8, F10, F11
+npm run fitness        # the static fitness functions F1, F2, F8, F10, F11, F12, F13
 npx tsx src/fitness/f2-cross-module-imports-use-public-interfaces.ts   # one fitness function alone
 cp .env.example .env && npm start                                      # the HTTP entry point, in-memory storage
 ```
