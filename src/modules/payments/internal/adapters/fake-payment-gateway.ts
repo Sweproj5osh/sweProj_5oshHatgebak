@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { RequestId } from '../../../../shared/request-id';
 import type { ChargeOutcome, ChargeResult, PaymentGateway } from '../../public';
+import { PROVIDER_TIMEOUT_MILLISECONDS } from '../payment-ledger';
 
 /**
  * The stand-in for the outside payment provider (task C1, ADR-11). Every test and the in-memory server run on it;
  * the real adapter of task C18 replaces it by configuration only.
  *
- * The answer is chosen by the amount's last whole-pound digit: 1 → paid, 2 → declined, 3 → pending, 9 → no answer
- * until the caller's timeout passes, then "timed out". Every other digit is paid, so an ordinary fee needs no
- * special amount to succeed.
+ * The answer is chosen by the amount's last whole-pound digit: 1 → paid, 2 → declined, 3 → pending, 9 → a slow
+ * provider: no answer for the ledger's whole timer, then paid one second late (P18: the adapter never times itself).
+ * Every other digit is paid, so an ordinary fee needs no special amount to succeed.
  */
 export interface FakePaymentGateway extends PaymentGateway {
   /** How many times `charge` was called with this key, or in total when no key is given (task C3). */
@@ -25,19 +26,27 @@ interface RecordedCharge {
   readonly outcome: ChargeOutcome;
 }
 
-const OUTCOME_BY_LAST_DIGIT: Readonly<Record<number, ChargeOutcome>> = {
-  1: 'paid',
-  2: 'declined',
-  3: 'pending',
-  9: 'timed out',
+/** How the fake answers an amount: what it says, and whether it says it late. */
+export interface ScriptedBehaviour {
+  readonly outcome: ChargeOutcome;
+  readonly answersLate: boolean;
+}
+
+const LATE_ANSWER_MILLISECONDS = PROVIDER_TIMEOUT_MILLISECONDS + 1_000;
+
+const BEHAVIOUR_BY_LAST_DIGIT: Readonly<Record<number, ScriptedBehaviour>> = {
+  1: { outcome: 'paid', answersLate: false },
+  2: { outcome: 'declined', answersLate: false },
+  3: { outcome: 'pending', answersLate: false },
+  9: { outcome: 'paid', answersLate: true },
 };
 
-const DEFAULT_OUTCOME: ChargeOutcome = 'paid';
+const DEFAULT_BEHAVIOUR: ScriptedBehaviour = { outcome: 'paid', answersLate: false };
 
-/** The outcome the fake gives an amount, from its last whole-pound digit. */
-export function outcomeForAmount(amount: number): ChargeOutcome {
+/** The behaviour the fake gives an amount, from its last whole-pound digit. */
+export function behaviourForAmount(amount: number): ScriptedBehaviour {
   const lastDigit = Math.abs(Math.trunc(amount)) % 10;
-  return OUTCOME_BY_LAST_DIGIT[lastDigit] ?? DEFAULT_OUTCOME;
+  return BEHAVIOUR_BY_LAST_DIGIT[lastDigit] ?? DEFAULT_BEHAVIOUR;
 }
 
 /** Waits the given time. A plain timer so that tests can drive it with fake timers. */
@@ -51,7 +60,8 @@ class ScriptedPaymentGateway implements FakePaymentGateway {
   private readonly callsByKey = new Map<RequestId, number>();
   private totalCalls = 0;
 
-  async charge(amount: number, idempotencyKey: RequestId, timeoutMilliseconds: number): Promise<ChargeResult> {
+  /** A repeated key answers at once with the first answer: the provider already holds the charge (ADR-08). */
+  async charge(amount: number, idempotencyKey: RequestId): Promise<ChargeResult> {
     this.countCall(idempotencyKey);
 
     const alreadyCharged = this.chargesByKey.get(idempotencyKey);
@@ -59,15 +69,13 @@ class ScriptedPaymentGateway implements FakePaymentGateway {
       return toResult(alreadyCharged);
     }
 
-    const outcome = outcomeForAmount(amount);
-    if (outcome === 'timed out') {
-      await wait(timeoutMilliseconds);
-      return { outcome };
-    }
-
-    const charge: RecordedCharge = { providerReference: `fake-${randomUUID()}`, amount, idempotencyKey, outcome };
+    const behaviour = behaviourForAmount(amount);
+    const charge: RecordedCharge = { providerReference: `fake-${randomUUID()}`, amount, idempotencyKey, outcome: behaviour.outcome };
     this.chargesByReference.set(charge.providerReference, charge);
     this.chargesByKey.set(idempotencyKey, charge);
+    if (behaviour.answersLate) {
+      await wait(LATE_ANSWER_MILLISECONDS);
+    }
     return toResult(charge);
   }
 
