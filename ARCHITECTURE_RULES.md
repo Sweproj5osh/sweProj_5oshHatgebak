@@ -61,7 +61,8 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
   fails the build otherwise.
 - You write only inside the modules you own. Changes to another owner's module go through that owner.
 - Shared code lives in `src/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
-  unit of work, the operation contract and body schema, the rate-limiter port. A module never imports
+  unit of work, the operation contract and body schema, the rate-limiter port, the token-issuer port, the keyed serial
+  queue. A module never imports
   `src/entrypoint` (F2): the entry point depends on the modules, not the reverse.
 - `committee-prices` imports nothing outside its own folder (F1): it is pure arithmetic, testable with plain numbers.
 - A must-stay-on module never calls a may-fail module synchronously (Rule D, F8). It publishes an event instead.
@@ -86,7 +87,11 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - The audit entry holds: who (person, role), what (operation, input), when (server clock), why (mandatory for prices,
   licences, waivers and corrections), the approver if any, the request id, and the hash of the previous entry.
 - The audit table is append-only twice over: no update or delete code path exists, and the application's database role
-  has no `UPDATE` or `DELETE` right on it. Corrections are new rows.
+  has no `UPDATE` or `DELETE` right on it. Corrections are new rows. A one-row head (last id, last hash) moves with
+  every append in the same transaction, so a log cut at its tail fails verification. The commit step of every audited
+  action (next id, chain, append, commit) is serialized per process and, across copies, by the advisory lock.
+- The first Chair is created once from the environment at start-up, as an audited action of the system actor
+  (`{ kind: 'system' }`); every other person is created by someone above them or registers themself.
 - Events (TicketOpened, TicketClosed, TicketPaid, DepositConfirmed, RequestAwaitingChair, …) are written to the
   `outbox` table inside the same transaction and delivered by a job. There is no message broker. Handlers tolerate
   receiving an event twice.
@@ -115,7 +120,11 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
   or money; role table, then `Authorization` with the same ladder as writes: Chair everywhere, Member in the district,
   Inspector in the zone, Attendant at the own site).
 - The same request id with a different body is refused with 409 and writes nothing: the response store keeps the hash
-  of the body beside the response (Rule H).
+  of the body beside the response (Rule H). One request id is handled at a time, from the repeat lookup to the store of
+  the response, so a concurrent repeat waits and receives the stored answer.
+- A failed handler answers a plain "internal error" and a correlation id; the cause goes to the server log only.
+- The token is checked before the route: an unknown path answers 401 without a token, so the route table is not
+  discoverable.
 - Live status on every request: after the token check the pipeline asks `Authorization.liveStatus` and refuses anything
   but active; the session's bound site rides on the actor. Tokens expire: staff after 14 hours, drivers after 30 days;
   the live-status check is what locks a person out, the expiry only bounds a stolen token.

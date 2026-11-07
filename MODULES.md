@@ -30,11 +30,11 @@ A module that exposes operations through the entry point exports `operations(dep
 ## Foundation folders (Zeyad)
 | Folder | Holds |
 |---|---|
-| `src/entrypoint/` | The single HTTP entry point: token and expiry, live status, permission table, read scopes, request id, server clock rule, repeat check with body hash, rate limits, the audited unit of work that appends the one redacted audit entry, telemetry, logged reads, the composition root (`composeRegistry`, `composeInMemoryApplication`) |
-| `src/shared/` | Code with no business rule: identifiers and roles, `Result`, `Clock`, request ids, canonical JSON, timestamp detection, `UnitOfWork` and `TableAccess`, the operation contract (`ReadOperation`, `WriteOperation`, `PublicWriteOperation`, `TelemetryOperation`, their contexts and outcomes, `respond`, `refuse`), the body schema (`list of <kind>`, `localDateTime`), the `RateLimiter` port, event ports and the outbox delivery job |
+| `src/entrypoint/` | The single HTTP entry point: token and expiry, live status, permission table, read scopes, request id, server clock rule, repeat check with body hash under a per-request-id lock, rate limits, the audited unit of work whose serialized commit step appends the one redacted audit entry, telemetry, logged reads, the bootstrap of the first Chair, the composition root (`composeRegistry`, `composeInMemoryApplication`, `composeInMemoryServer`) |
+| `src/shared/` | Code with no business rule: identifiers and roles, `Result`, `Clock`, request ids, canonical JSON, timestamp detection, `UnitOfWork` and `TableAccess`, the operation contract (`ReadOperation`, `WriteOperation`, `PublicWriteOperation`, `TelemetryOperation`, their contexts and outcomes, `respond`, `refuse`), the body schema (`list of <kind>`, `localDateTime`), the `RateLimiter` and `TokenIssuer` ports, `SerialQueue` and `KeyedSerialQueue`, event ports and the outbox delivery job |
 | `src/adapters/in-memory/` | The in-memory database (keyed rows, staged replace and remove), audit store, outbox store, response store and rate limiter every test runs on |
 | `src/fitness/` | The static fitness functions and the fixtures that prove each one can fail |
-| `db/migrations/` | PostgreSQL migrations: one schema per module, `personal_data`, `foundation` (outbox, write responses), the append-only `audit_log` |
+| `db/migrations/` | PostgreSQL migrations: one schema per module, `personal_data`, `foundation` (outbox, write responses), the append-only `audit_log` with its one-row `head` and three actor shapes (0003) |
 
 ## Open placement
 `PendingActions` (the assistant proposes, the driver confirms; Q12 and task D18) is named in the interface catalogue
