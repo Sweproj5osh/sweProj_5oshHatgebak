@@ -35,3 +35,14 @@ export function telemetryRequest(path: string, role: Role, body: unknown): HttpR
 export function readRequest(path: string, token: string, query: Record<string, string> = {}): HttpRequest {
   return { method: 'GET', path, query, headers: { authorization: `Bearer ${token}` }, address: TEST_ADDRESS };
 }
+
+/** A logged read (P9): a read that carries the request id its one audit entry will name. */
+export function loggedReadRequest(path: string, role: Role, requestId: string, query: Record<string, string> = {}): HttpRequest {
+  return {
+    method: 'GET',
+    path,
+    query,
+    headers: { authorization: `Bearer ${tokenFor(role)}`, [REQUEST_ID_HEADER]: requestId },
+    address: TEST_ADDRESS,
+  };
+}

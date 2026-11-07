@@ -1,13 +1,14 @@
 import type { Actor } from '../shared/identifiers';
-import { refuse, type HttpResponse, type ReadOperation, type RoleGuardedOperation } from '../shared/operation-contract';
+import { refuse, type HttpResponse, type RoleGuardedOperation } from '../shared/operation-contract';
 import type { PermissionTable } from './auth/permission-table';
 import { verifyToken } from './auth/token';
 import type { HttpRequest } from './http';
 import type { OperationRegistry } from './operations/registry';
+import { handleRead, type ReadDependencies } from './reads';
 import { handleTelemetry } from './telemetry';
 import { handlePublicWrite, handleWrite, type WriteDependencies } from './writes';
 
-export interface RequestHandlerDependencies extends WriteDependencies {
+export interface RequestHandlerDependencies extends WriteDependencies, ReadDependencies {
   readonly registry: OperationRegistry;
   readonly permissions: PermissionTable;
   readonly tokenSecret: string;
@@ -15,7 +16,7 @@ export interface RequestHandlerDependencies extends WriteDependencies {
 
 export type RequestHandler = (request: HttpRequest) => Promise<HttpResponse>;
 
-export { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './write-intake';
+export { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './intake';
 
 /**
  * The single entry point. Every request passes, in order: route → token → permission table → the operation's own
@@ -56,14 +57,10 @@ function dispatch(
 ): Promise<HttpResponse> {
   switch (operation.kind) {
     case 'read':
-      return handleRead(operation, request, actor);
+      return handleRead(operation, request, actor, dependencies);
     case 'telemetry':
       return handleTelemetry(operation, request, actor, dependencies);
     case 'write':
       return handleWrite(operation, request, actor, dependencies);
   }
-}
-
-function handleRead(operation: ReadOperation, request: HttpRequest, actor: Actor): Promise<HttpResponse> {
-  return operation.handle({ actor, query: request.query });
 }

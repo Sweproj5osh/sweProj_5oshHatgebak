@@ -20,7 +20,7 @@ function readAuditLogByScope(audit: AuditTrail): ReadOperation {
     path: '/audit-log',
     allowedRoles: ['attendant', 'inspector', 'member', 'chair'],
     async handle(context) {
-      return respond(200, { entries: await audit.readByScope(context.actor) });
+      return { response: respond(200, { entries: await audit.readByScope(context.actor) }) };
     },
   };
 }
@@ -33,7 +33,7 @@ function verifyAuditChain(audit: AuditTrail): ReadOperation {
     path: '/audit-log/verification',
     allowedRoles: ['chair'],
     async handle() {
-      return respond(200, { chainIntact: await audit.verifyChain() });
+      return { response: respond(200, { chainIntact: await audit.verifyChain() }) };
     },
   };
 }

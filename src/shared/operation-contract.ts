@@ -33,6 +33,8 @@ export function refuse(status: number, message: string, details?: unknown): Http
 export interface ReadContext {
   readonly actor: Actor;
   readonly query: Readonly<Record<string, string>>;
+  /** The tables to read: the committed rows for a plain read, the unit of work for a logged read (P9). */
+  readonly database: TableAccess;
 }
 
 /**
@@ -88,9 +90,19 @@ export interface AuditDetail {
   readonly references?: Readonly<Record<string, string>>;
 }
 
-export interface WriteOutcome {
+/** The handler's answer plus what it adds to the one audit entry; the same shape for writes and logged reads. */
+export interface AuditedOutcome {
   readonly response: HttpResponse;
   readonly audit?: AuditDetail;
+}
+
+export type WriteOutcome = AuditedOutcome;
+export type ReadOutcome = AuditedOutcome;
+
+/** What a read declares about personal data (Rule F, P9), beside the redaction of the query it logs. */
+export interface ReadAuditDeclaration extends AuditRedaction {
+  /** True when the schema or the result names a person, a plate or a phone; such a read must be `logged` (F5). */
+  readonly touchesPersonalData?: boolean;
 }
 
 interface RouteBase {
@@ -111,10 +123,17 @@ export interface BodyDeclaration {
   fixture?(database: TableAccess): Promise<void>;
 }
 
+/**
+ * A read. When `logged` is true the pipeline requires a request id, opens a unit of work, runs the handler and writes
+ * one redacted audit entry (operation, actor, request id, the subject the handler names), then commits (P9). Modules
+ * never append entries themselves.
+ */
 export interface ReadOperation extends OperationBase {
   readonly kind: 'read';
   readonly method: 'GET';
-  handle(context: ReadContext): Promise<HttpResponse>;
+  readonly logged?: boolean;
+  readonly audit?: ReadAuditDeclaration;
+  handle(context: ReadContext): Promise<ReadOutcome>;
 }
 
 export interface WriteOperation extends OperationBase, BodyDeclaration {

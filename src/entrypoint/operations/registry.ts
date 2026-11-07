@@ -1,4 +1,4 @@
-import type { HttpMethod, Operation, PublicWriteOperation, TelemetryOperation, WriteOperation } from '../../shared/operation-contract';
+import type { HttpMethod, Operation, PublicWriteOperation, ReadOperation, TelemetryOperation, WriteOperation } from '../../shared/operation-contract';
 
 export class OperationRegistry {
   private readonly byRoute = new Map<string, Operation>();
@@ -15,6 +15,10 @@ export class OperationRegistry {
 
   all(): readonly Operation[] {
     return [...this.byRoute.values()];
+  }
+
+  reads(): readonly ReadOperation[] {
+    return this.all().filter((operation): operation is ReadOperation => operation.kind === 'read');
   }
 
   writes(): readonly WriteOperation[] {

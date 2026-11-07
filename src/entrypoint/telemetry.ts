@@ -4,7 +4,7 @@ import type { RateLimiter } from '../shared/rate-limiter';
 import type { HttpRequest } from './http';
 import { TELEMETRY_READINGS_PER_PERSON, TOO_MANY_ATTEMPTS } from './rate-limits';
 import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
-import { admitBody } from './write-intake';
+import { admitBody } from './intake';
 
 export interface TelemetryDependencies {
   readonly resources: UnitOfWorkResourcesFactory;

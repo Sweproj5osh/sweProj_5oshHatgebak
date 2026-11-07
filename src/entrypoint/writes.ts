@@ -7,7 +7,7 @@ import type { HttpRequest } from './http';
 import { PUBLIC_ATTEMPTS_PER_ADDRESS, PUBLIC_ATTEMPTS_PER_KEY, TOO_MANY_ATTEMPTS } from './rate-limits';
 import type { ResponseStore } from './repeatable-writes/response-store';
 import type { UnitOfWorkResourcesFactory } from './unit-of-work-resources';
-import { admitWrite, rememberIfCommitted } from './write-intake';
+import { admitWrite, rememberIfCommitted } from './intake';
 
 export interface WriteDependencies {
   readonly resources: UnitOfWorkResourcesFactory;

@@ -26,20 +26,29 @@ export async function admitWrite(
   responseOwner: string,
   responses: ResponseStore,
 ): Promise<Result<AdmittedWrite, HttpResponse>> {
-  const requestId = request.headers[REQUEST_ID_HEADER];
-  if (!isWellFormedRequestId(requestId)) {
-    return fail(refuse(400, `every write needs a well-formed ${REQUEST_ID_HEADER} header (8 to 128 letters, digits, - or _)`));
+  const requestId = admitRequestId(request, 'every write');
+  if (!requestId.ok) {
+    return requestId;
   }
   const body = admitBody(request, schema);
   if (!body.ok) {
     return body;
   }
-  const responseKey = responseKeyFor(responseOwner, requestId);
+  const responseKey = responseKeyFor(responseOwner, requestId.value);
   const earlier = await responses.find(responseKey);
   if (earlier !== undefined) {
     return fail(earlier);
   }
-  return succeed({ requestId, body: body.value, responseKey });
+  return succeed({ requestId: requestId.value, body: body.value, responseKey });
+}
+
+/** Rule H: the client's request id, well formed, or the refusal naming who needs it ("every write", "a logged read"). */
+export function admitRequestId(request: HttpRequest, whoNeedsIt: string): Result<RequestId, HttpResponse> {
+  const requestId = request.headers[REQUEST_ID_HEADER];
+  if (!isWellFormedRequestId(requestId)) {
+    return fail(refuse(400, `${whoNeedsIt} needs a well-formed ${REQUEST_ID_HEADER} header (8 to 128 letters, digits, - or _)`));
+  }
+  return succeed(requestId);
 }
 
 /** The server clock rule (Rule I) and the schema check, shared by every kind that takes a body. */

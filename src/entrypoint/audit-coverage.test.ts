@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { refuse, respond, type PublicWriteOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
+import { refuse, respond, type PublicWriteOperation, type ReadOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
 import { composeInMemoryApplication, type InMemoryApplication } from './composition';
 import type { HttpRequest } from './http';
 import { publicRequest, telemetryRequest, TEST_TOKEN_SECRET, writeRequest } from './test-helpers';
@@ -30,6 +30,34 @@ describe('F5 audit coverage over every write and public operation in the compose
     });
   }
 });
+
+/** Rule F: showing personal data is a logged join, so a read that declares it touches personal data must be logged (P9). */
+describe('F5: every read that touches personal data is a logged read', () => {
+  const { registry } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+
+  it('holds for every read in the composed registry', () => {
+    expect(unloggedReadsOfPersonalData(registry.reads())).toEqual([]);
+  });
+
+  it('names a read that touches personal data without being logged', () => {
+    const unlogged: ReadOperation = {
+      kind: 'read',
+      name: 'bad.readPlate',
+      method: 'GET',
+      path: '/bad/plates',
+      allowedRoles: ['chair'],
+      audit: { touchesPersonalData: true },
+      async handle() {
+        return { response: respond(200, {}) };
+      },
+    };
+    expect(unloggedReadsOfPersonalData([unlogged])).toEqual(['bad.readPlate']);
+  });
+});
+
+function unloggedReadsOfPersonalData(reads: readonly ReadOperation[]): string[] {
+  return reads.filter((read) => read.audit?.touchesPersonalData === true && read.logged !== true).map((read) => read.name);
+}
 
 /** Telemetry is left out of the one-entry rule on purpose (P7): a measurement is not an action, so it leaves no entry. */
 describe('F5 ignores telemetry operations explicitly: a telemetry post leaves no audit entry', () => {

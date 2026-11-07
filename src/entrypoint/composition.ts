@@ -79,6 +79,7 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
     registry,
     permissions,
     tokenSecret: options.tokenSecret,
+    database,
     resources,
     responses: new InMemoryResponseStore(),
     rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
