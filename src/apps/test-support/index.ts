@@ -17,3 +17,5 @@ export { InMemoryAttendantModeApi } from './in-memory-attendant-mode-api';
 export { createStandInAttendanceOperations, createStandInAttendanceState, type StandInAttendanceState } from './stand-in-attendance-operations';
 export { createStandInPaymentOperations, createStandInPaymentState, type StandInPaymentState } from './stand-in-payment-operations';
 export { platesFor, priceListFor, TEST_PRICE } from './ticketing-ports';
+export { InMemoryDriverMapApi, type SiteMapEntry } from './in-memory-driver-map-api';
+export { InMemoryDriverPaymentApi } from './in-memory-driver-payment-api';
