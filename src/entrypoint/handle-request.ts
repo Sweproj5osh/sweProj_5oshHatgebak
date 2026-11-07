@@ -4,6 +4,7 @@ import type { PermissionTable } from './auth/permission-table';
 import { verifyToken } from './auth/token';
 import type { HttpRequest } from './http';
 import type { OperationRegistry } from './operations/registry';
+import { handleTelemetry } from './telemetry';
 import { handlePublicWrite, handleWrite, type WriteDependencies } from './writes';
 
 export interface RequestHandlerDependencies extends WriteDependencies {
@@ -53,10 +54,14 @@ function dispatch(
   actor: Actor,
   dependencies: RequestHandlerDependencies,
 ): Promise<HttpResponse> {
-  if (operation.kind === 'read') {
-    return handleRead(operation, request, actor);
+  switch (operation.kind) {
+    case 'read':
+      return handleRead(operation, request, actor);
+    case 'telemetry':
+      return handleTelemetry(operation, request, actor, dependencies);
+    case 'write':
+      return handleWrite(operation, request, actor, dependencies);
   }
-  return handleWrite(operation, request, actor, dependencies);
 }
 
 function handleRead(operation: ReadOperation, request: HttpRequest, actor: Actor): Promise<HttpResponse> {

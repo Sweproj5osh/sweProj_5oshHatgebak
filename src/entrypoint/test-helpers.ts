@@ -27,6 +27,11 @@ export function publicRequest(path: string, requestId: string, body: unknown, ad
   return { method: 'POST', path, query: {}, headers: { [REQUEST_ID_HEADER]: requestId }, address, body };
 }
 
+/** A telemetry post: token, body, no request id (P7). */
+export function telemetryRequest(path: string, role: Role, body: unknown): HttpRequest {
+  return { method: 'POST', path, query: {}, headers: { authorization: `Bearer ${tokenFor(role)}` }, address: TEST_ADDRESS, body };
+}
+
 export function readRequest(path: string, token: string, query: Record<string, string> = {}): HttpRequest {
   return { method: 'GET', path, query, headers: { authorization: `Bearer ${token}` }, address: TEST_ADDRESS };
 }

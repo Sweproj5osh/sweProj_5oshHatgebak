@@ -30,6 +30,20 @@ export async function admitWrite(
   if (!isWellFormedRequestId(requestId)) {
     return fail(refuse(400, `every write needs a well-formed ${REQUEST_ID_HEADER} header (8 to 128 letters, digits, - or _)`));
   }
+  const body = admitBody(request, schema);
+  if (!body.ok) {
+    return body;
+  }
+  const responseKey = responseKeyFor(responseOwner, requestId);
+  const earlier = await responses.find(responseKey);
+  if (earlier !== undefined) {
+    return fail(earlier);
+  }
+  return succeed({ requestId, body: body.value, responseKey });
+}
+
+/** The server clock rule (Rule I) and the schema check, shared by every kind that takes a body. */
+export function admitBody(request: HttpRequest, schema: BodySchema): Result<ValidBody, HttpResponse> {
   const timestampFields = findTimestampFields(request.body);
   if (timestampFields.length > 0) {
     return fail(refuse(400, TIMESTAMPS_ARE_SET_BY_THE_SERVER, { fields: timestampFields }));
@@ -38,12 +52,7 @@ export async function admitWrite(
   if (!body.ok) {
     return fail(refuse(400, 'body does not match the operation schema', { problems: body.error }));
   }
-  const responseKey = responseKeyFor(responseOwner, requestId);
-  const earlier = await responses.find(responseKey);
-  if (earlier !== undefined) {
-    return fail(earlier);
-  }
-  return succeed({ requestId, body: body.value, responseKey });
+  return body;
 }
 
 /** Only a committed write's response is stored, so a refusal or a rolled-back failure is re-evaluated on retry. */

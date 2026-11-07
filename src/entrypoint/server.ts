@@ -66,6 +66,11 @@ function readBody(incoming: IncomingMessage): Promise<string> {
 }
 
 function writeJson(outgoing: ServerResponse, status: number, body: unknown): void {
+  if (body === undefined) {
+    outgoing.writeHead(status);
+    outgoing.end();
+    return;
+  }
   outgoing.writeHead(status, { 'content-type': 'application/json' });
   outgoing.end(JSON.stringify(body));
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { refuse, respond, type PublicWriteOperation, type WriteOperation } from '../shared/operation-contract';
+import { refuse, respond, type PublicWriteOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
 import { composeInMemoryApplication, type InMemoryApplication } from './composition';
 import type { HttpRequest } from './http';
-import { publicRequest, TEST_TOKEN_SECRET, writeRequest } from './test-helpers';
+import { publicRequest, telemetryRequest, TEST_TOKEN_SECRET, writeRequest } from './test-helpers';
 
 type AuditedWrite = WriteOperation | PublicWriteOperation;
 
@@ -27,6 +27,33 @@ describe('F5 audit coverage over every write and public operation in the compose
 
     it(`${operation.name}: an invalid payload leaves zero audit rows`, async () => {
       await expectNoAuditRowForTheInvalidExample(composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET }), operation);
+    });
+  }
+});
+
+/** Telemetry is left out of the one-entry rule on purpose (P7): a measurement is not an action, so it leaves no entry. */
+describe('F5 ignores telemetry operations explicitly: a telemetry post leaves no audit entry', () => {
+  const { registry } = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+  const reading: TelemetryOperation = {
+    kind: 'telemetry',
+    name: 'test.reading',
+    method: 'POST',
+    path: '/test/readings',
+    allowedRoles: ['attendant'],
+    bodySchema: { fields: { value: 'number' } },
+    examples: { valid: { value: 1 }, invalid: {} },
+    async handle(context) {
+      await context.transaction.insert('test_readings', String(Math.random()), context.body);
+    },
+  };
+
+  for (const operation of [...registry.telemetry(), reading]) {
+    it(`${operation.name}: a valid reading is accepted with 204 and leaves zero audit rows`, async () => {
+      const application = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, additionalOperations: [reading] });
+      await operation.fixture?.(application.database);
+      const response = await application.handle(telemetryRequest(operation.path, firstAllowedRole(operation), operation.examples.valid));
+      expect(response.status).toBe(204);
+      expect(await application.audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(0);
     });
   }
 });
@@ -78,7 +105,7 @@ function sampleRequest(operation: AuditedWrite, requestId: string, body: unknown
   return writeRequest(operation.path, firstAllowedRole(operation), requestId, body);
 }
 
-function firstAllowedRole(operation: WriteOperation) {
+function firstAllowedRole(operation: WriteOperation | TelemetryOperation) {
   const role = operation.allowedRoles[0];
   if (role === undefined) {
     throw new Error(`${operation.name} allows no role, so nobody can ever call it`);

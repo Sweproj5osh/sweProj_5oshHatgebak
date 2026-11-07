@@ -58,6 +58,13 @@ export interface PublicWriteContext {
   readonly events: EventPublisher;
 }
 
+/** What a telemetry handler receives: the measurement goes into the owning module's tables and nowhere else (P7). */
+export interface TelemetryContext {
+  readonly actor: Actor;
+  readonly body: ValidBody;
+  readonly transaction: Transaction;
+}
+
 /**
  * What the one audit entry may never carry (P2, ADR-14): `omit` drops a body field; `replace` drops a body field and
  * writes, under the given name, the reference the handler returned in `AuditDetail.references`. For example
@@ -131,7 +138,18 @@ export interface PublicWriteOperation extends RouteBase, BodyDeclaration {
   handle(context: PublicWriteContext): Promise<WriteOutcome>;
 }
 
-export type Operation = ReadOperation | WriteOperation | PublicWriteOperation;
+/**
+ * A measurement, not an action (P7): token checked, rate-limited to one reading per person per minute, body validated,
+ * no request id, no audit entry, no event. The handler writes through the unit of work into its module's tables; the
+ * answer is 204. The decision a measurement may lead to (an off-site flag) is an ordinary audited write.
+ */
+export interface TelemetryOperation extends OperationBase, BodyDeclaration {
+  readonly kind: 'telemetry';
+  readonly method: 'POST';
+  handle(context: TelemetryContext): Promise<void>;
+}
+
+export type Operation = ReadOperation | WriteOperation | PublicWriteOperation | TelemetryOperation;
 
 /** Every kind but `public` names the roles that may call it; the permission table holds exactly those. */
 export type RoleGuardedOperation = Exclude<Operation, PublicWriteOperation>;
