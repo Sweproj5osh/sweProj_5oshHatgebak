@@ -14,11 +14,18 @@ export interface ChargeResult {
   readonly providerReference?: string;
 }
 
-/** Port to the outside payment provider (ADR-11). The request id is the idempotency key (ADR-08). */
+/**
+ * Port to the outside payment provider (ADR-11). The request id is the idempotency key (ADR-08).
+ * `charge` answers within `timeoutMilliseconds` or returns "timed out" with no reference; it never throws for a slow
+ * provider. `status` asks the provider about a charge it issued earlier, for settling pending payments (C5).
+ */
 export interface PaymentGateway {
   charge(amount: number, idempotencyKey: RequestId, timeoutMilliseconds: number): Promise<ChargeResult>;
   status(providerReference: string): Promise<ChargeOutcome>;
 }
+
+/** The fake provider for tests and the in-memory server (C1); the composition root builds it through this function. */
+export { createFakePaymentGateway, type FakePaymentGateway } from './internal/adapters/fake-payment-gateway';
 
 export interface PaymentRecord {
   readonly paymentId: PaymentId;
