@@ -15,12 +15,13 @@ describe('A2 the personal-data store', () => {
     console.log(`A2 report: columns scanned ${result.checked}; violations ${result.violations.length}`);
   });
 
-  it('declares the name, phone and plate columns of this area inside personal_data', async () => {
+  it('declares the name, phone and plate columns of this area inside personal_data (the phone twice: the details and the sign-in challenge keyed by it)', async () => {
     const migrationsFolder = path.join(repositoryRoot, 'db', 'migrations');
     const files = (await readdir(migrationsFolder)).filter((file) => file.endsWith('.sql'));
     const columns = (await Promise.all(files.map(async (file) => columnsDeclaredIn(await readFile(path.join(migrationsFolder, file), 'utf8'))))).flat();
     const personalColumns = columns.filter((column) => ['display_name', 'phone', 'plate'].includes(column.column));
-    expect(personalColumns.map((column) => column.column).sort()).toEqual(['display_name', 'phone', 'plate']);
+    expect([...new Set(personalColumns.map((column) => column.column))].sort()).toEqual(['display_name', 'phone', 'plate']);
+    expect(personalColumns.filter((column) => column.column === 'phone').map((column) => column.table).sort()).toEqual(['person_details', 'sign_in_challenges']);
     expect(personalColumns.every((column) => column.schema === PERSONAL_DATA_SCHEMA)).toBe(true);
   });
 

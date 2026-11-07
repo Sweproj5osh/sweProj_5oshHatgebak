@@ -5,6 +5,9 @@ import { runWhenInvokedDirectly } from './support/run-as-script';
 /** The words that name personal data in a body field, matched case-insensitively as a whole word or a word part. */
 export const PERSONAL_FIELD_WORDS: readonly string[] = ['plate', 'phone', 'name', 'password', 'latitude', 'longitude'];
 
+/** A measurement leaves no audit entry at all (P7), so there is nothing for a redaction rule to redact. */
+const TELEMETRY_KIND = 'telemetry';
+
 /**
  * F12: every personal field of a write or public schema is covered by an `audit.omit` or `audit.replace` rule, so the
  * hash-chained log never keeps a plate, phone, name, password or coordinate for ever (P2, ADR-14, Rule F).
@@ -13,7 +16,9 @@ export const f12PersonalFieldsHaveARedactionRule = defineFitnessFunction(
   'F12',
   'every personal field in a write schema has a redaction rule',
   async (repositoryRoot) => {
-    const writes = (await loadComposedOperations(repositoryRoot)).filter((operation) => operation.bodySchema !== undefined);
+    const writes = (await loadComposedOperations(repositoryRoot)).filter(
+      (operation) => operation.bodySchema !== undefined && operation.kind !== TELEMETRY_KIND,
+    );
     const violations = writes.flatMap((write) =>
       fieldNamesOf(write)
         .filter((field) => namesPersonalData(field) && !isRedacted(write, field))
