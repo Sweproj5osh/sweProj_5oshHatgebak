@@ -1,5 +1,4 @@
-import type { HttpMethod } from '../http';
-import type { Operation, WriteOperation } from './operation';
+import type { HttpMethod, Operation, WriteOperation } from '../../shared/operation-contract';
 
 export class OperationRegistry {
   private readonly byRoute = new Map<string, Operation>();

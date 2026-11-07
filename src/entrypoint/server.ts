@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { RequestHandler } from './handle-request';
-import type { HttpMethod, HttpRequest } from './http';
+import type { HttpMethod } from '../shared/operation-contract';
+import type { HttpRequest } from './http';
 
 const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
 

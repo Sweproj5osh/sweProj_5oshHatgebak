@@ -53,3 +53,6 @@ export interface AuditLogStore {
 }
 
 export { createHashChainedAuditTrail, GENESIS_HASH } from './internal/hash-chained-audit-trail';
+
+/** The operations this module registers with the entry point; the composition root calls this once (P4). */
+export { auditLogOperations as operations, type AuditLogOperationsDependencies } from './internal/audit-operations';

@@ -1,12 +1,12 @@
-import type { AuditEntry, AuditTrail } from '../modules/audit-log/public';
+import type { AuditEntry } from '../modules/audit-log/public';
 import type { Actor } from '../shared/identifiers';
 import { isWellFormedRequestId, REQUEST_ID_HEADER, type RequestId } from '../shared/request-id';
 import { findTimestampFields } from '../shared/timestamp-fields';
 import type { PermissionTable } from './auth/permission-table';
 import { verifyToken } from './auth/token';
-import { refuse, type HttpRequest, type HttpResponse } from './http';
-import { validateBody } from './operations/body-schema';
-import type { Operation, ReadOperation, WriteOperation, WriteOutcome } from './operations/operation';
+import { validateBody } from '../shared/body-schema';
+import { refuse, type HttpResponse, type Operation, type ReadOperation, type WriteOperation, type WriteOutcome } from '../shared/operation-contract';
+import type { HttpRequest } from './http';
 import type { OperationRegistry } from './operations/registry';
 import { responseKeyFor, type ResponseStore } from './repeatable-writes/response-store';
 import type { WriteResources, WriteResourcesFactory } from './write-resources';
@@ -17,8 +17,6 @@ export interface RequestHandlerDependencies {
   readonly tokenSecret: string;
   readonly writeResources: WriteResourcesFactory;
   readonly responses: ResponseStore;
-  /** The audit trail for reads, outside any transaction. */
-  readonly auditReadSide: AuditTrail;
 }
 
 export type RequestHandler = (request: HttpRequest) => Promise<HttpResponse>;
@@ -61,18 +59,13 @@ function dispatch(
   dependencies: RequestHandlerDependencies,
 ): Promise<HttpResponse> {
   if (operation.kind === 'read') {
-    return handleRead(operation, request, actor, dependencies.auditReadSide);
+    return handleRead(operation, request, actor);
   }
   return handleWrite(operation, request, actor, dependencies);
 }
 
-function handleRead(
-  operation: ReadOperation,
-  request: HttpRequest,
-  actor: Actor,
-  audit: AuditTrail,
-): Promise<HttpResponse> {
-  return operation.handle({ actor, query: request.query, audit });
+function handleRead(operation: ReadOperation, request: HttpRequest, actor: Actor): Promise<HttpResponse> {
+  return operation.handle({ actor, query: request.query });
 }
 
 async function handleWrite(

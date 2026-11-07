@@ -38,6 +38,12 @@ describe('each fitness function fails on its planted violation', () => {
     expect(result.violations[0]).toContain('audit-log/internal/read-scope');
   });
 
+  it('F2 catches a module importing the entry point', async () => {
+    const result = await f2CrossModuleImportsUsePublicInterfaces(fixture('f2-entrypoint-violation'));
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toContain('src/entrypoint, which no module or app may import');
+  });
+
   it('F8 catches a must-stay-on module importing a may-fail module', async () => {
     const result = await f8MustStayOnNeverImportsMayFail(fixture('f8-violation'));
     expect(result.passed).toBe(false);

@@ -1,6 +1,6 @@
-/** Plain data crossing the boundary between Node's http module and the request pipeline. No framework types. */
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+import type { HttpMethod } from '../shared/operation-contract';
 
+/** What Node's http module hands the pipeline, as plain data. The response half of the contract is in src/shared. */
 export interface HttpRequest {
   readonly method: HttpMethod;
   readonly path: string;
@@ -10,17 +10,4 @@ export interface HttpRequest {
   readonly headers: Readonly<Record<string, string>>;
   /** The parsed JSON body, or undefined when the request carried none. */
   readonly body?: unknown;
-}
-
-export interface HttpResponse {
-  readonly status: number;
-  readonly body: unknown;
-}
-
-export function respond(status: number, body: unknown): HttpResponse {
-  return { status, body };
-}
-
-export function refuse(status: number, message: string, details?: unknown): HttpResponse {
-  return respond(status, details === undefined ? { error: message } : { error: message, details });
 }

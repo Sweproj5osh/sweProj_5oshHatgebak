@@ -1,4 +1,4 @@
-import { fail, succeed, type Result } from '../../shared/result';
+import { fail, succeed, type Result } from './result';
 
 /**
  * The declared shape of a write body. Deliberately no date or timestamp type exists: the server is the only clock

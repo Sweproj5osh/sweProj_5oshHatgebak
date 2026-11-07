@@ -1,6 +1,6 @@
 import type { PersonId } from '../../shared/identifiers';
 import type { RequestId } from '../../shared/request-id';
-import type { HttpResponse } from '../http';
+import type { HttpResponse } from '../../shared/operation-contract';
 
 export type StoredResponse = HttpResponse;
 

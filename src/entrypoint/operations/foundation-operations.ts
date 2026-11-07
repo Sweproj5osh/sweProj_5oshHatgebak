@@ -1,33 +1,11 @@
-import { respond } from '../http';
-import type { Operation, ReadOperation, WriteContext, WriteOperation } from './operation';
+import type { Operation, WriteContext, WriteOperation } from '../../shared/operation-contract';
+import { respond } from '../../shared/operation-contract';
 
 /**
- * The foundation's own operations. The two audit reads are real. The five example writes, one per role, exist so
- * that the entry-point, repeatable-write and audit-coverage tests mean something before the module owners register
- * their real operations; each one publishes one event and returns its audit detail, nothing more.
+ * The foundation's own operations: five example writes, one per role. They exist so that the entry-point,
+ * repeatable-write and audit-coverage tests mean something before the module owners register their real operations;
+ * each one publishes one event and returns its audit detail, nothing more.
  */
-export const readAuditLogByScope: ReadOperation = {
-  kind: 'read',
-  name: 'audit.readByScope',
-  method: 'GET',
-  path: '/audit-log',
-  allowedRoles: ['attendant', 'inspector', 'member', 'chair'],
-  async handle(context) {
-    return respond(200, { entries: await context.audit.readByScope(context.actor) });
-  },
-};
-
-export const verifyAuditChain: ReadOperation = {
-  kind: 'read',
-  name: 'audit.verifyChain',
-  method: 'GET',
-  path: '/audit-log/verification',
-  allowedRoles: ['chair'],
-  async handle(context) {
-    return respond(200, { chainIntact: await context.audit.verifyChain() });
-  },
-};
-
 export const exampleDriverOpensTicket = exampleWrite({
   name: 'example.driver.openTicket',
   path: '/example/tickets',
@@ -74,8 +52,6 @@ export const exampleChairApprovesRequest = exampleWrite({
 });
 
 export const foundationOperations: readonly Operation[] = [
-  readAuditLogByScope,
-  verifyAuditChain,
   exampleDriverOpensTicket,
   exampleAttendantTicksCash,
   exampleInspectorConfirmsDeposit,

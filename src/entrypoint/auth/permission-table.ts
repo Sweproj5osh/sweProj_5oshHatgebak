@@ -1,5 +1,5 @@
 import type { Role } from '../../shared/identifiers';
-import type { Operation } from '../operations/operation';
+import type { Operation } from '../../shared/operation-contract';
 
 /** Role → the operations that role may call. Checked before any module runs (ADR-10). One table to review. */
 export class PermissionTable {

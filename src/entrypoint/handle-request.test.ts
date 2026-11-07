@@ -3,9 +3,7 @@ import { FixedClock } from '../shared/clock';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
 import { composeInMemoryApplication } from './composition';
 import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from './handle-request';
-import { respond } from './http';
-import { foundationOperations } from './operations/foundation-operations';
-import type { WriteOperation } from './operations/operation';
+import { respond, type WriteOperation } from '../shared/operation-contract';
 import { readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from './test-helpers';
 
 function application() {
@@ -96,8 +94,7 @@ describe('entry point: token and permission table (Z4)', () => {
   it('takes a member\'s district from the signed token only, never from the query string', async () => {
     const districtOne = composeInMemoryApplication({
       tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
-        ...foundationOperations,
+      additionalOperations: [
         auditedWriteInDistrict('/district-one-action', 'district-1'),
         auditedWriteInDistrict('/district-two-action', 'district-2'),
       ],
@@ -143,7 +140,7 @@ describe('entry point: repeatable writes (Z5)', () => {
     let attempts = 0;
     const { handle, audit } = composeInMemoryApplication({
       tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
+      additionalOperations: [
         {
           kind: 'write',
           name: 'test.failsOnce',
@@ -217,7 +214,7 @@ describe('entry point: audit entry and events commit together', () => {
   it('rolls everything back when the handler throws', async () => {
     const { handle, audit, outbox } = composeInMemoryApplication({
       tokenSecret: TEST_TOKEN_SECRET,
-      operations: [
+      additionalOperations: [
         {
           kind: 'write',
           name: 'test.explodes',
