@@ -17,18 +17,18 @@ export function createTicketReadingService(dependencies: TicketReadingDependenci
   const { store, plates, fees } = dependencies;
 
   return {
-    async ticketStatus(ticketId) {
-      const ticket = await store.findById(ticketId);
+    async ticketStatus(tables, ticketId) {
+      const ticket = await store.findById(tables, ticketId);
       if (ticket === undefined) {
         throw new TicketReadRefusal('unknown ticket');
       }
       return ticket;
     },
 
-    ticketHistory: (driverRef) => store.listByDriver(driverRef),
+    ticketHistory: (tables, driverRef) => store.listByDriver(tables, driverRef),
 
-    async receipt(ticketId, reader): Promise<Receipt> {
-      const ticket = await store.findById(ticketId);
+    async receipt(tables, ticketId, reader): Promise<Receipt> {
+      const ticket = await store.findById(tables, ticketId);
       if (ticket === undefined) {
         throw new TicketReadRefusal('unknown ticket');
       }

@@ -24,8 +24,8 @@ export function createOpenTicketOperation(opening: TicketOpening): Operation {
     allowedRoles: ['driver'],
     bodySchema: { fields: { siteId: 'string', carRef: 'string', entryCode: 'string' } },
     examples: { valid: { siteId: 'site-1', carRef: 'car-1', entryCode: 'entry-site-1' }, invalid: { siteId: 7 } },
-    async handle({ actor, requestId, body }) {
-      const opened = await opening.openTicket({
+    async handle({ actor, requestId, body, transaction }) {
+      const opened = await opening.openTicket(transaction, {
         requestId,
         driverRef: actor.personId,
         carRef: String(body['carRef']),

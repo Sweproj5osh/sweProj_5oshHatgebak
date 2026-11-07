@@ -24,8 +24,8 @@ function history(reading: TicketReading): ReadOperation {
     method: 'GET',
     path: '/tickets',
     allowedRoles: ['driver'],
-    async handle({ actor }) {
-      return respond(200, { tickets: await reading.ticketHistory(actor.personId) });
+    async handle({ actor, database }) {
+      return respond(200, { tickets: await reading.ticketHistory(database, actor.personId) });
     },
   };
 }
@@ -56,14 +56,14 @@ function receipt(reading: TicketReading): ReadOperation {
     async handle(context) {
       return answer(async () => {
         const ticket = await ownTicket(reading, context);
-        return respond(200, { receipt: await reading.receipt(ticket.ticketId, context.actor.personId) });
+        return respond(200, { receipt: await reading.receipt(context.database, ticket.ticketId, context.actor.personId) });
       });
     },
   };
 }
 
-async function ownTicket(reading: TicketReading, { actor, query }: ReadContext) {
-  const ticket = await reading.ticketStatus(query['ticketId'] ?? '');
+async function ownTicket(reading: TicketReading, { actor, query, database }: ReadContext) {
+  const ticket = await reading.ticketStatus(database, query['ticketId'] ?? '');
   if (actor.role === 'driver' && ticket.driverRef !== actor.personId) {
     throw new TicketReadRefusal('unknown ticket');
   }

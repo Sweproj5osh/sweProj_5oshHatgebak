@@ -1,14 +1,18 @@
+import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../../../committee-prices/public';
 import { FixedClock } from '../../../../shared/clock';
-import type { SiteId } from '../../../../shared/identifiers';
+import type { SiteId, TicketId } from '../../../../shared/identifiers';
+import type { RequestId } from '../../../../shared/request-id';
 import { fail, succeed, type Result } from '../../../../shared/result';
+import type { Transaction } from '../../../../shared/unit-of-work';
 import {
   createTicketClosing,
   createTicketOpening,
   createTicketPaymentStatus,
-  InMemoryTicketStore,
+  TableTicketStore,
   type ClockedInAttendant,
   type OpenTicketCommand,
+  type PaymentStatus,
   type SiteCodeProblem,
   type TicketingSites,
 } from '../../public';
@@ -130,9 +134,15 @@ export interface WorldOptions {
   readonly residents?: readonly string[];
 }
 
+/**
+ * The ticketing module over an in-memory database, with its ports faked. Each wrapper below (`openTicket`, `closeTicket`,
+ * …) runs one call in its own unit of work and commits, as one request through the entry point would (ADR-13); a test
+ * that needs several calls in one transaction uses `transact` directly.
+ */
 export async function buildTicketingWorld(capacity = 5, options: WorldOptions = {}) {
+  const database = new InMemoryDatabase();
   const sites = new FakeSites().withCapacity('site-1', capacity);
-  const store = new InMemoryTicketStore();
+  const store = new TableTicketStore();
   const clock = new FixedClock(START);
   let counter = 0;
   const opening = createTicketOpening({ sites, store, clock, newTicketId: () => `ticket-${(counter += 1)}` });
@@ -144,7 +154,42 @@ export async function buildTicketingWorld(capacity = 5, options: WorldOptions = 
   const fees = createFeeCalculator({ isResident: (carRef, siteId) => siteId === 'site-1' && residents.includes(carRef) });
   const closing = createTicketClosing({ sites, store, clock, prices, fees });
   const payments = createTicketPaymentStatus({ store });
-  return { sites, store, clock, opening, closing, payments, prices, fees };
+
+  async function transact<Value>(work: (transaction: Transaction) => Promise<Value>): Promise<Value> {
+    const transaction = database.begin();
+    try {
+      const value = await work(transaction);
+      await transaction.commit();
+      return value;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  return {
+    database,
+    sites,
+    store,
+    clock,
+    opening,
+    closing,
+    payments,
+    prices,
+    fees,
+    transact,
+    openTicket: (command: OpenTicketCommand) => transact((transaction) => opening.openTicket(transaction, command)),
+    openAssistedTicket: (command: OpenTicketCommand, attendant: ClockedInAttendant) =>
+      transact((transaction) => opening.openAssistedTicket(transaction, command, attendant)),
+    closeTicket: (requestId: RequestId, ticketId: TicketId, exitCode: string) =>
+      transact((transaction) => closing.closeTicket(transaction, requestId, ticketId, exitCode)),
+    closeAssistedTicket: (requestId: RequestId, ticketId: TicketId, exitCode: string, attendant: ClockedInAttendant, carRef: string) =>
+      transact((transaction) => closing.closeAssistedTicket(transaction, requestId, ticketId, exitCode, attendant, carRef)),
+    changePaymentStatus: (requestId: RequestId, ticketId: TicketId, to: PaymentStatus) =>
+      transact((transaction) => payments.changePaymentStatus(transaction, requestId, ticketId, to)),
+    findById: (ticketId: TicketId) => store.findById(database, ticketId),
+    countOpen: (siteId: SiteId) => store.countOpen(database, siteId),
+  };
 }
 
 let requestCounter = 0;

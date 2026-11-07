@@ -9,6 +9,7 @@ import type { Clock } from '../../shared/clock';
 import type { PersonId, SiteId, TicketId } from '../../shared/identifiers';
 import type { RequestId } from '../../shared/request-id';
 import type { Result } from '../../shared/result';
+import type { TableAccess, Transaction } from '../../shared/unit-of-work';
 import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';
@@ -20,7 +21,7 @@ import { createTicketReadingService } from './internal/ticket-reading';
 import { createTicketPaymentStatusService } from './internal/ticket-payment-status';
 import { createTicketOpeningService } from './internal/ticket-opening';
 
-export { InMemoryTicketStore } from './internal/in-memory-ticket-store';
+export { TableTicketStore } from './internal/table-ticket-store';
 export type { TicketStore } from './internal/ticket-store';
 export { PLATE_UNAVAILABLE, TicketReadRefusal } from './internal/ticket-reading';
 
@@ -73,12 +74,17 @@ export interface ClockedInAttendant {
   readonly boundSiteId?: SiteId;
 }
 
+/**
+ * The writes. Every method takes the caller's unit of work first (ADR-13, P1): the ticket row, the caller's own rows,
+ * the audit entry and the events commit or roll back together. A write handler passes `context.transaction`; another
+ * module (payments marking a ticket paid, approvals applying a waiver) passes the transaction of its own write.
+ */
 export interface TicketDesk {
-  openTicket(command: OpenTicketCommand): Promise<Result<Ticket, OpenRefusal>>;
-  openAssistedTicket(command: OpenTicketCommand, attendant: ClockedInAttendant): Promise<Result<Ticket, OpenRefusal>>;
-  closeTicket(requestId: RequestId, ticketId: TicketId, exitCode: string): Promise<Result<Ticket, CloseRefusal>>;
-  changePaymentStatus(requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>>;
-  closeStaleTickets(siteId: SiteId, maximumHours: number): Promise<readonly TicketId[]>;
+  openTicket(unitOfWork: Transaction, command: OpenTicketCommand): Promise<Result<Ticket, OpenRefusal>>;
+  openAssistedTicket(unitOfWork: Transaction, command: OpenTicketCommand, attendant: ClockedInAttendant): Promise<Result<Ticket, OpenRefusal>>;
+  closeTicket(unitOfWork: Transaction, requestId: RequestId, ticketId: TicketId, exitCode: string): Promise<Result<Ticket, CloseRefusal>>;
+  changePaymentStatus(unitOfWork: Transaction, requestId: RequestId, ticketId: TicketId, to: PaymentStatus): Promise<Result<Ticket, string>>;
+  closeStaleTickets(unitOfWork: Transaction, siteId: SiteId, maximumHours: number): Promise<readonly TicketId[]>;
 }
 
 export interface Receipt {
@@ -91,13 +97,17 @@ export interface Receipt {
   readonly plate: string;
 }
 
+/**
+ * The reads. Every method takes the tables to read first: a plain read passes the committed tables, a logged read or a
+ * write passes its unit of work (`ReadContext.database`, `WriteContext.transaction`).
+ */
 export interface TicketQuery {
-  ticketStatus(ticketId: TicketId): Promise<Ticket>;
-  ticketHistory(driverRef: PersonId): Promise<readonly Ticket[]>;
-  freeSpaces(siteId: SiteId): Promise<number>;
-  assistedTicketCount(siteId: SiteId, year: number, month: number): Promise<number>;
-  receipt(ticketId: TicketId, reader: PersonId): Promise<Receipt>;
-  frequentSites(driverRef: PersonId): Promise<readonly SiteId[]>;
+  ticketStatus(tables: TableAccess, ticketId: TicketId): Promise<Ticket>;
+  ticketHistory(tables: TableAccess, driverRef: PersonId): Promise<readonly Ticket[]>;
+  freeSpaces(tables: TableAccess, siteId: SiteId): Promise<number>;
+  assistedTicketCount(tables: TableAccess, siteId: SiteId, year: number, month: number): Promise<number>;
+  receipt(tables: TableAccess, ticketId: TicketId, reader: PersonId): Promise<Receipt>;
+  frequentSites(tables: TableAccess, driverRef: PersonId): Promise<readonly SiteId[]>;
 }
 
 /** Why the site registry refused a scanned code. An exit code shown at the entrance is "wrong kind". */
@@ -141,7 +151,14 @@ export interface TicketClosingDependencies {
 
 /** Closing an assisted ticket also names the attendant and the car seen at the exit, which must match the ticket's. */
 export interface AssistedClosing {
-  closeAssistedTicket(requestId: RequestId, ticketId: TicketId, exitCode: string, attendant: ClockedInAttendant, carRef: CarReference): Promise<Result<Ticket, CloseRefusal>>;
+  closeAssistedTicket(
+    unitOfWork: Transaction,
+    requestId: RequestId,
+    ticketId: TicketId,
+    exitCode: string,
+    attendant: ClockedInAttendant,
+    carRef: CarReference,
+  ): Promise<Result<Ticket, CloseRefusal>>;
 }
 
 export type TicketClosing = Pick<TicketDesk, 'closeTicket'> & AssistedClosing;
@@ -190,7 +207,8 @@ export type TicketPaymentStatus = Pick<TicketDesk, 'changePaymentStatus'>;
 /**
  * Task B9: the payment status of a closed ticket, changed only along the allowed paths. No request reaches this from
  * outside: the entry point registers no operation for it, and the caller (payments, or the approved waiver) is trusted
- * to be authorised, because the method is not told who is asking.
+ * to be authorised, because the method is not told who is asking. The caller passes its own unit of work, so the
+ * payment row, the ticket's status and the one audit entry commit together (P1, P18, P28 #29).
  */
 export function createTicketPaymentStatus(dependencies: { readonly store: TicketStore }): TicketPaymentStatus {
   return createTicketPaymentStatusService(dependencies.store);

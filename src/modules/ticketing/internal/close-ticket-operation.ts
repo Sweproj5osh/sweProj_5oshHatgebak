@@ -29,13 +29,13 @@ export function createCloseTicketOperation(closing: TicketClosing, store: Ticket
     allowedRoles: ['driver'],
     bodySchema: { fields: { ticketId: 'string', exitCode: 'string' } },
     examples: { valid: { ticketId: 'ticket-1', exitCode: 'exit-site-1' }, invalid: { ticketId: 7 } },
-    async handle({ actor, requestId, body, events }) {
+    async handle({ actor, requestId, body, events, transaction }) {
       const ticketId = String(body['ticketId']);
-      const held = await store.findById(ticketId);
+      const held = await store.findById(transaction, ticketId);
       if (held !== undefined && held.driverRef !== actor.personId) {
         return { response: refuse(403, 'not your ticket') };
       }
-      const closed = await closing.closeTicket(requestId, ticketId, String(body['exitCode']));
+      const closed = await closing.closeTicket(transaction, requestId, ticketId, String(body['exitCode']));
       if (!closed.ok) {
         return { response: refuse(STATUS_FOR_CLOSE_REFUSAL[closed.error], closed.error) };
       }

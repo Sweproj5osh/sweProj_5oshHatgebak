@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fail, succeed, type Result } from '../../../shared/result';
+import type { Transaction } from '../../../shared/unit-of-work';
 import type { ClockedInAttendant, OpenRefusal, OpenTicketCommand, Ticket, TicketOpening, TicketOpeningDependencies } from '../public';
 
 /**
@@ -12,8 +13,13 @@ export function createTicketOpeningService(dependencies: TicketOpeningDependenci
   const { sites, store, clock } = dependencies;
   const newTicketId = dependencies.newTicketId ?? randomUUID;
 
-  async function open(command: OpenTicketCommand, requestKey: string, attendant?: ClockedInAttendant): Promise<Result<Ticket, OpenRefusal>> {
-    const earlier = await store.findByRequestKey(requestKey);
+  async function open(
+    unitOfWork: Transaction,
+    command: OpenTicketCommand,
+    requestKey: string,
+    attendant?: ClockedInAttendant,
+  ): Promise<Result<Ticket, OpenRefusal>> {
+    const earlier = await store.findByRequestKey(unitOfWork, requestKey);
     if (earlier !== undefined) {
       return succeed(earlier);
     }
@@ -39,11 +45,11 @@ export function createTicketOpeningService(dependencies: TicketOpeningDependenci
       openedAt: now.toISOString(),
       assisted: attendant !== undefined,
     };
-    return store.openIfPossible({ requestKey, ticket, capacity });
+    return store.openIfPossible(unitOfWork, { requestKey, ticket, capacity });
   }
 
   return {
-    openTicket: (command) => open(command, `${command.driverRef}:${command.requestId}`),
-    openAssistedTicket: (command, attendant) => open(command, `assisted:${attendant.attendantId}:${command.requestId}`, attendant),
+    openTicket: (unitOfWork, command) => open(unitOfWork, command, `${command.driverRef}:${command.requestId}`),
+    openAssistedTicket: (unitOfWork, command, attendant) => open(unitOfWork, command, `assisted:${attendant.attendantId}:${command.requestId}`, attendant),
   };
 }

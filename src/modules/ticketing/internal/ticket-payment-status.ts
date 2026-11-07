@@ -14,8 +14,8 @@ export const ALLOWED_PAYMENT_CHANGES: Readonly<Record<PaymentStatus, readonly Pa
 
 export function createTicketPaymentStatusService(store: TicketStore): TicketPaymentStatus {
   return {
-    changePaymentStatus(requestId, ticketId, to) {
-      return store.changePaymentStatus({ requestKey: `payment:${requestId}:${ticketId}`, ticketId, to });
+    changePaymentStatus(unitOfWork, requestId, ticketId, to) {
+      return store.changePaymentStatus(unitOfWork, { requestKey: `payment:${requestId}:${ticketId}`, ticketId, to });
     },
   };
 }

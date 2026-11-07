@@ -11,10 +11,10 @@ export function createTicketCountsService(dependencies: {
 }): TicketCounts {
   const { sites, store } = dependencies;
   return {
-    async freeSpaces(siteId) {
+    async freeSpaces(tables, siteId) {
       const capacity = (await sites.capacityOf(siteId)) ?? 0;
-      return Math.max(0, capacity - (await store.countOpen(siteId)));
+      return Math.max(0, capacity - (await store.countOpen(tables, siteId)));
     },
-    assistedTicketCount: (siteId, year, month) => store.countAssisted(siteId, year, month),
+    assistedTicketCount: (tables, siteId, year, month) => store.countAssisted(tables, siteId, year, month),
   };
 }

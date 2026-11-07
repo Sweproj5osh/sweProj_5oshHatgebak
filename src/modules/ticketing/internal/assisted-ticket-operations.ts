@@ -27,9 +27,10 @@ function openAssisted(opening: TicketOpening): WriteOperation {
       valid: { siteId: 'site-1', carRef: 'car-1', driverRef: 'driver-9', entryCode: 'entry-site-1', photoId: 'photo-1' },
       invalid: { siteId: 7 },
     },
-    async handle({ actor, requestId, body }) {
+    async handle({ actor, requestId, body, transaction }) {
       const driverRef = String(body['driverRef']);
       const opened = await opening.openAssistedTicket(
+        transaction,
         { requestId, driverRef, carRef: String(body['carRef']), siteId: String(body['siteId']), entryCode: String(body['entryCode']) },
         clockedInAttendant(actor),
       );
@@ -53,8 +54,9 @@ function closeAssisted(closing: TicketClosing): WriteOperation {
       valid: { ticketId: 'ticket-1', carRef: 'car-1', exitCode: 'exit-site-1', photoId: 'photo-2' },
       invalid: { ticketId: 7 },
     },
-    async handle({ actor, requestId, body, events }) {
+    async handle({ actor, requestId, body, events, transaction }) {
       const closed = await closing.closeAssistedTicket(
+        transaction,
         requestId,
         String(body['ticketId']),
         String(body['exitCode']),

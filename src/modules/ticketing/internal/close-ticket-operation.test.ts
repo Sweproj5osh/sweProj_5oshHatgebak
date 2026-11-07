@@ -64,7 +64,7 @@ describe('closing a ticket through the entry point', () => {
       body: closeBody(ticketId),
     });
     expect(response.status).toBe(403);
-    expect((await store.findById(ticketId))?.state).toBe('open');
+    expect((await store.findById(app.database, ticketId))?.state).toBe('open');
   });
 
   it('rejects a body that carries a time', async () => {

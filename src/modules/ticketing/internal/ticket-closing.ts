@@ -1,4 +1,5 @@
 import { fail, succeed, type Result } from '../../../shared/result';
+import type { Transaction } from '../../../shared/unit-of-work';
 import type { ClockedInAttendant, CloseRefusal, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
 
 /**
@@ -13,17 +14,18 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
   const { sites, store, clock, prices, fees } = dependencies;
 
   async function close(
+    unitOfWork: Transaction,
     requestId: string,
     ticketId: string,
     exitCode: string,
     assisted?: { readonly attendant: ClockedInAttendant; readonly carRef: string },
   ): Promise<Result<Ticket, CloseRefusal>> {
     const requestKey = `close:${requestId}:${ticketId}`;
-    const earlier = await store.findByRequestKey(requestKey);
+    const earlier = await store.findByRequestKey(unitOfWork, requestKey);
     if (earlier !== undefined) {
       return succeed(earlier);
     }
-    const ticket = await store.findById(ticketId);
+    const ticket = await store.findById(unitOfWork, ticketId);
     if (ticket === undefined || ticket.state !== 'open') {
       return fail('no open ticket');
     }
@@ -52,11 +54,12 @@ export function createTicketClosingService(dependencies: TicketClosingDependenci
       return fail('no price known');
     }
     const fee = await fees.computeFeeForCar({ carRef: ticket.carRef }, entry, exit, price.version);
-    return store.closeIfOpen({ requestKey, ticketId, closedAt: exit.toISOString(), fee });
+    return store.closeIfOpen(unitOfWork, { requestKey, ticketId, closedAt: exit.toISOString(), fee });
   }
 
   return {
-    closeTicket: (requestId, ticketId, exitCode) => close(requestId, ticketId, exitCode),
-    closeAssistedTicket: (requestId, ticketId, exitCode, attendant, carRef) => close(requestId, ticketId, exitCode, { attendant, carRef }),
+    closeTicket: (unitOfWork, requestId, ticketId, exitCode) => close(unitOfWork, requestId, ticketId, exitCode),
+    closeAssistedTicket: (unitOfWork, requestId, ticketId, exitCode, attendant, carRef) =>
+      close(unitOfWork, requestId, ticketId, exitCode, { attendant, carRef }),
   };
 }
