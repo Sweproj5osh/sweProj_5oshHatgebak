@@ -11,6 +11,7 @@ import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } fro
 import {
   createFakePaymentGateway,
   createPayments,
+  operations,
   PAYMENTS_TABLE,
   TICKET_PAID_TOPIC,
   type PaymentRecord,
@@ -266,6 +267,21 @@ describe('C2 paying in the app', () => {
     const response = await application.handle(writeRequest(PAY_PATH, 'driver', 'request-pay-0009', {}));
     expect(response.status).toBe(400);
     expect(await auditRows()).toHaveLength(0);
+  });
+
+  it('registers through operations(dependencies) beside the composed registry, as the composition root will call it (P4)', async () => {
+    const clock = new FixedClock(new Date('2026-11-06T10:05:00Z'));
+    const tickets = new FakeTickets();
+    tickets.seed(closedTicket('ticket-1', 11));
+    const application = composeInMemoryApplication({
+      tokenSecret: TEST_TOKEN_SECRET,
+      clock,
+      additionalOperations: operations({ gateway: createFakePaymentGateway(), ticketDesk: tickets, ticketQuery: tickets, clock }),
+    });
+
+    expect(application.registry.writes().map((operation) => operation.name)).toContain('payments.payInApp');
+    const response = await application.handle(writeRequest(PAY_PATH, 'driver', 'request-pay-0010', { ticketId: 'ticket-1' }));
+    expect(response.status).toBe(201);
   });
 
   afterAll(() => {

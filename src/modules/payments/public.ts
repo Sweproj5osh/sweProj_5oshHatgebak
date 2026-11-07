@@ -82,5 +82,13 @@ export function createPayments(dependencies: PaymentsDependencies): Payments {
   return { ledgerBoundTo, operations: [payInAppOperation({ ledgerBoundTo })] };
 }
 
+/**
+ * The operations this module registers with the entry point; the composition root calls this once (P4). It needs the
+ * payment gateway, Ticketing's desk and query and the clock from `ModuleDependencies`.
+ */
+export function operations(dependencies: PaymentsDependencies): readonly Operation[] {
+  return createPayments(dependencies).operations;
+}
+
 export { PAYMENTS_TABLE } from './internal/adapters/table-access-payment-store';
 export { PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './internal/payment-ledger';
