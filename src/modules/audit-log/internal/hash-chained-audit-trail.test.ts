@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryAuditLogStore } from '../../../adapters/in-memory/in-memory-audit-log-store';
 import { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
 import { FixedClock } from '../../../shared/clock';
-import { createHashChainedAuditTrail, GENESIS_HASH, type AuditEntry, type AuditRecord, type AuditTrail } from '../public';
+import { createHashChainedAuditTrail, GENESIS_HASH, type AuditEntry, type AuditRecord, type AuditTrail, type ChainHead } from '../public';
 
 const clock = new FixedClock(new Date('2026-11-04T10:00:00Z'));
 
@@ -19,6 +19,17 @@ function entry(overrides: Partial<AuditEntry> = {}): AuditEntry {
     districtId: 'district-1',
     ...overrides,
   };
+}
+
+/** A fresh database holding the given records under the original's head, as a tampered copy of the log would. */
+function copyWith(original: InMemoryDatabase, records: readonly AuditRecord[]): InMemoryDatabase {
+  const copy = new InMemoryDatabase();
+  records.forEach((record) => copy.tables.insert('audit_log', String(record.id), record));
+  const head = original.tables.find<ChainHead>('audit_log_head', 'head');
+  if (head !== undefined) {
+    copy.tables.insert('audit_log_head', 'head', head);
+  }
+  return copy;
 }
 
 async function appendThree(trail: AuditTrail): Promise<AuditRecord[]> {
@@ -49,19 +60,33 @@ describe('hash-chained audit trail', () => {
   it('fails verification when one entry in a copy of the log is altered', async () => {
     const original = new InMemoryDatabase();
     const records = await appendThree(trailOver(original));
-    const tamperedCopy = new InMemoryDatabase();
-    records.forEach((record, index) =>
-      tamperedCopy.tables.insert('audit_log', String(record.id), index === 1 ? { ...record, operation: 'two-but-edited' } : record),
-    );
+    const tamperedCopy = copyWith(original, records.map((record, index) => (index === 1 ? { ...record, operation: 'two-but-edited' } : record)));
     expect(await trailOver(tamperedCopy).verifyChain()).toBe(false);
   });
 
   it('fails verification when one entry in a copy of the log is removed', async () => {
     const original = new InMemoryDatabase();
     const records = await appendThree(trailOver(original));
-    const shortenedCopy = new InMemoryDatabase();
-    records.filter((record) => record.id !== 2).forEach((record) => shortenedCopy.tables.insert('audit_log', String(record.id), record));
+    const shortenedCopy = copyWith(original, records.filter((record) => record.id !== 2));
     expect(await trailOver(shortenedCopy).verifyChain()).toBe(false);
+  });
+
+  it('fails verification when the LAST entry is removed: the head record remembers the last id and hash', async () => {
+    const database = new InMemoryDatabase();
+    const trail = trailOver(database);
+    const [, , third] = await appendThree(trail);
+    database.tables.remove('audit_log', String(third?.id));
+    expect(await trail.verifyChain()).toBe(false);
+  });
+
+  it('fails verification when the log is empty but the head says entries existed', async () => {
+    const database = new InMemoryDatabase();
+    const trail = trailOver(database);
+    await appendThree(trail);
+    for (const id of [1, 2, 3]) {
+      database.tables.remove('audit_log', String(id));
+    }
+    expect(await trail.verifyChain()).toBe(false);
   });
 
   it('reads by scope: member sees own district, Chair sees all, attendant sees entries naming them', async () => {

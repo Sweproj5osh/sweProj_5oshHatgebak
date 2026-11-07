@@ -18,7 +18,12 @@ export interface AnonymousAuditActor {
   readonly address: string;
 }
 
-export type AuditActor = PersonAuditActor | AnonymousAuditActor;
+/** The system itself, for the few actions no person triggers (the one-time bootstrap of the first Chair). */
+export interface SystemAuditActor {
+  readonly kind: 'system';
+}
+
+export type AuditActor = PersonAuditActor | AnonymousAuditActor | SystemAuditActor;
 
 /** What the pipeline hands to the audit log for one action: who, what, inputs (redacted), why, approver, request id. */
 export interface AuditEntry {
@@ -40,6 +45,7 @@ export interface AuditEntry {
  */
 export interface AuditRecord extends Omit<AuditEntry, 'actor'> {
   readonly id: number;
+  readonly actorKind: AuditActor['kind'];
   readonly personId?: PersonId;
   readonly role?: Role;
   readonly address?: string;
@@ -54,8 +60,15 @@ export interface AuditReader {
   readonly districtId?: DistrictId;
 }
 
+/** The last id and hash, kept beside the log and moved by every append, so a log cut at its tail no longer verifies. */
+export interface ChainHead {
+  readonly lastId: number;
+  readonly lastHash: string;
+}
+
 export interface AuditTrail {
   append(entry: AuditEntry): Promise<AuditRecord>;
+  /** True when every record chains to the one before it and the head names the last record. */
   verifyChain(): Promise<boolean>;
   readByScope(reader: AuditReader): Promise<readonly AuditRecord[]>;
 }
@@ -67,9 +80,11 @@ export interface AuditTrail {
  * `pg_advisory_xact_lock(<constant>)` inside the write's transaction before `lastRecord()` and `appendRecord()`.
  */
 export interface AuditLogStore {
+  /** Stores the record and moves the head to it, in the same transaction. */
   appendRecord(record: AuditRecord): Promise<void>;
   lastRecord(): Promise<AuditRecord | undefined>;
   readAll(): Promise<readonly AuditRecord[]>;
+  head(): Promise<ChainHead | undefined>;
 }
 
 export { createHashChainedAuditTrail, GENESIS_HASH } from './internal/hash-chained-audit-trail';

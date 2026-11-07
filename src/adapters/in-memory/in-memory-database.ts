@@ -1,6 +1,10 @@
 import type { Row, TableAccess, Transaction } from '../../shared/unit-of-work';
 
 export const AUDIT_LOG_TABLE = 'audit_log';
+export const AUDIT_LOG_HEAD_TABLE = 'audit_log_head';
+
+/** Reachable only through the audit log store: the log itself and the head that names its last record (ADR-10, ADR-13). */
+const AUDIT_LOG_TABLES: readonly string[] = [AUDIT_LOG_TABLE, AUDIT_LOG_HEAD_TABLE];
 
 /**
  * Synchronous, unguarded access to keyed rows, for this folder's own adapters (the audit log store and the outbox
@@ -133,8 +137,8 @@ class GuardedTableAccess implements TableAccess {
   }
 
   private reachable(table: string): RowTables {
-    if (table === AUDIT_LOG_TABLE) {
-      throw new Error(`${AUDIT_LOG_TABLE} is reachable only through the audit log store`);
+    if (AUDIT_LOG_TABLES.includes(table)) {
+      throw new Error(`${table} is reachable only through the audit log store`);
     }
     return this.tables;
   }

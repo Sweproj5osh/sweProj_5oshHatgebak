@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { canonicalJson } from '../../../shared/canonical-json';
 import type { Clock } from '../../../shared/clock';
 import { SerialQueue } from '../../../shared/serial-queue';
-import type { AuditActor, AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail } from '../public';
+import type { AuditActor, AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail, ChainHead } from '../public';
 import { isVisibleTo } from './read-scope';
 
 /** The previous hash of the very first entry. */
@@ -33,21 +33,30 @@ class HashChainedAuditTrail implements AuditTrail {
   }
 
   async verifyChain(): Promise<boolean> {
+    const records = await this.store.readAll();
     let expectedPrevHash = GENESIS_HASH;
-    for (const record of await this.store.readAll()) {
+    for (const record of records) {
       const { hash: storedHash, ...hashedFields } = record;
       if (record.prevHash !== expectedPrevHash || hashOf(hashedFields) !== storedHash) {
         return false;
       }
       expectedPrevHash = storedHash;
     }
-    return true;
+    return headNames(await this.store.head(), records[records.length - 1]);
   }
 
   async readByScope(reader: AuditReader): Promise<readonly AuditRecord[]> {
     const all = await this.store.readAll();
     return all.filter((record) => isVisibleTo(reader, record));
   }
+}
+
+/** A cut at the tail leaves a chain that still verifies link by link; only the head, moved by every append, tells. */
+function headNames(head: ChainHead | undefined, last: AuditRecord | undefined): boolean {
+  if (last === undefined) {
+    return head === undefined;
+  }
+  return head !== undefined && head.lastId === last.id && head.lastHash === last.hash;
 }
 
 function chainAfter(previous: AuditRecord | undefined, entry: AuditEntry, recordedAt: Date): AuditRecord {
@@ -62,9 +71,16 @@ function chainAfter(previous: AuditRecord | undefined, entry: AuditEntry, record
   return { ...unhashed, hash: hashOf(unhashed) };
 }
 
-/** The actor as the table stores it: two columns for a person, one for an anonymous caller. */
-function flattened(actor: AuditActor): Pick<AuditRecord, 'personId' | 'role' | 'address'> {
-  return actor.kind === 'person' ? { personId: actor.personId, role: actor.role } : { address: actor.address };
+/** The actor as the table stores it: its kind, then two columns for a person or one for an anonymous caller. */
+function flattened(actor: AuditActor): Pick<AuditRecord, 'actorKind' | 'personId' | 'role' | 'address'> {
+  switch (actor.kind) {
+    case 'person':
+      return { actorKind: 'person', personId: actor.personId, role: actor.role };
+    case 'anonymous':
+      return { actorKind: 'anonymous', address: actor.address };
+    case 'system':
+      return { actorKind: 'system' };
+  }
 }
 
 type HashedFields = Omit<AuditRecord, 'hash'>;
