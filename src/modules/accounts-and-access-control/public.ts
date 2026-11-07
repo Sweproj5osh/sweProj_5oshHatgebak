@@ -82,6 +82,15 @@ export interface SiteLocator {
   locateZone(zoneId: ZoneId): Promise<{ readonly districtId: DistrictId } | undefined>;
 }
 
+/**
+ * Port: whether a car is, or was lately, parked at a site, answered by ticketing through the composition root. An
+ * attendant or inspector is served a plate only for a car their site has actually seen, so naming the own site does
+ * not open every plate in the city; the owner, the Chair and a Member in their district read for audits, every read logged.
+ */
+export interface CarPresence {
+  carSeenAt(carRef: CarRef, siteId: SiteId): Promise<boolean>;
+}
+
 /** The scope rules in the order they are applied, for review and for the task A3 report. */
 export const SCOPE_RULE_DESCRIPTIONS: readonly string[] = SCOPE_RULES.map((rule) => rule.description);
 
@@ -245,6 +254,7 @@ export interface AccountsAndAccessControlDependencies {
   readonly database: TableAccess;
   readonly stores: AccountsAndAccessControlStores;
   readonly siteLocator: SiteLocator;
+  readonly carPresence: CarPresence;
   readonly signInCodeSender: SignInCodeSender;
   /** The entry point's token minter, handed in by the composition root (Q4, P27): sign-in never imports the entry point. */
   readonly tokenIssuer: TokenIssuer;
@@ -264,7 +274,7 @@ export interface AccountsAndAccessControl {
 
 /** The composition root builds this module through this one function; nothing else constructs its internals. */
 export function createAccountsAndAccessControl(dependencies: AccountsAndAccessControlDependencies): AccountsAndAccessControl {
-  const { database, stores, siteLocator, signInCodeSender, tokenIssuer, signInCodeSecret, clock } = dependencies;
+  const { database, stores, siteLocator, carPresence, signInCodeSender, tokenIssuer, signInCodeSecret, clock } = dependencies;
   const authorization = new AuthorizationService({ database, people: stores.people, accessFacts: stores.accessFacts, siteLocator });
   const personalData = new PersonalDataService({
     database,
@@ -275,6 +285,7 @@ export function createAccountsAndAccessControl(dependencies: AccountsAndAccessCo
     accessFacts: stores.accessFacts,
     authorization,
     siteLocator,
+    carPresence,
     clock,
   });
   const signIn = new SignInService({

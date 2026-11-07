@@ -9,6 +9,7 @@ import {
   createAccountsStores,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
+  type CarPresence,
 } from '../../../accounts-and-access-control/public';
 import { createSiteLocator, createSiteRegistry, createSitesStores, type SiteRegistry } from '../../../sites-and-areas/public';
 import {
@@ -48,6 +49,7 @@ export const TEST_SITE_CODE_SECRET = 'site-code-secret-for-tests';
 
 /** Nobody signs in through this world, so the token minter is a stand-in; this file never imports the entry point (F2). */
 const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
+const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
 
 /**
  * Access control, the site registry and this module wired over one in-memory database the way the composition root
@@ -80,6 +82,7 @@ export async function createLicensingWorld(): Promise<LicensingWorld> {
     database,
     stores: createAccountsStores(),
     siteLocator: createSiteLocator(database, sitesStores),
+    carPresence: NO_PLATE_IS_READ_HERE,
     signInCodeSender: new RecordingSignInCodeSender(),
     tokenIssuer: NO_TOKENS_NEEDED,
     signInCodeSecret: 'sign-in-code-secret-for-tests',

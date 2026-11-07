@@ -5,6 +5,7 @@ import { fail, succeed, type Result } from '../../../shared/result';
 import type { TableAccess } from '../../../shared/unit-of-work';
 import type {
   Authorization,
+  CarPresence,
   CarRef,
   CarRefusal,
   CreatePersonRefusal,
@@ -34,11 +35,15 @@ export interface PersonalDataDependencies {
   readonly accessFacts: AccessFactsStore;
   readonly authorization: Authorization;
   readonly siteLocator: SiteLocator;
+  readonly carPresence: CarPresence;
   readonly clock: Clock;
 }
 
 /** A self-registered driver has given no name; the empty string is the one value that cannot be mistaken for one. */
 const NO_NAME_GIVEN_YET = '';
+
+/** The roles whose plate read needs the car to have been seen at the site they name. */
+const ROLES_READING_SEEN_CARS_ONLY: readonly Role[] = ['attendant', 'inspector'];
 
 /** The operation name the scope rules are asked about for every plate read, whichever route serves the plate. */
 export const PLATE_READ_OPERATION = 'personalData.readPlate';
@@ -207,11 +212,19 @@ export class PersonalDataService implements PersonalData {
     return carRef;
   }
 
+  /**
+   * The owner reads the own car; staff read within their scope over the site named. An attendant or inspector names
+   * their own site by right, so for them the car must also have been seen at that site (ticketing's word), or any plate
+   * in the city would be one site name away. The Chair and a Member of the district read for audits; every read is logged.
+   */
   private async mayRead(request: PlateReadRequest, readerRole: Role, ownerRef: PersonId): Promise<boolean> {
     if (request.reader === ownerRef) {
       return (await this.dependencies.authorization.liveStatus(request.reader)) === 'active';
     }
     if (!roleMayReadPlateFor(readerRole, request.purpose)) {
+      return false;
+    }
+    if (ROLES_READING_SEEN_CARS_ONLY.includes(readerRole) && !(await this.dependencies.carPresence.carSeenAt(request.carRef, request.siteId))) {
       return false;
     }
     return this.dependencies.authorization.may(request.reader, PLATE_READ_OPERATION, { siteId: request.siteId });

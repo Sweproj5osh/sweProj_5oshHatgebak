@@ -21,7 +21,10 @@ let inspectorOfZoneA: PersonId;
 let carRef: CarRef;
 
 async function created(outcome: Promise<{ ok: true; value: PersonId } | { ok: false; error: string }>): Promise<PersonId> {
-  const result = await outcome;
+  return valueOf(await outcome);
+}
+
+function valueOf<Value>(result: { ok: true; value: Value } | { ok: false; error: string }): Value {
   if (!result.ok) {
     throw new Error(result.error);
   }
@@ -45,6 +48,7 @@ beforeEach(async () => {
     throw new Error(added.error);
   }
   carRef = added.value;
+  world.carPresence.markSeen(carRef, 'site-a');
 });
 
 describe('A4 the task sheet cases', () => {
@@ -75,6 +79,16 @@ describe('A4 the rest of the join', () => {
     expect(await read({ carRef, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-b' })).toEqual({ ok: false, error: 'refused' });
     await world.accounts.accessFacts.recordLicenceState(world.database, attendantOfSiteA, 'suspended');
     expect(await read({ carRef, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
+  });
+
+  it('refuses an attendant or inspector a plate for a car their site has not seen, and serves it once ticketing has seen the car there', async () => {
+    const read = world.accounts.personalData.readPlate.bind(world.accounts.personalData);
+    const unseen = valueOf(await world.accounts.personalData.addCar(driver, 'XYZ 9'));
+    expect(await read({ carRef: unseen, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
+    expect(await read({ carRef: unseen, reader: inspectorOfZoneA, purpose: 'inspector look-up', siteId: 'site-a' })).toEqual({ ok: false, error: 'refused' });
+    expect(await read({ carRef: unseen, reader: driver, purpose: 'receipt', siteId: 'site-a' })).toMatchObject({ ok: true, value: { plate: 'XYZ9' } });
+    world.carPresence.markSeen(unseen, 'site-a');
+    expect((await read({ carRef: unseen, reader: attendantOfSiteA, purpose: 'cash list', siteId: 'site-a' })).ok).toBe(true);
   });
 
   it('answers "not resolvable" for an unknown car', async () => {

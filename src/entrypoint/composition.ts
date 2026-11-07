@@ -9,6 +9,7 @@ import {
   operations as accountsOperations,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
+  type CarPresence,
 } from '../modules/accounts-and-access-control/public';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/audit-log/public';
 import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../modules/committee-prices/public';
@@ -110,8 +111,16 @@ export function composeInMemoryRegistry(): OperationRegistry {
   const clock = new SystemClock();
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
   const tokens = createTokenIssuer(INSPECTION_ONLY_SECRET, clock);
-  const area2 = composeArea2({ database, clock, tokens, signInCodeSecret: INSPECTION_ONLY_SECRET, siteCodeSecret: INSPECTION_ONLY_SECRET });
-  return composeRegistry(moduleDependenciesFor({ audit, clock, tokens }, area2, ticketingPortsFrom(area2)));
+  const tickets = new TableTicketStore();
+  const area2 = composeArea2({
+    database,
+    clock,
+    tokens,
+    carPresence: carPresenceFrom({ store: tickets, database, clock }),
+    signInCodeSecret: INSPECTION_ONLY_SECRET,
+    siteCodeSecret: INSPECTION_ONLY_SECRET,
+  });
+  return composeRegistry(moduleDependenciesFor({ audit, clock, tokens }, area2, ticketingPortsFrom(area2), tickets));
 }
 
 export interface InMemoryApplicationOptions {
@@ -162,7 +171,11 @@ export interface InMemoryApplication {
 export function composeInMemoryServer(
   options: Pick<InMemoryApplicationOptions, 'tokenSecret' | 'siteCodeSecret' | 'signInCodeSecret' | 'clock'>,
 ): InMemoryApplication {
-  return compose(options, { chooseAccessChecks: (accounts) => accounts.authorization, chooseTicketingPorts: ticketingPortsFrom });
+  return compose(options, {
+    chooseAccessChecks: (accounts) => accounts.authorization,
+    chooseTicketingPorts: ticketingPortsFrom,
+    chooseCarPresence: (tickets) => carPresenceFrom(tickets),
+  });
 }
 
 /** The in-memory application for tests: stand-ins answer live status and ticketing's ports unless the test passes its own. */
@@ -170,13 +183,22 @@ export function composeInMemoryApplication(options: InMemoryApplicationOptions):
   return compose(options, {
     chooseAccessChecks: () => options.accessChecks ?? EVERYONE_IS_LIVE_AND_CLOCKED_IN,
     chooseTicketingPorts: () => TICKETING_PORTS_FOR_TESTS,
+    chooseCarPresence: () => EVERY_CAR_IS_PRESENT,
   });
 }
 
-/** What differs between the server and the test application: who answers access checks, and who fills ticketing's ports. */
+/** What differs between the server and the test application: who answers access checks, ticketing's ports and car presence. */
 interface StandIns {
   readonly chooseAccessChecks: (accounts: AccountsAndAccessControl) => AccessChecks;
   readonly chooseTicketingPorts: (area2: Area2Modules) => TicketingPorts;
+  readonly chooseCarPresence: (tickets: TicketPresenceSource) => CarPresence;
+}
+
+/** What the car-presence adapter needs from ticketing: its store over the committed tables and the server clock. */
+interface TicketPresenceSource {
+  readonly store: TicketStore;
+  readonly database: TableAccess;
+  readonly clock: Clock;
 }
 
 /** The composition root for the in-memory stack: construction happens here and nowhere else. */
@@ -186,16 +208,18 @@ function compose(options: InMemoryApplicationOptions, standIns: StandIns): InMem
   const outbox = new InMemoryOutboxStore(database, clock);
   const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
   const tokens = createTokenIssuer(options.tokenSecret, clock);
+  const tickets = new TableTicketStore();
   const area2 = composeArea2({
     database,
     clock,
     tokens,
+    carPresence: standIns.chooseCarPresence({ store: tickets, database, clock }),
     signInCodeSecret: options.signInCodeSecret ?? options.tokenSecret,
     siteCodeSecret: options.siteCodeSecret ?? options.tokenSecret,
   });
   const { accounts, signInCodes } = area2;
   const moduleDependencies: ModuleDependencies = {
-    ...moduleDependenciesFor({ audit, clock, tokens }, area2, standIns.chooseTicketingPorts(area2)),
+    ...moduleDependenciesFor({ audit, clock, tokens }, area2, standIns.chooseTicketingPorts(area2), tickets),
     ...options.moduleDependencies,
   };
   const registry = registryFor(options, moduleDependencies);
@@ -255,6 +279,7 @@ function moduleDependenciesFor(
   foundation: Pick<ModuleDependencies, 'audit' | 'clock' | 'tokens'>,
   area2: Area2Modules,
   ports: TicketingPorts,
+  tickets: TicketStore,
 ): ModuleDependencies {
   return {
     ...foundation,
@@ -268,7 +293,7 @@ function moduleDependenciesFor(
     siteCodeSecret: area2.siteCodeSecret,
     siteRegistry: area2.siteRegistry,
     sites: ports.sites,
-    tickets: new TableTicketStore(),
+    tickets,
   };
 }
 
@@ -276,6 +301,7 @@ interface Area2Construction {
   readonly database: TableAccess;
   readonly clock: Clock;
   readonly tokens: TokenIssuer;
+  readonly carPresence: CarPresence;
   readonly signInCodeSecret: string;
   readonly siteCodeSecret: string;
 }
@@ -291,13 +317,14 @@ interface Area2Modules extends Pick<Area2Construction, 'signInCodeSecret' | 'sit
  * Area 2's three modules over one database, wired the way their ports ask (P26 Q8, P27 Q3): access control gets its
  * SiteLocator from the site registry's tables, the registry gets Authorization, licensing gets both.
  */
-function composeArea2({ database, clock, tokens, signInCodeSecret, siteCodeSecret }: Area2Construction): Area2Modules {
+function composeArea2({ database, clock, tokens, carPresence, signInCodeSecret, siteCodeSecret }: Area2Construction): Area2Modules {
   const sitesStores = createSitesStores();
   const signInCodes = new RecordingSignInCodeSender();
   const accounts = createAccountsAndAccessControl({
     database,
     stores: createAccountsStores(),
     siteLocator: createSiteLocator(database, sitesStores),
+    carPresence,
     signInCodeSender: signInCodes,
     tokenIssuer: tokens,
     signInCodeSecret,
@@ -351,6 +378,27 @@ function ticketingPortsFrom(area2: Area2Modules): TicketingPorts {
     isApproved: () => false,
   };
 }
+
+/** How long after its ticket closed a car still counts as seen at the site, for the attendant's cash list and the inspector's look-up. */
+const CAR_SEEN_AT_SITE_HOURS_AFTER_CLOSE = 24;
+
+/**
+ * Ticketing's word on where a car was seen (the server's CarPresence): an open ticket at the site, or one closed there
+ * within the last CAR_SEEN_AT_SITE_HOURS_AFTER_CLOSE hours. Read from the committed tables, never from a stand-in.
+ */
+function carPresenceFrom({ store, database, clock }: TicketPresenceSource): CarPresence {
+  return {
+    carSeenAt: async (carRef, siteId) => {
+      const now = clock.now();
+      const since = new Date(now.getTime() - CAR_SEEN_AT_SITE_HOURS_AFTER_CLOSE * 60 * 60 * 1000);
+      const [open, lately] = await Promise.all([store.listOpenAt(database, siteId), store.listClosedAt(database, siteId, since, now)]);
+      return [...open, ...lately].some((ticket) => ticket.carRef === carRef);
+    },
+  };
+}
+
+/** The test application's car presence: every car was seen everywhere, so the sample requests of the F5 harness run (QUESTIONS.md item 21). */
+const EVERY_CAR_IS_PRESENT: CarPresence = { carSeenAt: async () => true };
 
 /**
  * Transitional (QUESTIONS.md item 17): the registry's free-space count and first-hour fee come from Karim's ticket

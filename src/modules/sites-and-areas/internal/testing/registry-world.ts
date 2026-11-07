@@ -4,6 +4,7 @@ import {
   createAccountsStores,
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
+  type CarPresence,
 } from '../../../accounts-and-access-control/public';
 import { FixedClock } from '../../../../shared/clock';
 import type { PersonId, Role, SiteId } from '../../../../shared/identifiers';
@@ -16,6 +17,7 @@ export const TEST_START = new Date('2026-11-05T08:00:00Z');
 
 /** Nobody signs in through this world, so the token minter is a stand-in; this file never imports the entry point (F2). */
 const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
+const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
 
 /** Access control and the site registry wired together over one in-memory database, the way the composition root wires them. */
 export interface RegistryWorld {
@@ -39,6 +41,7 @@ export async function createRegistryWorld(): Promise<RegistryWorld> {
     database,
     stores: createAccountsStores(),
     siteLocator: createSiteLocator(database, sitesStores),
+    carPresence: NO_PLATE_IS_READ_HERE,
     signInCodeSender: new RecordingSignInCodeSender(),
     tokenIssuer: NO_TOKENS_NEEDED,
     signInCodeSecret: 'sign-in-code-secret-for-tests',

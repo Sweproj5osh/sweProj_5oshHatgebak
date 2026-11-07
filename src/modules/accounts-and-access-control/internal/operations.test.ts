@@ -79,6 +79,18 @@ beforeEach(async () => {
   await accounts.accessFacts.recordInspectorZone(application.database, inspector, zoneId);
 });
 
+/** Ticketing's word that the car was seen at the site: an open ticket in the composed ticket store. */
+async function parkTheCarAt(parkedSiteId: string): Promise<void> {
+  const opened = await application.moduleDependencies.tickets.openIfPossible(application.database, {
+    requestKey: `${driver}/ticket-${parkedSiteId}`,
+    ticket: { ticketId: `ticket-${parkedSiteId}`, siteId: parkedSiteId, driverRef: driver, carRef, state: 'open', paymentStatus: 'unpaid', openedAt: clock.now().toISOString(), assisted: false },
+    capacity: 5,
+  });
+  if (!opened.ok) {
+    throw new Error(`set-up refused: ${opened.error}`);
+  }
+}
+
 describe('A1 sign-in through the entry point (P3, ADR-15)', () => {
   it('sends a code at POST /sign-in/code and signs in at POST /sign-in with a token the server then accepts', async () => {
     const code = await codeSentTo(DRIVER_PHONE);
@@ -170,7 +182,14 @@ describe('A4 through the entry point', () => {
     expect(JSON.stringify(entries)).not.toMatch(/XYZ|1033333333|An Attendant/);
   });
 
-  it('serves an inspector of the zone a plate as a logged read: one entry naming the reader, the car reference and the owner, never the plate', async () => {
+  it('refuses an inspector a plate for a car their site has not seen, with no audit entry, even inside their zone', async () => {
+    const lookUp = await application.handle(plateLookUp({ carRef, siteId }));
+    expect(lookUp).toEqual({ status: 403, body: { error: 'refused' } });
+    expect(await auditOperationsSeenBy(driver, 'driver')).toEqual([]);
+  });
+
+  it('serves an inspector of the zone a plate for a car ticketed at the site, as a logged read: one entry naming the reader, the car reference and the owner, never the plate', async () => {
+    await parkTheCarAt(siteId);
     const lookUp = await application.handle(plateLookUp({ carRef, siteId }));
     expect(lookUp).toEqual({ status: 200, body: { plate: 'ABC123' } });
     const [entry] = await application.audit.readByScope({ personId: driver, role: 'driver' });
@@ -185,6 +204,7 @@ describe('A4 through the entry point', () => {
   });
 
   it('refuses the look-up without a request id, and outside the inspector\'s scope, each with no audit entry', async () => {
+    await parkTheCarAt(siteId);
     const withoutId = await application.handle(readRequest('/plates/look-up', tokenFor('inspector', { personId: inspector }), { carRef, siteId }));
     const elsewhere = await application.handle(plateLookUp({ carRef, siteId: 'site-x' }));
     expect([withoutId.status, elsewhere.status]).toEqual([400, 403]);
@@ -202,6 +222,7 @@ describe('A4 through the entry point', () => {
 
 describe('A4 report', () => {
   it('logs every plate served and nothing for a refused read', async () => {
+    await parkTheCarAt(siteId);
     let served = 0;
     for (let index = 0; index < 10; index += 1) {
       const inScope = await application.handle(plateLookUp({ carRef, siteId }));
