@@ -56,17 +56,30 @@ export interface CarAtSite {
  */
 export type IsResident = (carRef: string, siteId: string) => boolean | Promise<boolean>;
 
+/**
+ * The second question (P28 #27): is parking at this site free at this moment (a committee-declared free period, held by
+ * Sites & Areas, task A9)? Asked once per started hour, at the moment that hour begins. Handed in by the composition
+ * root like `isResident`; the arithmetic stays here (Rule C, F1).
+ */
+export type IsFreeAt = (siteId: string, moment: Date) => boolean | Promise<boolean>;
+
 export interface FeeCalculatorOptions {
   /** Without it nobody is a resident. */
   readonly isResident?: IsResident;
+  /** Without it no hour is free. */
+  readonly isFreeAt?: IsFreeAt;
 }
 
 export interface FeeCalculator {
+  /** The plain tariff of a stay, with no exemption and no free period: what a price table shows. */
   computeFee(entry: Date, exit: Date, version: PriceVersion): Money;
   computeResidentFee(): Money;
   /** The hours a stay is charged for: every started hour, and 0 for an empty, reversed or invalid stay. */
   startedHours(entry: Date, exit: Date): number;
-  /** The fee for one car at the site of the price version: 0 for a resident, the normal fee for everyone else. */
+  /**
+   * The fee for one car at the site of the price version: 0 for a resident; for everyone else the tariff of the started
+   * hours, where a started hour that begins inside a free period costs 0, capped as any stay is.
+   */
   computeFeeForCar(car: CarAtSite, entry: Date, exit: Date, version: PriceVersion): Promise<Money>;
 }
 
