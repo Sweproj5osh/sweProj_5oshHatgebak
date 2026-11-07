@@ -2,20 +2,20 @@
  * In-memory stand-in for driver sign-in and cars while Teammate A's A1/A4 entry-point routes are not ready.
  * Tests and local prototypes only — not the accounts module.
  */
-import { signToken } from '../../../entrypoint/auth/token';
 import type { PersonId } from '../../../shared/identifiers';
 import type { RequestId } from '../../../shared/request-id';
+import type { TokenIssuer } from '../../../shared/token-issuer';
 import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from './driver-auth-api';
 
-
 export interface InMemoryDriverAuthApiOptions {
-  readonly tokenSecret: string;
+  /** Mints the token a signed-in driver carries; tests pass the entry point's issuer or an opaque stand-in. */
+  readonly tokens: TokenIssuer;
   /** Expected one-time codes keyed by phone. Missing phones get `driver-code-<phone>`. */
   readonly codes?: ReadonlyMap<string, string>;
 }
 
 export class InMemoryDriverAuthApi implements DriverAuthApi {
-  private readonly tokenSecret: string;
+  private readonly tokens: TokenIssuer;
   private readonly codes: Map<string, string>;
   private readonly requestCodeResponses = new Map<RequestId, true>();
   private readonly signInResponses = new Map<RequestId, SignInSuccess>();
@@ -25,7 +25,7 @@ export class InMemoryDriverAuthApi implements DriverAuthApi {
   private currentDriverId: PersonId | undefined;
 
   constructor(options: InMemoryDriverAuthApiOptions) {
-    this.tokenSecret = options.tokenSecret;
+    this.tokens = options.tokens;
     this.codes = new Map(options.codes ?? []);
   }
 
@@ -57,7 +57,7 @@ export class InMemoryDriverAuthApi implements DriverAuthApi {
       this.driverByPhone.set(phone, driverId);
     }
 
-    const token = signToken({ personId: driverId, role: 'driver' }, this.tokenSecret);
+    const token = this.tokens.issue({ personId: driverId, role: 'driver' });
     const success: SignInSuccess = { driverId, token };
     this.signInResponses.set(requestId, success);
     this.currentDriverId = driverId;

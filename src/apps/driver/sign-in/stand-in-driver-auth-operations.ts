@@ -14,12 +14,12 @@
  * unknown phone is answered "wrong code", and a plate is upper-cased with spaces and dashes removed, then must be one
  * to ten English letters or digits. Saving the same plate twice returns the car already saved.
  */
-import { signToken } from '../../../entrypoint/auth/token';
 import { refuse, respond, type HttpResponse } from '../../../entrypoint/http';
-import { validateBody, type BodySchema } from '../../../entrypoint/operations/body-schema';
 import type { Operation, ReadOperation, WriteOperation } from '../../../entrypoint/operations/operation';
+import { validateBody, type BodySchema } from '../../../shared/body-schema';
 import type { PersonId } from '../../../shared/identifiers';
 import { isWellFormedRequestId, REQUEST_ID_HEADER } from '../../../shared/request-id';
+import type { TokenIssuer } from '../../../shared/token-issuer';
 import type { EntryPointHandle } from './http-driver-auth-api';
 import {
   DRIVER_ADD_CAR_OPERATION,
@@ -44,7 +44,8 @@ interface StoredCar {
 }
 
 export interface StandInAccountsState {
-  readonly tokenSecret: string;
+  /** The entry point's own issuer, so the token the stand-in hands out is one the real pipeline accepts. */
+  readonly tokens: TokenIssuer;
   readonly driverByPhone: Map<string, PersonId>;
   readonly challenges: Map<string, Challenge>;
   readonly sentCodes: { readonly phone: string; readonly code: string }[];
@@ -57,11 +58,11 @@ export interface StandInAccountsState {
 
 /** The phones given are registered drivers; any other phone is unknown to the server. */
 export function createStandInAccountsState(
-  tokenSecret: string,
+  tokens: TokenIssuer,
   registeredPhones: readonly string[],
 ): StandInAccountsState {
   return {
-    tokenSecret,
+    tokens,
     driverByPhone: new Map(registeredPhones.map((phone) => [phone, `driver-${phone}`])),
     challenges: new Map(),
     sentCodes: [],
@@ -150,7 +151,7 @@ function signIn(state: StandInAccountsState, phone: string, code: string): HttpR
   }
   state.challenges.delete(phone);
   state.tokensIssued += 1;
-  return respond(200, { token: signToken({ personId: driverId, role: 'driver' }, state.tokenSecret) });
+  return respond(200, { token: state.tokens.issue({ personId: driverId, role: 'driver' }) });
 }
 
 export function createStandInCarOperations(state: StandInAccountsState): readonly Operation[] {

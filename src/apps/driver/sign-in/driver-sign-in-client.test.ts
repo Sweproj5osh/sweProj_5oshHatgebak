@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RequestId } from '../../../shared/request-id';
+import type { TokenIssuer } from '../../../shared/token-issuer';
 import {
   DriverAuthRefusedError,
   DriverAuthTransportError,
@@ -11,8 +12,10 @@ import { InMemoryDriverAuthApi } from './in-memory-driver-auth-api';
 
 const PHONE = '01012345678';
 const RIGHT_CODE = `driver-code-${PHONE}`;
+/** The client carries a token and never reads it, so an opaque string stands for it here. */
+const OPAQUE_TOKENS: TokenIssuer = { issue: (identity) => `token-for-${identity.personId}` };
 
-function buildClient(api: DriverAuthApi = new InMemoryDriverAuthApi({ tokenSecret: 'test-secret-that-is-long-enough' })) {
+function buildClient(api: DriverAuthApi = new InMemoryDriverAuthApi({ tokens: OPAQUE_TOKENS })) {
   let serial = 1;
   const issued: RequestId[] = [];
   const client = new DriverSignInClient({
@@ -153,7 +156,7 @@ describe('D1 Driver App sign-in and cars client', () => {
   });
 
   it('keeps the same request id for the sign-in retry after a lost answer', async () => {
-    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokenSecret: 'test-secret-that-is-long-enough' }), [
+    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokens: OPAQUE_TOKENS }), [
       true,
       false,
       true,
@@ -177,7 +180,7 @@ describe('D1 Driver App sign-in and cars client', () => {
   });
 
   it('keeps the same request id for the plate retry after a lost answer, and saves one car', async () => {
-    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokenSecret: 'test-secret-that-is-long-enough' }));
+    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokens: OPAQUE_TOKENS }));
     const { client } = buildClient(api);
     await client.submitPhone(PHONE);
     await client.submitCode(RIGHT_CODE);
@@ -197,7 +200,7 @@ describe('D1 Driver App sign-in and cars client', () => {
   });
 
   it('uses a new request id when the retry is for a different phone', async () => {
-    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokenSecret: 'test-secret-that-is-long-enough' }), [
+    const api = new AnswerLosingApi(new InMemoryDriverAuthApi({ tokens: OPAQUE_TOKENS }), [
       true,
     ]);
     const { client } = buildClient(api);

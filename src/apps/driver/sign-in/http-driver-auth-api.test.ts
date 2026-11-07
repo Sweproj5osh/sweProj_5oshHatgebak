@@ -3,6 +3,7 @@ import { composeInMemoryApplication } from '../../../entrypoint/composition';
 import { foundationOperations } from '../../../entrypoint/operations/foundation-operations';
 import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
 import { FixedClock } from '../../../shared/clock';
+import type { TokenIssuer } from '../../../shared/token-issuer';
 import { DriverSignInClient } from './driver-sign-in-client';
 import { HttpDriverAuthApi } from './http-driver-auth-api';
 import {
@@ -17,7 +18,9 @@ const UNKNOWN_PHONE = '01199999999';
 const DRIVER_ID = `driver-${PHONE}`;
 
 function buildStack(dropSuccessfulAnswers = { remaining: 0 }) {
-  const accounts = createStandInAccountsState(TEST_TOKEN_SECRET, [PHONE]);
+  /** The stand-in mints through the application's own issuer, which exists only once the application is composed. */
+  const tokensOfTheApplication: TokenIssuer = { issue: (identity) => app.moduleDependencies.tokens.issue(identity) };
+  const accounts = createStandInAccountsState(tokensOfTheApplication, [PHONE]);
   const app = composeInMemoryApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: new FixedClock(new Date('2026-11-06T12:00:00Z')),
