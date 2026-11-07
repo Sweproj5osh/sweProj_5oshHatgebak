@@ -194,6 +194,9 @@ describe('B3 accepting new versions only from the approvals area', () => {
       ['a negative later-hour fee', { eachLaterHourFee: -5 }],
       ['a negative daily cap', { dailyCap: -50 }],
       ['a fee that is not a whole number of pounds', { firstHourFee: 10.5 }],
+      ['a later-hour fee that is not a whole number of pounds', { eachLaterHourFee: 2.5 }],
+      ['a cap that is not a whole number of pounds', { dailyCap: 49.99 }],
+      ['an infinite cap', { dailyCap: Number.POSITIVE_INFINITY }],
       ['a fee that is not a number', { dailyCap: Number.NaN }],
     ];
 
