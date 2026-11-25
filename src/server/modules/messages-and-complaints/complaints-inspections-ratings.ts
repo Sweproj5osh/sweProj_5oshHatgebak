@@ -3,9 +3,9 @@
  * Complaints up the hierarchy, inspection reports, road-block confirmations, ratings, disputes.
  * Needs TicketQuery, EvidenceStore, AuditTrail.
  */
-import type { PersonId, PhotoId, SiteId, TicketId } from '../../server/shared/identifiers';
-import type { RequestId } from '../../server/shared/request-id';
-import type { Result } from '../../server/shared/result';
+import type { PersonId, PhotoId, SiteId, TicketId } from '../../shared/identifiers';
+import type { RequestId } from '../../shared/request-id';
+import type { Result } from '../../shared/result';
 
 export type ComplaintRefusal = 'cannot complain upward' | 'reason required';
 

@@ -14,17 +14,19 @@ conflict ([ADR-01](docs/adr/ADR-01-ranked-qualities.md)).
 - **The AI Assistant service**: a separate small service with its own database that calls the main system with the
   driver's own token ([ADR-04](docs/adr/ADR-04-assistant-second-quantum.md)).
 
-## The fourteen modules
-`src/modules/<module>/public.ts` is the only file another module may import; `internal/` is private. The full table of
-modules, public interfaces, owners and sets is in [docs/architecture/modules.md](docs/architecture/modules.md).
+## The five area modules
+Business code lives in five area modules under `src/server/modules/`, one per owner (ADR-16). The fourteen components
+of ADR-02 are sub-folders (or single files) inside them; another component is used through its `index.ts`. The full
+table of components, public names, owners and sets is in [docs/architecture/modules.md](docs/architecture/modules.md),
+and the folder map in [docs/architecture/overview.md](docs/architecture/overview.md).
 
-| Owner | Modules |
+| Owner | Area module (`src/server/modules/…`) and its components |
 |---|---|
-| Zeyad (Area 1) | `audit-log`, `scheduler`, plus the foundation: `src/server/http`, `src/server/composition`, `src/server/shared`, `src/server/adapters`, `src/server/test-support`, `src/fitness`, `db/` |
-| Lino (Teammate A) (Area 2) | `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
-| Karim (Teammate B) (Area 3) | `committee-prices`, `ticketing` |
-| Amina (Teammate C) (Area 4) | `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
-| Mahi (Teammate D) (Area 5) | `notifications`, `evidence`, `complaints-inspections-ratings` |
+| Zeyad (Area 1) | `foundation/`: `audit-log`, `scheduler`, plus the foundation: `src/server/http`, `src/server/composition`, `src/server/shared`, `src/server/adapters`, `src/server/test-support`, `src/fitness`, `db/` |
+| Lino (Teammate A) (Area 2) | `identity-and-registry/`: `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
+| Karim (Teammate B) (Area 3) | `parking-and-prices/`: `committee-prices`, `ticketing` |
+| Amina (Teammate C) (Area 4) | `money-and-governance/`: `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
+| Mahi (Teammate D) (Area 5) | `messages-and-complaints/`: `notifications`, `evidence`, `complaints-inspections-ratings` |
 
 ## Running things
 ```bash
@@ -50,7 +52,7 @@ register their operations as `WriteOperation` objects (see `src/server/shared/op
 test (`src/server/http/audit-coverage.test.ts`) then checks every registered write automatically.
 
 ## Rules for everyone (from `docs/team/TEAM_TASKS.md`)
-1. Stay inside your area; use another area only through its `public.ts`.
+1. Stay inside your area; use another area only through its `index.ts`.
 2. Every write accepts a client request id; the same id twice gives the same answer and changes the database once.
 3. Every write leaves exactly one audit entry, inside the same transaction; a failed write leaves none.
 4. The apps hold no business rule: they display and collect; the server decides.

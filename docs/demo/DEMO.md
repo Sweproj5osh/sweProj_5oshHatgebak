@@ -48,7 +48,7 @@ and `npm run fitness` (7 static architecture checks pass).
 
 1. **Simultaneous separate requests can take more spaces than exist.** `demo/known-gap-parallel-requests.ts` sends
    20 separate simultaneous opens for 5 spaces through the entry point: 6 tickets are issued, in 30 of 30 runs. The
-   ticket store's contract (`src/modules/ticketing/internal/ticket-store.ts`) says the PostgreSQL adapter must lock the
+   ticket store's contract (`src/server/modules/parking-and-prices/ticketing/ticket-store.ts`) says the PostgreSQL adapter must lock the
    site, but `src/server/adapters/` holds only in-memory code so far, and the in-memory database does not lock across
    transactions (the project's F3 test races the 20 opens inside one unit of work, which passes). Demo 03 therefore
    shows only what holds today: arrivals one after another, the F3 single-unit-of-work race, and 10 simultaneous

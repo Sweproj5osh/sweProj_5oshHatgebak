@@ -35,8 +35,8 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - **Unit 2, the AI Assistant service:** a separate small service with its own database. It calls unit 1 through the
   public interface with the driver's own token, never a staff token. If it fails, nothing else fails.
 
-## 5. The fourteen modules and their owners (ADR-02)
-| Module (folder under `src/modules/`) | Public interfaces | Owner | Set |
+## 5. The five area modules, their fourteen components and their owners (ADR-02, ADR-16)
+| Component (under `src/server/modules/`) | Public interfaces | Owner | Set |
 |---|---|---|---|
 | `identity-and-registry/accounts-and-access-control` | `Authorization`, `PersonalData` | Lino (Teammate A) | must stay on |
 | `identity-and-registry/sites-and-areas` | `SiteRegistry` | Lino (Teammate A) | must stay on |
@@ -47,18 +47,17 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 | `money-and-governance/cash-custody.ts` | `DepositLedger` | Amina (Teammate C) | may fail |
 | `identity-and-registry/licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
 | `money-and-governance/approvals.ts` | `ApprovalDesk` | Amina (Teammate C) | may fail |
-| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/complaints-inspections-ratings.ts` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
 | `money-and-governance/money-check-dashboard.ts` | `MoneyCheck` | Amina (Teammate C) | may fail |
 | `foundation/scheduler.ts` | none (it calls others) | Zeyad | may fail |
-| `notifications` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
-| `evidence` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/notifications.ts` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/evidence.ts` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |
 
 "Must stay on" means a driver cannot park without it. "May fail" means it fails gracefully and the rest keeps working.
 
 ## 6. Module boundaries
-- A module exposes only what its `public.ts` exports. Everything under `internal/` is private.
-- Code in one module should import another module only through that module's `public.ts`; review checks it (the
-  build check F2 was dropped by ADR-16).
+- A component exposes what its `index.ts` exports. Code in one component should import another component only through
+  that `index.ts`; review checks it (the build check F2 was dropped by ADR-16).
 - You write only inside the modules you own. Changes to another owner's module go through that owner.
 - Shared code lives in `src/server/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
   unit of work, the operation contract and body schema, the rate-limiter port, the token-issuer port, the keyed serial

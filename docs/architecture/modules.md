@@ -1,16 +1,19 @@
 # Modules
 
-One folder per module under `src/modules/`. Another module should import only the module's `public.ts`; everything
-under `internal/` is private (review; the build check F2 was dropped by ADR-16). "Must stay on" modules keep a driver
+Five area modules under `src/server/modules/`, one per owner (ADR-16); each of the fourteen components of ADR-02 is a
+sub-folder with an `index.ts`, or a single file when it holds only types. Another component should import only that
+`index.ts`; review checks it (the build check F2 was dropped by ADR-16). A component that answers HTTP requests has one
+controller file per REST resource and an `operations.ts` (or `operations` in its `index.ts`) that lists them in
+registration order. "Must stay on" modules keep a driver
 parking; "may fail" modules fail alone, and no must-stay-on module calls a may-fail one synchronously (Rule D, review
 and the behavioural test Z14).
 
-**The code is the catalogue (P25).** The names below are the ones actually exported from each `public.ts` on `main`.
+**The code is the catalogue (P25).** The names below are the ones actually exported from each component's `index.ts` on `main`.
 An owner who adds, renames or removes a public name edits this file's row in the same pull request; review checks it.
 A module that exposes operations through the entry point exports `operations(dependencies)` and adds one line to
 `src/server/composition/compose-server.ts` in its own pull request (P4).
 
-| Module folder | Public names exported from `public.ts` | Owner | Set |
+| Component (under `src/server/modules/`) | Public names exported from `index.ts` | Owner | Set |
 |---|---|---|---|
 | `identity-and-registry/sites-and-areas` | `SiteRegistry` (extends `SiteCodes` and `SiteLocator`; `isOpenAt`, `isFreeAt`, `statusAt`, `nearbySites`, `declareSpecialEvent`, …), `SiteCodes`; ports `FreeSpaceSource`, `PriceSource`; factories `createSiteRegistry(dependencies)`, `createSiteLocator(database, stores)`, `createSiteCodes(secret)`, `createSitesStores()`, `signedSiteCodes(secret, siteId)`, `readSiteCodeSecret(environment)`; `operations(dependencies)` (nine writes, four reads); constants `SITE_CODE_SECRET_VARIABLE`, `FREE_SPACE_BAND_POLICY`; types `GeoPoint`, `NearbySite`, `NearbyRefusal`, `CapacityChange`, `FreeSpaceBand`, `SiteCodeKind`, `SiteCodeRefusal`, `PlaceRefusal`, `OpeningPeriod`, `LocalDateTime`, `SpecialEventKind`, `SiteStatus`, `SiteDetails`, `SitesAndAreasStores`, `SitesAndAreasDependencies`, `SitesOperationsDependencies` | Lino (Teammate A) | must stay on |
 | `parking-and-prices/ticketing` | `TicketDesk` (every write takes the unit of work first, ADR-13; `closeStaleTickets` returns `StaleTicketSweep`), `TicketQuery` (every read takes the tables first; `closedTicketsBetween` returns `ClosedTicketSummary`); ports `TicketingSites`, `CarOwnership`, `PlateLookup`, `TicketStore` (with `TableTicketStore` over the shared tables); `operations(dependencies: TicketingDependencies)` for the composition root (P4); factories `createTicketOpening`, `createTicketClosing`, `createTicketCounts`, `createTicketReading`, `createTicketPaymentStatus`; constants `PLATE_UNAVAILABLE`, `TicketReadRefusal`; types `Ticket` (with `feeWarnings`), `Receipt`, `OpenTicketCommand`, `ClockedInAttendant`, `CarReference`, `TicketState`, `PaymentStatus`, `OpenRefusal`, `CloseRefusal`, `SiteCodeProblem`, `TicketOpening`, `TicketClosing`, `AssistedClosing`, `TicketCounts`, `TicketReading`, `TicketPaymentStatus` and their `…Dependencies`. Reads: `ticketHistory`, `ticketStatus`, `receipt` (`own`; the receipt is a logged read of personal data), `freeSpaces` (`open`) | Karim (Teammate B) | must stay on |
@@ -21,11 +24,11 @@ A module that exposes operations through the entry point exports `operations(dep
 | `money-and-governance/cash-custody.ts` | `DepositLedger`; types `Deposit`, `DepositReceipt`, `DepositState`, `DepositRefusal` | Amina (Teammate C) | may fail |
 | `identity-and-registry/licensing-assignment-attendance` | `LicenceStatus` (`applyApprovedStateChange(unitOfWork, …)` takes the approving request's unit of work, ADR-13), `Assignments`, `Attendance`; port `ApprovalVerifier`; module `LicensingAssignmentAttendance` with factories `createLicensingAssignmentAttendance(dependencies)`, `createLicensingStores()`; `operations(dependencies)` (seven writes, two reads, the telemetry `attendance.recordLocation`); constants `OFF_SITE_POLICY`, `LICENCE_STATE_CHANGED_TOPIC`; types `LicenceState`, `LicenceRefusal`, `LicenceStateChange`, `ApprovalUnitOfWork`, `LicenceStateChangedEvent`, `AssignmentRefusal`, `ClockInRefusal`, `ClockOutRefusal`, `LocationRefusal`, `OffSiteFlag`, `LicensingAssignmentAttendanceStores`, `LicensingAssignmentAttendanceDependencies`, `LicensingOperationsDependencies` | Lino (Teammate A) | may fail |
 | `money-and-governance/approvals.ts` | `ApprovalDesk`; types `ApprovalRequest`, `ApprovableKind`, `ApprovalState`, `ApprovalRefusal` | Amina (Teammate C) | may fail |
-| `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores`; types `ComplaintRefusal`, `DisputeDecision` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/complaints-inspections-ratings.ts` | `Complaints`, `Inspections`, `Scores`; types `ComplaintRefusal`, `DisputeDecision` | Mahi (Teammate D) | may fail |
 | `money-and-governance/money-check-dashboard.ts` | `MoneyCheck`; types `MoneyCheckFigures`, `DashboardView` | Amina (Teammate C) | may fail |
 | `foundation/scheduler.ts` | `Scheduler`, `ScheduledJob`, `JobRunReport` (job registry for owners; provides nothing to other modules) | Zeyad | may fail |
-| `notifications` | `Notifier`; port `MessageDelivery`; type `Message` | Mahi (Teammate D) | may fail |
-| `evidence` | `EvidenceStore`; port `PhotoStorage`; type `PhotoState` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/notifications.ts` | `Notifier`; port `MessageDelivery`; type `Message` | Mahi (Teammate D) | may fail |
+| `messages-and-complaints/evidence.ts` | `EvidenceStore`; port `PhotoStorage`; type `PhotoState` | Mahi (Teammate D) | may fail |
 
 ## Foundation folders (Zeyad)
 | Folder | Holds |
