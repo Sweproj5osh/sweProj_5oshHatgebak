@@ -4,13 +4,13 @@
  * server. Needs the site registry, the fee calculator and price list, car ownership and the plate lookup, all through
  * narrow ports the composition root fills (Q12a: not Authorization or LicenceStatus; Rule D).
  */
-import type { Operation } from '../../shared/operation-contract';
+import type { Operation } from '../../server/shared/operation-contract';
 import type { FeeCalculator, PriceList } from '../committee-prices/public';
-import type { Clock } from '../../shared/clock';
-import type { PersonId, SiteId, TicketId } from '../../shared/identifiers';
-import type { RequestId } from '../../shared/request-id';
-import type { Result } from '../../shared/result';
-import type { TableAccess, Transaction } from '../../shared/unit-of-work';
+import type { Clock } from '../../server/shared/clock';
+import type { PersonId, SiteId, TicketId } from '../../server/shared/identifiers';
+import type { RequestId } from '../../server/shared/request-id';
+import type { Result } from '../../server/shared/result';
+import type { TableAccess, Transaction } from '../../server/shared/unit-of-work';
 import { createCloseTicketOperation } from './internal/close-ticket-operation';
 import { createOpenTicketOperation } from './internal/open-ticket-operation';
 import type { TicketStore } from './internal/ticket-store';

@@ -3,11 +3,11 @@
  * Attendant licences (state changed only through Approvals), site and shift assignment, inspector to zone,
  * clock in and out, location readings and off-site flags. Imports the two must-stay-on modules above it, never the reverse.
  */
-import type { Clock } from '../../shared/clock';
-import type { EventPublisher } from '../../shared/events/event';
-import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, SiteId, ZoneId } from '../../shared/identifiers';
-import type { Result } from '../../shared/result';
-import type { TableAccess, Transaction } from '../../shared/unit-of-work';
+import type { Clock } from '../../server/shared/clock';
+import type { EventPublisher } from '../../server/shared/events/event';
+import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, SiteId, ZoneId } from '../../server/shared/identifiers';
+import type { Result } from '../../server/shared/result';
+import type { TableAccess, Transaction } from '../../server/shared/unit-of-work';
 import type { AccessFacts, Authorization, LicenceLiveState } from '../accounts-and-access-control/public';
 import type { GeoPoint, SiteRegistry } from '../sites-and-areas/public';
 import { TableAssignmentsStore, TableAttendanceStore, TableLicencesStore, TableOffSiteStore } from './internal/adapters/table-stores';

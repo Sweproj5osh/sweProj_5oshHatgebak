@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../entrypoint/test-helpers';
-import { respond, type HttpResponse } from '../../../shared/operation-contract';
-import { REQUEST_ID_HEADER } from '../../../shared/request-id';
+import { TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../server/test-support/test-helpers';
+import { respond, type HttpResponse } from '../../../server/shared/operation-contract';
+import { REQUEST_ID_HEADER } from '../../../server/shared/request-id';
 import { createStandInPaymentOperations, createStandInPaymentState } from '../../test-support/stand-in-payment-operations';
 import { platesFor, priceListFor, TEST_PRICE } from '../../test-support/ticketing-ports';
-import { FixedClock } from '../../../shared/clock';
+import { FixedClock } from '../../../server/shared/clock';
 import { DriverScanClient } from '../scanning/driver-scan-client';
 import { HttpTicketScanApi } from '../scanning/http-ticket-scan-api';
 import type { ServerRequest } from '../server-call';

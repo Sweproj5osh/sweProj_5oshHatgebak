@@ -1,6 +1,6 @@
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import type { Role } from '../../../../shared/identifiers';
+import type { Role } from '../../../../server/shared/identifiers';
 
 /** The committee's second sign-in step (task A15): members and the Chair need a password as well as the phone code. */
 export const COMMITTEE_ROLES: readonly Role[] = ['member', 'chair'];

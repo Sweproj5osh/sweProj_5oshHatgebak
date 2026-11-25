@@ -1,5 +1,5 @@
-import type { DistrictId, SiteId, ZoneId } from '../../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../../shared/result';
+import type { DistrictId, SiteId, ZoneId } from '../../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
 import type { GeoPoint } from '../../public';
 
 /** A district of the governorate, run by its committee members. */

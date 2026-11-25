@@ -1,4 +1,4 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import { InMemoryDatabase } from '../../../../server/adapters/in-memory/in-memory-database';
 import {
   createAccountsAndAccessControl,
   createAccountsStores,
@@ -6,10 +6,10 @@ import {
   type AccountsAndAccessControl,
   type CarPresence,
 } from '../../../accounts-and-access-control/public';
-import { FixedClock } from '../../../../shared/clock';
-import type { PersonId, Role, SiteId } from '../../../../shared/identifiers';
-import type { Result } from '../../../../shared/result';
-import type { TokenIssuer } from '../../../../shared/token-issuer';
+import { FixedClock } from '../../../../server/shared/clock';
+import type { PersonId, Role, SiteId } from '../../../../server/shared/identifiers';
+import type { Result } from '../../../../server/shared/result';
+import type { TokenIssuer } from '../../../../server/shared/token-issuer';
 import { createSiteLocator, createSiteRegistry, createSitesStores, type SiteRegistry, type SitesAndAreasStores } from '../../public';
 
 export const TEST_SITE_CODE_SECRET = 'site-code-secret-for-tests';

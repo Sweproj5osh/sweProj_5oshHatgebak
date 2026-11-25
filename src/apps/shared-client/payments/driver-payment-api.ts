@@ -7,8 +7,8 @@
  * (payments module on main: 201 with the payment, 202 with a pending attempt and the message "pay later or pay cash",
  * refusals with 402, 403 or 409), Karim's `Receipt` and the receipt read's refusal words (ticketing module on main).
  */
-import type { PaymentId, SiteId, TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { PaymentId, SiteId, TicketId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
 
 /** The state of one payment attempt (P18): pending until the provider's final answer, then paid or failed. */
 export type AttemptState = 'pending' | 'paid' | 'failed';

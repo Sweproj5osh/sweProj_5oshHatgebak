@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { DistrictId, PersonId } from '../../../shared/identifiers';
+import type { DistrictId, PersonId } from '../../../server/shared/identifiers';
 import { createRegistryWorld, createStaff, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';
 
 /** Task A6: districts, zones and sites; only a member of that district, or the Chair, creates and edits them. */

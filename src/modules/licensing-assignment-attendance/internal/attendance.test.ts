@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PersonId } from '../../../shared/identifiers';
+import type { PersonId } from '../../../server/shared/identifiers';
 import { approvalUnitOfWork, createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 
 /** Task A13: clock in and out by scanning the own site's code; refuse another site's code. */

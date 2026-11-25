@@ -3,13 +3,13 @@
  * Payment records (app and cash), corrections as new rows, one charge per request id. Needs TicketDesk, AuditTrail
  * and the PaymentGateway port.
  */
-import type { Operation } from '../../shared/operation-contract';
-import type { Clock } from '../../shared/clock';
-import type { EventPublisher } from '../../shared/events/event';
-import type { PaymentId, PersonId, SiteId, TicketId } from '../../shared/identifiers';
-import type { RequestId } from '../../shared/request-id';
-import type { Result } from '../../shared/result';
-import type { Transaction } from '../../shared/unit-of-work';
+import type { Operation } from '../../server/shared/operation-contract';
+import type { Clock } from '../../server/shared/clock';
+import type { EventPublisher } from '../../server/shared/events/event';
+import type { PaymentId, PersonId, SiteId, TicketId } from '../../server/shared/identifiers';
+import type { RequestId } from '../../server/shared/request-id';
+import type { Result } from '../../server/shared/result';
+import type { Transaction } from '../../server/shared/unit-of-work';
 import type { TicketDesk, TicketQuery } from '../ticketing/public';
 import { payInAppOperation } from './internal/operations/pay-in-app';
 import { PaymentLedgerService } from './internal/payment-ledger';

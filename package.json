@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "tsx src/entrypoint/main.ts",
+    "start": "tsx src/server/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "fitness": "tsx src/fitness/run-all.ts"

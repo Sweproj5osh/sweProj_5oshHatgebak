@@ -1,9 +1,9 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
-import { FixedClock } from '../../../../shared/clock';
-import type { DomainEvent, EventPublisher } from '../../../../shared/events/event';
-import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
-import type { Result } from '../../../../shared/result';
-import type { TokenIssuer } from '../../../../shared/token-issuer';
+import { InMemoryDatabase } from '../../../../server/adapters/in-memory/in-memory-database';
+import { FixedClock } from '../../../../server/shared/clock';
+import type { DomainEvent, EventPublisher } from '../../../../server/shared/events/event';
+import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, Role, SiteId, ZoneId } from '../../../../server/shared/identifiers';
+import type { Result } from '../../../../server/shared/result';
+import type { TokenIssuer } from '../../../../server/shared/token-issuer';
 import {
   createAccountsAndAccessControl,
   createAccountsStores,

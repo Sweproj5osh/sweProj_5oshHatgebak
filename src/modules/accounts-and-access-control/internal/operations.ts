@@ -1,4 +1,4 @@
-import { isRole, type PersonId, type Role } from '../../../shared/identifiers';
+import { isRole, type PersonId, type Role } from '../../../server/shared/identifiers';
 import {
   refuse,
   respond,
@@ -7,9 +7,9 @@ import {
   type ReadOperation,
   type WriteOperation,
   type WriteOutcome,
-} from '../../../shared/operation-contract';
-import type { Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+} from '../../../server/shared/operation-contract';
+import type { Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import {
   createAccountsStores,
   type AccountsAndAccessControl,

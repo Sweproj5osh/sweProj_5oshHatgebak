@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
-import type { PersonId, SiteId } from '../../../shared/identifiers';
+import { composeInMemoryServer, type InMemoryApplication } from '../../../server/composition/compose-server';
+import { TEST_TOKEN_SECRET, tokenFor } from '../../../server/test-support/test-helpers';
+import type { PersonId, SiteId } from '../../../server/shared/identifiers';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { AttendantModeClient } from './attendant-mode-client';
 import { HttpAttendantModeApi } from './http-attendant-mode-api';

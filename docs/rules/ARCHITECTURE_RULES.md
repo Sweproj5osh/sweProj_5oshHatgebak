@@ -60,10 +60,10 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - Code in one module should import another module only through that module's `public.ts`; review checks it (the
   build check F2 was dropped by ADR-16).
 - You write only inside the modules you own. Changes to another owner's module go through that owner.
-- Shared code lives in `src/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
+- Shared code lives in `src/server/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
   unit of work, the operation contract and body schema, the rate-limiter port, the token-issuer port, the keyed serial
   queue. A module never imports
-  `src/entrypoint`: the entry point depends on the modules, not the reverse (review; `module-imports.test.ts` for ticketing).
+  the entry point (`src/server/http`, `src/server/composition`): the entry point depends on the modules, not the reverse (review; `module-imports.test.ts` for ticketing).
 - No production file imports test-only code: a `*.test.ts` file, a `test-support/` or `testing/` folder, or
   `src/fitness` (F14).
 - `committee-prices` imports nothing outside its own folder (F1): it is pure arithmetic, testable with plain numbers.

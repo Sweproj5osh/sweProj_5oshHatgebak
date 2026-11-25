@@ -1,5 +1,5 @@
-import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
-import type { Actor } from '../../../shared/identifiers';
+import { refuse, respond, type Operation, type WriteOperation } from '../../../server/shared/operation-contract';
+import type { Actor } from '../../../server/shared/identifiers';
 import type { ClockedInAttendant, TicketClosing, TicketOpening } from '../public';
 import { STATUS_FOR_CLOSE_REFUSAL, TICKET_CLOSED_TOPIC, feeAuditDetail } from './close-ticket-operation';
 import { STATUS_FOR_OPEN_REFUSAL } from './open-ticket-operation';

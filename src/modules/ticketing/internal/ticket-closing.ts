@@ -1,6 +1,6 @@
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { SiteId, TicketId } from '../../../shared/identifiers';
-import type { Transaction } from '../../../shared/unit-of-work';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { SiteId, TicketId } from '../../../server/shared/identifiers';
+import type { Transaction } from '../../../server/shared/unit-of-work';
 import type { ClockedInAttendant, CloseRefusal, StaleTicketSweep, Ticket, TicketClosing, TicketClosingDependencies } from '../public';
 
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;

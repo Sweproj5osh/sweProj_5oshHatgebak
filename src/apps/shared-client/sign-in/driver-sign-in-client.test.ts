@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { RequestId } from '../../../shared/request-id';
-import type { TokenIssuer } from '../../../shared/token-issuer';
+import type { RequestId } from '../../../server/shared/request-id';
+import type { TokenIssuer } from '../../../server/shared/token-issuer';
 import { ServerTransportError } from '../server-call';
 import { DriverAuthRefusedError, type DriverAuthApi, type SignInSuccess } from './driver-auth-api';
 import { DriverSignInClient } from './driver-sign-in-client';

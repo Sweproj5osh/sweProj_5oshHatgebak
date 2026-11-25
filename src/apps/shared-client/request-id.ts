@@ -4,7 +4,7 @@
  * is kept only while the retry is for the same input; a different input is a different request and gets a new id, so
  * a retry can never silently resend an older request in place of the one the person just made.
  */
-import { isWellFormedRequestId, type RequestId } from '../../shared/request-id';
+import { isWellFormedRequestId, type RequestId } from '../../server/shared/request-id';
 
 /** A fresh id the entry point accepts: a version 4 UUID is 36 letters, digits and hyphens. */
 export function randomRequestId(): RequestId {

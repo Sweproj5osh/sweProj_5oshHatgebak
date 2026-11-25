@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
 import { operations, type PaymentStatus } from '../public';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 

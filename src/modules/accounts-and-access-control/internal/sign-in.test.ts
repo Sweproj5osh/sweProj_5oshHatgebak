@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { verifyToken } from '../../../entrypoint/auth/token';
-import { createTokenIssuer } from '../../../entrypoint/auth/token-issuer';
-import { TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
-import type { PersonId } from '../../../shared/identifiers';
+import { verifyToken } from '../../../server/http/auth/token';
+import { createTokenIssuer } from '../../../server/http/auth/token-issuer';
+import { TEST_TOKEN_SECRET } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
+import type { PersonId } from '../../../server/shared/identifiers';
 import { SIGN_IN_POLICY } from '../public';
 import { createAccountsWorld, NO_SITES, type AccountsWorld } from './testing/accounts-world';
 

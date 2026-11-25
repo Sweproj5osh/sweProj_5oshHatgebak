@@ -6,8 +6,8 @@
  * operation decides which words the screen shows; no answer at all is a transport failure the caller may retry with
  * the same request id.
  */
-import type { HttpMethod, HttpResponse } from '../../shared/operation-contract';
-import { REQUEST_ID_HEADER, type RequestId } from '../../shared/request-id';
+import type { HttpMethod, HttpResponse } from '../../server/shared/operation-contract';
+import { REQUEST_ID_HEADER, type RequestId } from '../../server/shared/request-id';
 import { asRecord, type ServerAnswer } from './server-answer';
 
 /** What the app sends: the same plain data the entry point's HTTP adapter builds from a Node request. */

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { verifyToken } from '../../../entrypoint/auth/token';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
-import type { HttpRequest } from '../../../entrypoint/http';
-import { loggedReadRequest, publicRequest, readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
-import type { PersonId, Role } from '../../../shared/identifiers';
+import { verifyToken } from '../../../server/http/auth/token';
+import { composeInMemoryServer, type InMemoryApplication } from '../../../server/composition/compose-server';
+import type { HttpRequest } from '../../../server/http/http';
+import { loggedReadRequest, publicRequest, readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
+import type { PersonId, Role } from '../../../server/shared/identifiers';
 import { REQUEST_SIGN_IN_CODE_PATH, SIGN_IN_PATH, SIGN_IN_WITH_SECOND_STEP_PATH } from './operations';
 
 /**

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { SiteId } from '../../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../../shared/result';
+import type { SiteId } from '../../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
 import type { SiteCodeKind, SiteCodeRefusal } from '../../public';
 
 /**

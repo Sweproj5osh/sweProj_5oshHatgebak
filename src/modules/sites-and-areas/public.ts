@@ -2,10 +2,10 @@
  * Sites & Areas — owner: Teammate A (Area 2). Must-stay-on set.
  * Districts, zones, sites, capacity with history, hours, special events, signed entry and exit codes. Needs AuditTrail.
  */
-import type { Clock } from '../../shared/clock';
-import type { DistrictId, PersonId, SiteId, ZoneId } from '../../shared/identifiers';
-import type { Result } from '../../shared/result';
-import type { TableAccess } from '../../shared/unit-of-work';
+import type { Clock } from '../../server/shared/clock';
+import type { DistrictId, PersonId, SiteId, ZoneId } from '../../server/shared/identifiers';
+import type { Result } from '../../server/shared/result';
+import type { TableAccess } from '../../server/shared/unit-of-work';
 import type { Authorization, SiteLocator } from '../accounts-and-access-control/public';
 import { TableCapacityStore, TablePlacesStore, TableSiteCalendarStore } from './internal/adapters/table-stores';
 import { SiteCodeSigner } from './internal/domain/site-code-signer';

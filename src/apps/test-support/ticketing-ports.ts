@@ -5,7 +5,7 @@
  */
 import { createPriceList, type PriceList, type PriceVersion } from '../../modules/committee-prices/public';
 import type { PlateLookup } from '../../modules/ticketing/public';
-import { fail, succeed } from '../../shared/result';
+import { fail, succeed } from '../../server/shared/result';
 
 /** The price every site in a test charges: ten pounds for the first hour, five for each later one, fifty a day. */
 export const TEST_PRICE = { firstHourFee: 10, eachLaterHourFee: 5, dailyCap: 50 };

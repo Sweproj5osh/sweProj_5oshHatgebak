@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
-import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from '../../../entrypoint/handle-request';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, writeRequest } from '../../../server/test-support/test-helpers';
+import { TIMESTAMPS_ARE_SET_BY_THE_SERVER } from '../../../server/http/handle-request';
 import { buildTicketingWorld, START } from './testing/ticketing-world';
 
 async function application() {

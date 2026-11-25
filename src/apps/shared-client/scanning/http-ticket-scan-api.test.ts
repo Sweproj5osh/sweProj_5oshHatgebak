@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { InMemoryApplicationOptions } from '../../../entrypoint/composition';
-import { readRequest, TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
+import type { InMemoryApplicationOptions } from '../../../server/composition/compose-server';
+import { readRequest, TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { priceListFor, TEST_PRICE } from '../../test-support/ticketing-ports';
 import { DriverScanClient } from './driver-scan-client';

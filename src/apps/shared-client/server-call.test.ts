@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { refuse, respond, type HttpResponse } from '../../shared/operation-contract';
-import { REQUEST_ID_HEADER } from '../../shared/request-id';
+import { refuse, respond, type HttpResponse } from '../../server/shared/operation-contract';
+import { REQUEST_ID_HEADER } from '../../server/shared/request-id';
 import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, ServerTransportError, type ServerRequest } from './server-call';
 
 function recordingServer(answer: HttpResponse) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { refuse, respond, type HttpResponse } from '../../../shared/operation-contract';
+import { refuse, respond, type HttpResponse } from '../../../server/shared/operation-contract';
 import { MalformedServerAnswerError } from '../server-answer';
 import type { ServerRequest } from '../server-call';
 import { DriverMapRefusedError } from './driver-map-api';

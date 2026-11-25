@@ -1,7 +1,7 @@
-import type { Clock } from '../../../shared/clock';
-import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { AccessFacts, Authorization } from '../../accounts-and-access-control/public';
 import type { SiteRegistry } from '../../sites-and-areas/public';
 import type { AssignmentRefusal, Assignments } from '../public';

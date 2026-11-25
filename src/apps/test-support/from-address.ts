@@ -1,4 +1,4 @@
-import type { HttpResponse } from '../../shared/operation-contract';
+import type { HttpResponse } from '../../server/shared/operation-contract';
 import type { EntryPointHandle, ServerRequest } from '../shared-client/server-call';
 
 /** What the entry point's HTTP adapter adds to every request: the client's network address, as the socket reports it. */

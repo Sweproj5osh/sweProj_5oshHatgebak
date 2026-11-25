@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
-import { REQUEST_ID_HEADER } from '../../../shared/request-id';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
+import { REQUEST_ID_HEADER } from '../../../server/shared/request-id';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
 async function application(options: Parameters<typeof buildTicketingWorld>[1] = {}) {

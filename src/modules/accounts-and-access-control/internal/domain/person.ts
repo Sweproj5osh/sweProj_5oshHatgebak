@@ -1,5 +1,5 @@
-import type { PersonId, Role } from '../../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../../shared/result';
+import type { PersonId, Role } from '../../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
 import type { AccountStatus, CreatePersonRefusal, PersonCreator } from '../../public';
 
 /**

@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
 import {
   operations,
   PAY_LATER_OR_PAY_CASH,

@@ -6,11 +6,11 @@
  *
  * Run from the repository root:   npx tsx demo/01-driver-journey.ts
  */
-import { composeInMemoryServer } from '../src/entrypoint/composition';
-import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/entrypoint/bootstrap';
-import type { HttpRequest } from '../src/entrypoint/http';
+import { composeInMemoryServer } from '../src/server/composition/compose-server';
+import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/server/composition/bootstrap';
+import type { HttpRequest } from '../src/server/http/http';
 import { signedSiteCodes } from '../src/modules/sites-and-areas/public';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
 import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title } from './lib';
 
 const TOKEN_SECRET = 'demo-token-secret-that-is-long-enough';

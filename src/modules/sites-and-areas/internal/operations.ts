@@ -1,8 +1,8 @@
-import { isLocalDateTime, isPoint, type LocalDateTime } from '../../../shared/body-schema';
-import type { Clock } from '../../../shared/clock';
-import type { DistrictId } from '../../../shared/identifiers';
-import { refuse, respond, type Operation, type ReadOperation, type WriteOperation, type WriteOutcome } from '../../../shared/operation-contract';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import { isLocalDateTime, isPoint, type LocalDateTime } from '../../../server/shared/body-schema';
+import type { Clock } from '../../../server/shared/clock';
+import type { DistrictId } from '../../../server/shared/identifiers';
+import { refuse, respond, type Operation, type ReadOperation, type WriteOperation, type WriteOutcome } from '../../../server/shared/operation-contract';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import { createAccountsStores } from '../../accounts-and-access-control/public';
 import { createSitesStores, type GeoPoint, type PlaceRefusal, type SiteRegistry, type SpecialEventKind } from '../public';
 import { parseWeeklyHours } from './domain/site-calendar';

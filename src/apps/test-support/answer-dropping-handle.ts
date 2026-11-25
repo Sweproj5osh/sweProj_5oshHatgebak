@@ -1,4 +1,4 @@
-import type { HttpResponse } from '../../shared/operation-contract';
+import type { HttpResponse } from '../../server/shared/operation-contract';
 import { ServerTransportError, type EntryPointHandle } from '../shared-client/server-call';
 
 /** How many successful write answers the next calls lose. A test raises `remaining` when airplane mode should strike. */

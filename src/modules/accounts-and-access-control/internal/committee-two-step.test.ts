@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PersonId, Role } from '../../../shared/identifiers';
+import type { PersonId, Role } from '../../../server/shared/identifiers';
 import { COMMITTEE_ROLES, MINIMUM_PASSWORD_LENGTH } from '../public';
 import { createAccountsWorld, type AccountsWorld } from './testing/accounts-world';
 

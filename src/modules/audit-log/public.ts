@@ -2,8 +2,8 @@
  * Audit Log — owner: Zeyad (Area 1). Must-stay-on set.
  * Append-only, hash-chained record of every action (ADR-10). Needs nothing from other modules.
  */
-import type { DistrictId, PersonId, Role } from '../../shared/identifiers';
-import type { RequestId } from '../../shared/request-id';
+import type { DistrictId, PersonId, Role } from '../../server/shared/identifiers';
+import type { RequestId } from '../../server/shared/request-id';
 
 /** A signed-in person acting through the entry point. */
 export interface PersonAuditActor {

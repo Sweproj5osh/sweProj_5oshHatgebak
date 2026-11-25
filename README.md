@@ -20,7 +20,7 @@ modules, public interfaces, owners and sets is in [docs/architecture/modules.md]
 
 | Owner | Modules |
 |---|---|
-| Zeyad (Area 1) | `audit-log`, `scheduler`, plus the foundation: `src/entrypoint`, `src/shared`, `src/adapters`, `src/fitness`, `db/` |
+| Zeyad (Area 1) | `audit-log`, `scheduler`, plus the foundation: `src/server/http`, `src/server/composition`, `src/server/shared`, `src/server/adapters`, `src/server/test-support`, `src/fitness`, `db/` |
 | Lino (Teammate A) (Area 2) | `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
 | Karim (Teammate B) (Area 3) | `committee-prices`, `ticketing` |
 | Amina (Teammate C) (Area 4) | `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
@@ -46,8 +46,8 @@ appended by the pipeline** → events to the outbox → commit. A failed write l
 entry's id and previous hash come from the last entry, so appends are serialized across every server copy: the
 PostgreSQL adapter takes `pg_advisory_xact_lock(<constant>)` inside the write's transaction before reading the last
 entry and inserting the next. Module owners
-register their operations as `WriteOperation` objects (see `src/entrypoint/operations/operation.ts`); the audit-coverage
-test (`src/entrypoint/audit-coverage.test.ts`) then checks every registered write automatically.
+register their operations as `WriteOperation` objects (see `src/server/shared/operation-contract.ts`); the audit-coverage
+test (`src/server/http/audit-coverage.test.ts`) then checks every registered write automatically.
 
 ## Rules for everyone (from `docs/team/TEAM_TASKS.md`)
 1. Stay inside your area; use another area only through its `public.ts`.

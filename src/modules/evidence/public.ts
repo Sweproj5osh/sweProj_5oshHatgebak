@@ -3,7 +3,7 @@
  * Photos for complaints, road blocks and inspections, behind the PhotoStorage port; a report is saved even when
  * storage is down, with the photo pending.
  */
-import type { PhotoId } from '../../shared/identifiers';
+import type { PhotoId } from '../../server/shared/identifiers';
 
 export type PhotoState = 'pending upload' | 'stored';
 

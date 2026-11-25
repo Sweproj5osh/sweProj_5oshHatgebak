@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { Transaction } from '../../../shared/unit-of-work';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { Transaction } from '../../../server/shared/unit-of-work';
 import type { ClockedInAttendant, OpenRefusal, OpenTicketCommand, Ticket, TicketOpening, TicketOpeningDependencies } from '../public';
 
 /**

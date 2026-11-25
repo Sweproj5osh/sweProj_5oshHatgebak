@@ -1,4 +1,4 @@
-import { refuse, respond, type Operation, type WriteOperation } from '../../../shared/operation-contract';
+import { refuse, respond, type Operation, type WriteOperation } from '../../../server/shared/operation-contract';
 import type { OpenRefusal, TicketOpening } from '../public';
 import { SAMPLE_CAR, SAMPLE_ENTRY_CODE, SAMPLE_SITE } from './sample-rows';
 

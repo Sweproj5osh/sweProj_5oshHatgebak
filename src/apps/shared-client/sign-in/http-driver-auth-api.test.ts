@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryServer } from '../../../entrypoint/composition';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
+import { composeInMemoryServer } from '../../../server/composition/compose-server';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { fromAddress } from '../../test-support/from-address';
 import { DriverSignInClient } from './driver-sign-in-client';

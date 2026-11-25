@@ -1,6 +1,6 @@
-import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
-import type { Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { PersonId, SiteId, TicketId } from '../../../server/shared/identifiers';
+import type { Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { PaymentStatus, Ticket } from '../public';
 
 export type StoreRefusal = 'car already parked' | 'site full';

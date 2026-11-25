@@ -1,5 +1,5 @@
-import type { DistrictId, SiteId, ZoneId } from '../../../../shared/identifiers';
-import type { Row, TableAccess } from '../../../../shared/unit-of-work';
+import type { DistrictId, SiteId, ZoneId } from '../../../../server/shared/identifiers';
+import type { Row, TableAccess } from '../../../../server/shared/unit-of-work';
 import type { GeoPoint, OpeningPeriod } from '../../public';
 import type { District, Site, Zone } from '../domain/places';
 import type { CapacityChangeRow, CapacityStore, PlacesStore, SiteCalendarStore, SpecialEventRow } from '../ports';

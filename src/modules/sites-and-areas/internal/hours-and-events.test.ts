@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { DistrictId, PersonId, SiteId } from '../../../shared/identifiers';
+import type { DistrictId, PersonId, SiteId } from '../../../server/shared/identifiers';
 import { ALWAYS_OPEN, NO_HOURS_DECLARED, parseWeeklyHours } from './domain/site-calendar';
 import { createRegistryWorld, createStaff, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';
 

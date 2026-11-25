@@ -2,7 +2,7 @@
  * AttendantModeApi adapter: the Staff App talks to the main system only through the HTTP entry point.
  * The server's refusal is read from the `error` word; the app never decides whether a code or a site is valid.
  */
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 import { requiredBoolean, requiredString } from '../server-answer';
 import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import { AttendantModeRefusedError, isAttendantModeRefusal, type AttendantClockInSuccess, type AttendantModeApi } from './attendant-mode-api';

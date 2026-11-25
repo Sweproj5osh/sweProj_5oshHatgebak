@@ -1,5 +1,5 @@
-import { ALL_ROLES } from '../../../shared/identifiers';
-import { refuse, respond, type Operation, type ReadContext, type ReadOperation, type ReadOutcome } from '../../../shared/operation-contract';
+import { ALL_ROLES } from '../../../server/shared/identifiers';
+import { refuse, respond, type Operation, type ReadContext, type ReadOperation, type ReadOutcome } from '../../../server/shared/operation-contract';
 import type { TicketCounts, TicketReading } from '../public';
 import { TicketReadRefusal, type TicketReadReason } from './ticket-reading';
 

@@ -1,8 +1,8 @@
-import { FixedClock } from '../../../../shared/clock';
-import type { PersonId, TicketId } from '../../../../shared/identifiers';
-import type { RequestId } from '../../../../shared/request-id';
-import { fail, succeed, type Result } from '../../../../shared/result';
-import type { TableAccess, Transaction } from '../../../../shared/unit-of-work';
+import { FixedClock } from '../../../../server/shared/clock';
+import type { PersonId, TicketId } from '../../../../server/shared/identifiers';
+import type { RequestId } from '../../../../server/shared/request-id';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
+import type { TableAccess, Transaction } from '../../../../server/shared/unit-of-work';
 import type { CarReference, PaymentStatus, Ticket, TicketDesk, TicketQuery } from '../../../ticketing/public';
 import { createFakePaymentGateway, createPayments, type FakePaymentGateway, type PaymentGateway, type Payments } from '../../public';
 

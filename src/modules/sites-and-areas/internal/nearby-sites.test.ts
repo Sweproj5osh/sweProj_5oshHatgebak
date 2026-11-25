@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { SiteId, ZoneId } from '../../../shared/identifiers';
+import type { SiteId, ZoneId } from '../../../server/shared/identifiers';
 import { distanceInMeters } from './domain/nearby';
 import { bandFor, FEW_AT_OR_BELOW_SHARE_OF_CAPACITY, FEW_AT_OR_BELOW_SPACES, FULL_AT_OR_BELOW_SPACES } from './free-space-bands';
 import { createRegistryWorld, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';

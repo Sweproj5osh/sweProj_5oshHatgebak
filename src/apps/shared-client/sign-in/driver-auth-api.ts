@@ -6,7 +6,7 @@
  * interface. The app only carries them to the screen; it never decides them (Rule A). The token is an opaque string
  * the server issued: the app stores it and sends it back, and never reads what is inside.
  */
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 
 export interface SignInSuccess {
   readonly token: string;

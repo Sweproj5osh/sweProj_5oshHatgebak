@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
-import { refuse, type WriteOperation } from '../../../shared/operation-contract';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, writeRequest } from '../../../server/test-support/test-helpers';
+import { refuse, type WriteOperation } from '../../../server/shared/operation-contract';
 import type { TicketPaymentStatus } from '../public';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 

@@ -2,8 +2,8 @@
  * Small printing helpers shared by the demo scripts. They only format output; they hold no business rule.
  * The demos never change anything under src/: they call the real application the same way the tests do.
  */
-import type { HttpRequest } from '../src/entrypoint/http';
-import type { HttpResponse } from '../src/shared/operation-contract';
+import type { HttpRequest } from '../src/server/http/http';
+import type { HttpResponse } from '../src/server/shared/operation-contract';
 
 const useColour = process.stdout.isTTY === true && process.env['NO_COLOR'] === undefined;
 const paint = (code: number, text: string): string => (useColour ? `\u001b[${code}m${text}\u001b[0m` : text);

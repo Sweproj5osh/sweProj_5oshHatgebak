@@ -2,7 +2,7 @@
  * In-memory stand-in for the Staff App clock-in, for client tests that need no server (P14). A code of the form
  * `attendant-<site>` names its site; anything else is forged. The same request id answers the same site.
  */
-import type { RequestId } from '../../shared/request-id';
+import type { RequestId } from '../../server/shared/request-id';
 import { AttendantModeRefusedError, type AttendantClockInSuccess, type AttendantModeApi } from '../shared-client/attendant-mode/attendant-mode-api';
 
 const CODE_PREFIX = 'attendant-';

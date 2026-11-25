@@ -1,7 +1,7 @@
-import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import { SerialQueue } from '../../../shared/serial-queue';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { PersonId, SiteId, TicketId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import { SerialQueue } from '../../../server/shared/serial-queue';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { Ticket } from '../public';
 import { cairoCalendarMonth } from './cairo-calendar';
 import { ALLOWED_PAYMENT_CHANGES } from './ticket-payment-status';

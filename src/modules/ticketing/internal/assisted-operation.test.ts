@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, writeRequest } from '../../../entrypoint/test-helpers';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, writeRequest } from '../../../server/test-support/test-helpers';
 import { buildTicketingWorld, clockedIn } from './testing/ticketing-world';
 
 /** The attendant of the test token (`attendant-1`) is clocked in at site-1 unless a test binds them elsewhere. */

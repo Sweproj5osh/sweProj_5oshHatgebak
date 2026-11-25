@@ -3,11 +3,11 @@
  * Identities, roles, the hierarchy Chair > Member > Inspector > Attendant, session binding to a site, sign-in through
  * the entry point's public operations, and the personal-data store with logged joins and erasure (ADR-06 Rule F).
  */
-import type { Clock } from '../../shared/clock';
-import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../shared/identifiers';
-import type { Result } from '../../shared/result';
-import type { TokenIssuer } from '../../shared/token-issuer';
-import type { TableAccess } from '../../shared/unit-of-work';
+import type { Clock } from '../../server/shared/clock';
+import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../server/shared/identifiers';
+import type { Result } from '../../server/shared/result';
+import type { TokenIssuer } from '../../server/shared/token-issuer';
+import type { TableAccess } from '../../server/shared/unit-of-work';
 import {
   TableAccessFactsStore,
   TableCommitteePasswordStore,

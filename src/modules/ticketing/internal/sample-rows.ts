@@ -1,6 +1,6 @@
 import type { PriceList, PriceVersion } from '../../committee-prices/public';
-import type { Clock } from '../../../shared/clock';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { Ticket } from '../public';
 import { TICKETS_TABLE } from './table-ticket-store';
 

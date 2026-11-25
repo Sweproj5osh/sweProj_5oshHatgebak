@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { Clock } from '../../../shared/clock';
-import type { DistrictId, PersonId, SiteId, ZoneId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { DistrictId, PersonId, SiteId, ZoneId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { Authorization, Scope } from '../../accounts-and-access-control/public';
 import type {
   CapacityChange,

@@ -5,8 +5,8 @@
  * answers as her operation does: 201 with the payment, 202 with a pending attempt and "pay later or pay cash", 409
  * refusals by word.
  */
-import type { TicketId } from '../../shared/identifiers';
-import { refuse, respond, type Operation, type WriteOperation } from '../../shared/operation-contract';
+import type { TicketId } from '../../server/shared/identifiers';
+import { refuse, respond, type Operation, type WriteOperation } from '../../server/shared/operation-contract';
 import { PAY_LATER_OR_PAY_CASH } from '../shared-client/payments/driver-payment-api';
 import { DRIVER_PAY_OPERATION, DRIVER_PAY_PATH } from '../shared-client/payments/driver-payment-routes';
 

@@ -4,7 +4,7 @@
  * is read from the answer's `error` word, never from the status code alone, because the status codes of the sign-in
  * routes are the owner's to choose.
  */
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 import { asRecord, requiredList, requiredString } from '../server-answer';
 import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import {

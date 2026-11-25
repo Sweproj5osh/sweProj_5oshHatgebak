@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 import { InMemoryAttendantModeApi } from '../../test-support/in-memory-attendant-mode-api';
 import { ServerTransportError } from '../server-call';
 import { AttendantModeRefusedError, type AttendantModeApi } from './attendant-mode-api';

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
-import type { HttpRequest } from '../../../entrypoint/http';
-import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
-import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';
-import { REQUEST_ID_HEADER } from '../../../shared/request-id';
-import { looksLikeTimestampKey } from '../../../shared/timestamp-fields';
+import { composeInMemoryServer, type InMemoryApplication } from '../../../server/composition/compose-server';
+import type { HttpRequest } from '../../../server/http/http';
+import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
+import type { DistrictId, PersonId, Role } from '../../../server/shared/identifiers';
+import { REQUEST_ID_HEADER } from '../../../server/shared/request-id';
+import { looksLikeTimestampKey } from '../../../server/shared/timestamp-fields';
 import type { AccountsAndAccessControl } from '../../accounts-and-access-control/public';
 import type { SiteRegistry } from '../public';
 import { squareAround, TEST_SITE_CODE_SECRET, TEST_START, valueOf } from './testing/registry-world';

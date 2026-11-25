@@ -7,8 +7,8 @@
  * from their cars and the entry code; closing takes the ticket and the exit code; both answer his `Ticket`, whose
  * state is open or closed and whose times and fee are the server's. Who the driver is comes from the token.
  */
-import type { PersonId, SiteId, TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { PersonId, SiteId, TicketId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
 
 export interface OpenTicketScanInput {
   readonly requestId: RequestId;

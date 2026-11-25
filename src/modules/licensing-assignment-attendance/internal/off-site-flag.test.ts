@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PersonId } from '../../../shared/identifiers';
+import type { PersonId } from '../../../server/shared/identifiers';
 import { OFF_SITE_POLICY } from '../public';
 import { createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 

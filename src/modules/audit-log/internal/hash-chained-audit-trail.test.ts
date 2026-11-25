@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryAuditLogStore } from '../../../adapters/in-memory/in-memory-audit-log-store';
-import { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
-import { FixedClock } from '../../../shared/clock';
+import { InMemoryAuditLogStore } from '../../../server/adapters/in-memory/in-memory-audit-log-store';
+import { InMemoryDatabase } from '../../../server/adapters/in-memory/in-memory-database';
+import { FixedClock } from '../../../server/shared/clock';
 import { createHashChainedAuditTrail, GENESIS_HASH, type AuditEntry, type AuditRecord, type AuditTrail, type ChainHead } from '../public';
 
 const clock = new FixedClock(new Date('2026-11-04T10:00:00Z'));

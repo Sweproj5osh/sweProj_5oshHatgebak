@@ -1,10 +1,10 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import { InMemoryDatabase } from '../../../../server/adapters/in-memory/in-memory-database';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../../../committee-prices/public';
-import { FixedClock } from '../../../../shared/clock';
-import type { SiteId, TicketId } from '../../../../shared/identifiers';
-import type { RequestId } from '../../../../shared/request-id';
-import { fail, succeed, type Result } from '../../../../shared/result';
-import type { Transaction } from '../../../../shared/unit-of-work';
+import { FixedClock } from '../../../../server/shared/clock';
+import type { SiteId, TicketId } from '../../../../server/shared/identifiers';
+import type { RequestId } from '../../../../server/shared/request-id';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
+import type { Transaction } from '../../../../server/shared/unit-of-work';
 import {
   createTicketClosing,
   createTicketOpening,

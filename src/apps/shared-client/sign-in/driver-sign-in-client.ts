@@ -6,7 +6,7 @@
  * Every write keeps its request id until the answer arrives (Rule H, `RequestIdKeeper`), so after a lost connection
  * the retry carries the same id and the server answers once.
  */
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import { DriverAuthRefusedError, type DriverAuthApi, type DriverAuthRefusal, type SignInSuccess } from './driver-auth-api';

@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
-import { InMemoryOutboxStore } from '../../../adapters/in-memory/in-memory-outbox-store';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
-import type { RequestId } from '../../../shared/request-id';
+import { InMemoryDatabase } from '../../../server/adapters/in-memory/in-memory-database';
+import { InMemoryOutboxStore } from '../../../server/adapters/in-memory/in-memory-outbox-store';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
+import type { RequestId } from '../../../server/shared/request-id';
 import { PAYMENTS_TABLE } from '../public';
 import type { StoredPayment } from './ports';
 import { buildPaymentsWorld, closedTicket, DRIVER, PAY_PATH } from './test-support/payments-test-world';

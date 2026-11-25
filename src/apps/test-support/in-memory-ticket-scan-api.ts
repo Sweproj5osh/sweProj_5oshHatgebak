@@ -4,7 +4,7 @@
  * The codes are `entry-<site>` and `exit-<site>`; the site a code belongs to is read from the code, as the real
  * server reads it from the signed code. One open ticket per car, as Karim's store keeps it.
  */
-import type { RequestId } from '../../shared/request-id';
+import type { RequestId } from '../../server/shared/request-id';
 import {
   TicketScanRefusedError,
   type CloseTicketScanInput,

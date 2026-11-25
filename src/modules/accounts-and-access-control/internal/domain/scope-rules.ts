@@ -1,4 +1,4 @@
-import type { DistrictId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
+import type { DistrictId, Role, SiteId, ZoneId } from '../../../../server/shared/identifiers';
 import type { AccountStatus } from '../../public';
 
 /**

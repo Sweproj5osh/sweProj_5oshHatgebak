@@ -1,6 +1,6 @@
-import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { DistrictId, PersonId, Role, SiteId, ZoneId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type {
   AccessDecision,
   AccessFacts,

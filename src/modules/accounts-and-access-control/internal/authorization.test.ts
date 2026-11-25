@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
-import type { PersonId, Role } from '../../../shared/identifiers';
+import type { InMemoryDatabase } from '../../../server/adapters/in-memory/in-memory-database';
+import type { PersonId, Role } from '../../../server/shared/identifiers';
 import {
   SCOPE_RULE_DESCRIPTIONS,
   type AccountsAndAccessControl,

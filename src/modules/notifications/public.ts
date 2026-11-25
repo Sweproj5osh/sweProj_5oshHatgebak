@@ -3,8 +3,8 @@
  * Reacts to ticket closed, ticket paid, request awaiting the Chair, deposit confirmed; sends through the
  * MessageDelivery port; a failing delivery never fails the action it reacts to (Rule D).
  */
-import type { PersonId } from '../../shared/identifiers';
-import type { EventSubscriber } from '../../shared/events/event';
+import type { PersonId } from '../../server/shared/identifiers';
+import type { EventSubscriber } from '../../server/shared/events/event';
 
 export interface Message {
   readonly to: PersonId;

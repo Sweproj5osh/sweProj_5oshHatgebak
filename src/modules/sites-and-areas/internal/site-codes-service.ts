@@ -1,5 +1,5 @@
-import type { SiteId } from '../../../shared/identifiers';
-import type { Result } from '../../../shared/result';
+import type { SiteId } from '../../../server/shared/identifiers';
+import type { Result } from '../../../server/shared/result';
 import type { SiteCodeRefusal, SiteCodes } from '../public';
 import type { SiteCodeSigner } from './domain/site-code-signer';
 

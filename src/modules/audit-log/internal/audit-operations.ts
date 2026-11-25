@@ -1,5 +1,5 @@
-import type { Operation, ReadOperation } from '../../../shared/operation-contract';
-import { respond } from '../../../shared/operation-contract';
+import type { Operation, ReadOperation } from '../../../server/shared/operation-contract';
+import { respond } from '../../../server/shared/operation-contract';
 import type { AuditTrail } from '../public';
 
 export interface AuditLogOperationsDependencies {

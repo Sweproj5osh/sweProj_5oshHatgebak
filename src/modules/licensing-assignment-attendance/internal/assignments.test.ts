@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PersonId } from '../../../shared/identifiers';
+import type { PersonId } from '../../../server/shared/identifiers';
 import { approvalUnitOfWork, createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 
 /** Task A12: an attendant at one fixed site and a changeable shift; an inspector to a zone; members by the Chair only. */

@@ -11,9 +11,9 @@
  * Run from the repository root:   npx tsx demo/known-gap-parallel-requests.ts
  * It prints how many tickets were issued for 5 spaces over 30 independent runs. It never changes src/.
  */
-import { composeInMemoryApplication } from '../src/entrypoint/composition';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/entrypoint/test-helpers';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
+import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
 import { bold, say, title } from './lib';
 
 const RUNS = 30;

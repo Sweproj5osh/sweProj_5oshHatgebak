@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { LicenceId, PersonId } from '../../../shared/identifiers';
+import type { LicenceId, PersonId } from '../../../server/shared/identifiers';
 import { approvalUnitOfWork, createLicensingWorld, createPerson, valueOf, type LicensingWorld } from './testing/licensing-world';
 
 /** Task A11: issue a licence; move it valid → suspended → revoked only when an approved request says so. */

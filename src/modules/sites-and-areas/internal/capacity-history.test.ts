@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { DistrictId, PersonId, SiteId } from '../../../shared/identifiers';
+import type { DistrictId, PersonId, SiteId } from '../../../server/shared/identifiers';
 import { createRegistryWorld, createStaff, squareAround, valueOf, type RegistryWorld } from './testing/registry-world';
 
 /** Task A8: change capacity with a reason; keep every past value with its date. */

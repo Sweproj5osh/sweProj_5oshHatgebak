@@ -3,9 +3,9 @@
  * A member requests with a reason, the Chair approves or rejects, the change is applied; nobody approves their own
  * request. Needs PriceList, LicenceStatus, Authorization, AuditTrail.
  */
-import type { ApprovalRequestId, PersonId } from '../../shared/identifiers';
-import type { RequestId } from '../../shared/request-id';
-import type { Result } from '../../shared/result';
+import type { ApprovalRequestId, PersonId } from '../../server/shared/identifiers';
+import type { RequestId } from '../../server/shared/request-id';
+import type { Result } from '../../server/shared/result';
 
 export type ApprovableKind = 'price change' | 'licence suspension' | 'licence revocation';
 export type ApprovalState = 'pending' | 'approved' | 'rejected';

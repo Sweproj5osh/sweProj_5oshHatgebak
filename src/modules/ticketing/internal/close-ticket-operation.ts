@@ -1,4 +1,4 @@
-import { refuse, respond, type AuditDetail, type Operation, type WriteOperation } from '../../../shared/operation-contract';
+import { refuse, respond, type AuditDetail, type Operation, type WriteOperation } from '../../../server/shared/operation-contract';
 import type { CloseRefusal, Ticket, TicketClosing } from '../public';
 import { SAMPLE_EXIT_CODE, SAMPLE_TICKET, type SampleSeeder } from './sample-rows';
 import type { TicketStore } from './ticket-store';

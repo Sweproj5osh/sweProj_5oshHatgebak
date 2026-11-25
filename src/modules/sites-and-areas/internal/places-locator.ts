@@ -1,5 +1,5 @@
-import type { DistrictId, SiteId, ZoneId } from '../../../shared/identifiers';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { DistrictId, SiteId, ZoneId } from '../../../server/shared/identifiers';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { SiteLocator } from '../../accounts-and-access-control/public';
 import type { PlacesStore } from './ports';
 

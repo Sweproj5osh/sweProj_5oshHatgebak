@@ -8,7 +8,7 @@ and the behavioural test Z14).
 **The code is the catalogue (P25).** The names below are the ones actually exported from each `public.ts` on `main`.
 An owner who adds, renames or removes a public name edits this file's row in the same pull request; review checks it.
 A module that exposes operations through the entry point exports `operations(dependencies)` and adds one line to
-`src/entrypoint/composition.ts` in its own pull request (P4).
+`src/server/composition/compose-server.ts` in its own pull request (P4).
 
 | Module folder | Public names exported from `public.ts` | Owner | Set |
 |---|---|---|---|
@@ -30,9 +30,11 @@ A module that exposes operations through the entry point exports `operations(dep
 ## Foundation folders (Zeyad)
 | Folder | Holds |
 |---|---|
-| `src/entrypoint/` | The single HTTP entry point: token and expiry, live status, permission table, read scopes, request id, server clock rule, repeat check with body hash under a per-request-id lock, rate limits, the audited unit of work whose serialized commit step appends the one redacted audit entry, telemetry, logged reads, the bootstrap of the first Chair, the composition root (`composeRegistry`, `composeInMemoryApplication`, `composeInMemoryServer`) |
-| `src/shared/` | Code with no business rule: identifiers and roles, `Result`, `Clock`, request ids, canonical JSON, timestamp detection, `UnitOfWork` and `TableAccess`, the operation contract (`ReadOperation`, `WriteOperation`, `PublicWriteOperation`, `TelemetryOperation`, their contexts and outcomes, `respond`, `refuse`), the body schema (`list of <kind>`, `localDateTime`), the `RateLimiter` and `TokenIssuer` ports, `SerialQueue` and `KeyedSerialQueue`, event ports and the outbox delivery job |
-| `src/adapters/in-memory/` | The in-memory database (keyed rows, staged replace and remove), audit store, outbox store, response store and rate limiter every test runs on |
+| `src/server/http/` | The single HTTP entry point: token and expiry, live status, permission table, read scopes, request id, server clock rule, repeat check with body hash under a per-request-id lock, rate limits, the audited unit of work whose serialized commit step appends the one redacted audit entry, telemetry, logged reads, the bootstrap of the first Chair |
+| `src/server/composition/` | The composition root (`composeRegistry`, `composeInMemoryServer`, `composeDeclaredRegistry` for the fitness functions), the bootstrap of the first Chair, the foundation's example operations |
+| `src/server/test-support/` | Test-only (F14): `composeInMemoryApplication` with every stand-in it uses, and the test helpers |
+| `src/server/shared/` | Code with no business rule: identifiers and roles, `Result`, `Clock`, request ids, canonical JSON, timestamp detection, `UnitOfWork` and `TableAccess`, the operation contract (`ReadOperation`, `WriteOperation`, `PublicWriteOperation`, `TelemetryOperation`, their contexts and outcomes, `respond`, `refuse`), the body schema (`list of <kind>`, `localDateTime`), the `RateLimiter` and `TokenIssuer` ports, `SerialQueue` and `KeyedSerialQueue`, event ports and the outbox delivery job |
+| `src/server/adapters/in-memory/` | The in-memory database (keyed rows, staged replace and remove), audit store, outbox store, response store and rate limiter every test runs on |
 | `src/fitness/` | The static fitness functions and the fixtures that prove each one can fail |
 | `db/migrations/` | PostgreSQL migrations: one schema per module, `personal_data`, `foundation` (outbox, write responses), the append-only `audit_log` with its one-row `head` and three actor shapes (0003) |
 

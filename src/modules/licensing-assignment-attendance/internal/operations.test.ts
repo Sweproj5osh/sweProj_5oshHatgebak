@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
-import type { HttpRequest } from '../../../entrypoint/http';
-import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
-import type { DistrictId, PersonId, Role, SiteId } from '../../../shared/identifiers';
-import { REQUEST_ID_HEADER } from '../../../shared/request-id';
+import { composeInMemoryServer, type InMemoryApplication } from '../../../server/composition/compose-server';
+import type { HttpRequest } from '../../../server/http/http';
+import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../server/test-support/test-helpers';
+import type { DistrictId, PersonId, Role, SiteId } from '../../../server/shared/identifiers';
+import { REQUEST_ID_HEADER } from '../../../server/shared/request-id';
 import type { AccountsAndAccessControl } from '../../accounts-and-access-control/public';
 import type { SiteRegistry } from '../../sites-and-areas/public';
 import { createLicensingStores, type LicensingAssignmentAttendance, type LicensingAssignmentAttendanceStores } from '../public';

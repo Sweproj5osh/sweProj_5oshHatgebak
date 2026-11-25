@@ -1,6 +1,6 @@
-import { LOCAL_DATE_TIME_KIND } from '../shared/body-schema';
-import { COMMITTEE_ROLES } from '../shared/identifiers';
-import { looksLikeTimestampKey } from '../shared/timestamp-fields';
+import { LOCAL_DATE_TIME_KIND } from '../server/shared/body-schema';
+import { COMMITTEE_ROLES } from '../server/shared/identifiers';
+import { looksLikeTimestampKey } from '../server/shared/timestamp-fields';
 import { fieldNamesOf, loadComposedOperations, type DeclaredOperation } from './support/composed-operations';
 import { defineFitnessFunction } from './support/fitness-result';
 import { runWhenInvokedDirectly } from './support/run-as-script';

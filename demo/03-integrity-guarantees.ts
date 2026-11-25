@@ -10,15 +10,15 @@
  *
  * Run from the repository root:   npx tsx demo/03-integrity-guarantees.ts
  */
-import { AUDIT_LOG_HEAD_TABLE, AUDIT_LOG_TABLE, InMemoryDatabase } from '../src/adapters/in-memory/in-memory-database';
-import { composeInMemoryApplication } from '../src/entrypoint/composition';
-import type { HttpRequest } from '../src/entrypoint/http';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/entrypoint/test-helpers';
+import { AUDIT_LOG_HEAD_TABLE, AUDIT_LOG_TABLE, InMemoryDatabase } from '../src/server/adapters/in-memory/in-memory-database';
+import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import type { HttpRequest } from '../src/server/http/http';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
 import { createFeeCalculator, type PriceVersion } from '../src/modules/committee-prices/public';
 import { createTicketOpening, TableTicketStore } from '../src/modules/ticketing/public';
-import { FixedClock } from '../src/shared/clock';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
-import { fail, succeed } from '../src/shared/result';
+import { FixedClock } from '../src/server/shared/clock';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
+import { fail, succeed } from '../src/server/shared/result';
 import { bodyOf, bold, expectThat, note, say, scene, showExchange, title } from './lib';
 
 const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));

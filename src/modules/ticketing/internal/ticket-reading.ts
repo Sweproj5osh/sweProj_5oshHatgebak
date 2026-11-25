@@ -1,4 +1,4 @@
-import type { SiteId } from '../../../shared/identifiers';
+import type { SiteId } from '../../../server/shared/identifiers';
 import type { ClosedTicketSummary, Receipt, Ticket, TicketReading, TicketReadingDependencies } from '../public';
 
 export type TicketReadReason = 'unknown ticket' | 'ticket not closed';

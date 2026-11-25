@@ -3,8 +3,8 @@
  * Money due versus collected per site and period; owns no table (ADR-06 Rule G). Reads TicketQuery, PaymentLedger,
  * DepositLedger.
  */
-import type { DistrictId, PersonId, SiteId } from '../../shared/identifiers';
-import type { Result } from '../../shared/result';
+import type { DistrictId, PersonId, SiteId } from '../../server/shared/identifiers';
+import type { Result } from '../../server/shared/result';
 
 export interface MoneyCheckFigures {
   readonly due: number;

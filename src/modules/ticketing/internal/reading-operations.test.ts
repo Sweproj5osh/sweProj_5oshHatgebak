@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, loggedReadRequest, readRequest, tokenFor, writeRequest } from '../../../entrypoint/test-helpers';
+import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, loggedReadRequest, readRequest, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
 import { PLATE_UNAVAILABLE } from '../public';
 import { buildTicketingWorld } from './testing/ticketing-world';
 

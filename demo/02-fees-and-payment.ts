@@ -10,15 +10,15 @@
  *
  * Run from the repository root:   npx tsx demo/02-fees-and-payment.ts
  */
-import { composeInMemoryApplication } from '../src/entrypoint/composition';
-import type { HttpRequest } from '../src/entrypoint/http';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/entrypoint/test-helpers';
+import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import type { HttpRequest } from '../src/server/http/http';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../src/modules/committee-prices/public';
 import { createFakePaymentGateway, createPayments } from '../src/modules/payments/public';
 import { createTicketPaymentStatus, createTicketReading, TableTicketStore, type PlateLookup } from '../src/modules/ticketing/public';
-import { FixedClock } from '../src/shared/clock';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
-import { fail, succeed } from '../src/shared/result';
+import { FixedClock } from '../src/server/shared/clock';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
+import { fail, succeed } from '../src/server/shared/result';
 import { bodyOf, bold, dim, expectThat, money, note, say, scene, showExchange, table, title } from './lib';
 
 const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));

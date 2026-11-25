@@ -1,4 +1,4 @@
-import type { Role } from '../../../../shared/identifiers';
+import type { Role } from '../../../../server/shared/identifiers';
 import type { PlateReadPurpose } from '../../public';
 
 /**

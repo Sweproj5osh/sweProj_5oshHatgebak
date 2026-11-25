@@ -3,8 +3,8 @@
  * binds the session to the site it decodes from the code and answers with that site. The client keeps the request id
  * until the answer arrives (Rule H) and saves nothing locally when the connection is lost (ADR-09).
  */
-import type { SiteId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { SiteId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
 import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import { AttendantModeRefusedError, type AttendantClockInSuccess, type AttendantModeApi, type AttendantModeRefusal } from './attendant-mode-api';

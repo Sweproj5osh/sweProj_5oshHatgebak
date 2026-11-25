@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CarRef, SiteLocator } from '../public';
-import type { PersonId } from '../../../shared/identifiers';
+import type { PersonId } from '../../../server/shared/identifiers';
 import { createAccountsWorld, type AccountsWorld } from './testing/accounts-world';
 
 /**

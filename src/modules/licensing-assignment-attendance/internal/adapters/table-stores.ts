@@ -1,5 +1,5 @@
-import type { LicenceId, PersonId, ZoneId } from '../../../../shared/identifiers';
-import type { Row, TableAccess } from '../../../../shared/unit-of-work';
+import type { LicenceId, PersonId, ZoneId } from '../../../../server/shared/identifiers';
+import type { Row, TableAccess } from '../../../../server/shared/unit-of-work';
 import type {
   AttendanceRow,
   AttendanceStore,

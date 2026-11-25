@@ -1,5 +1,5 @@
-import type { BodySchema, ValidBody } from '../../../shared/body-schema';
-import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';
+import type { BodySchema, ValidBody } from '../../../server/shared/body-schema';
+import type { DistrictId, PersonId, Role } from '../../../server/shared/identifiers';
 import {
   refuse,
   respond,
@@ -9,9 +9,9 @@ import {
   type WriteContext,
   type WriteOperation,
   type WriteOutcome,
-} from '../../../shared/operation-contract';
-import type { Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+} from '../../../server/shared/operation-contract';
+import type { Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import { createAccountsStores, type Authorization } from '../../accounts-and-access-control/public';
 import { createSitesStores, signedSiteCodes, type SiteRegistry } from '../../sites-and-areas/public';
 import {

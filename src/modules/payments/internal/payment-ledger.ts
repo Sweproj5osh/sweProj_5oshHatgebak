@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { TicketDesk, TicketQuery } from '../../ticketing/public';
-import type { Clock } from '../../../shared/clock';
-import type { EventPublisher } from '../../../shared/events/event';
-import type { PaymentId, PersonId, SiteId, TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { Transaction } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { EventPublisher } from '../../../server/shared/events/event';
+import type { PaymentId, PersonId, SiteId, TicketId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { Transaction } from '../../../server/shared/unit-of-work';
 import type { PaymentGateway, PaymentLedger, PaymentRecord, PayRefusal } from '../public';
 import type { InFlightAttempts } from './in-flight-attempts';
 import type { PaymentStore, StoredPayment } from './ports';

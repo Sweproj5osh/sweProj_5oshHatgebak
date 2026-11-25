@@ -1,4 +1,4 @@
-import { fail, succeed, type Result } from '../../../../shared/result';
+import { fail, succeed, type Result } from '../../../../server/shared/result';
 import type { LocalDateTime, OpeningPeriod, SiteStatus, SpecialEventKind } from '../../public';
 
 /**

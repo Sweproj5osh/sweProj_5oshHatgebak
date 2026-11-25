@@ -1,5 +1,5 @@
-import type { PersonId, SiteId } from '../../../../shared/identifiers';
-import type { Row, TableAccess } from '../../../../shared/unit-of-work';
+import type { PersonId, SiteId } from '../../../../server/shared/identifiers';
+import type { Row, TableAccess } from '../../../../server/shared/unit-of-work';
 import type { AccountStatus, CarRef } from '../../public';
 import type { PasswordHash } from '../domain/password';
 import type { Person } from '../domain/person';

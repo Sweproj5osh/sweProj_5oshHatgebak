@@ -1,8 +1,8 @@
-import type { Clock } from '../../../shared/clock';
-import type { PersonId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { TokenIssuer } from '../../../shared/token-issuer';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { PersonId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { TokenIssuer } from '../../../server/shared/token-issuer';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type { Authorization, PasswordRefusal, SignIn, SignInCodeSender, SignInRefusal, SignedIn } from '../public';
 import { codeMatches, hashOfCode, minutesAfter, newOneTimeCode, SIGN_IN_POLICY } from './domain/one-time-code';
 import { hashPassword, needsSecondStep, passwordLengthProblem, passwordMatches } from './domain/password';

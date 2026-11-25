@@ -3,9 +3,9 @@
  * Deposit record with a system-issued receipt number; the zone's inspector confirms or rejects (ADR-12).
  * Needs Authorization, AuditTrail.
  */
-import type { DepositId, PersonId, SiteId } from '../../shared/identifiers';
-import type { RequestId } from '../../shared/request-id';
-import type { Result } from '../../shared/result';
+import type { DepositId, PersonId, SiteId } from '../../server/shared/identifiers';
+import type { RequestId } from '../../server/shared/request-id';
+import type { Result } from '../../server/shared/result';
 
 export type DepositState = 'recorded' | 'confirmed' | 'rejected';
 

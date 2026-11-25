@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { Clock } from '../../../shared/clock';
-import type { PersonId, Role, SiteId } from '../../../shared/identifiers';
-import { fail, succeed, type Result } from '../../../shared/result';
-import type { TableAccess } from '../../../shared/unit-of-work';
+import type { Clock } from '../../../server/shared/clock';
+import type { PersonId, Role, SiteId } from '../../../server/shared/identifiers';
+import { fail, succeed, type Result } from '../../../server/shared/result';
+import type { TableAccess } from '../../../server/shared/unit-of-work';
 import type {
   Authorization,
   CarPresence,
