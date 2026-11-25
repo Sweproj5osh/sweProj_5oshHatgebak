@@ -85,46 +85,58 @@ async function removeRecord(through: Queryable, table: string, key: string): Pro
 /**
  * The committed tables, and the factory of transactions. Reads outside a unit of work use `committedPool`;
  * transactions take their client from `transactionPool`, so a handler that reads committed tables while its own
- * transaction holds a client never waits on itself.
+ * transaction holds a client never waits on itself. `created` settles once the database exists: a test database is
+ * created while its application is composed, so every statement waits for it (and fails with its error).
  */
 export class PostgresDatabase implements TableAccess {
+  private readonly created: Promise<void>;
+  /** Statements on the committed tables, for the adapters' own stores. */
+  readonly committed: Queryable;
+
   constructor(
     private readonly committedPool: pg.Pool,
     private readonly transactionPool: pg.Pool = committedPool,
-  ) {}
+    created: Promise<void> = Promise.resolve(),
+  ) {
+    this.created = created;
+    // A database that failed to be created reports it to every statement; this handler only stops an unhandled rejection.
+    created.catch(() => undefined);
+    this.committed = {
+      query: async (sql, values) => {
+        await this.created;
+        return this.committedPool.query(sql, values as unknown[] | undefined);
+      },
+    };
+  }
 
   read<Stored extends Row>(table: string, key: string): Promise<Stored | undefined> {
-    return readRecord(this.committedPool, table, key);
+    return readRecord(this.committed, table, key);
   }
 
   list<Stored extends Row>(table: string): Promise<readonly Stored[]> {
-    return listRecords(this.committedPool, table);
+    return listRecords(this.committed, table);
   }
 
   insert(table: string, key: string, row: Row): Promise<void> {
-    return insertRecord(this.committedPool, table, key, row);
+    return insertRecord(this.committed, table, key, row);
   }
 
   replace(table: string, key: string, row: Row): Promise<void> {
-    return replaceRecord(this.committedPool, table, key, row);
+    return replaceRecord(this.committed, table, key, row);
   }
 
   remove(table: string, key: string): Promise<void> {
-    return removeRecord(this.committedPool, table, key);
+    return removeRecord(this.committed, table, key);
   }
 
-  /** For the adapters that run their own short transactions (the rate limiter). */
-  get pool(): pg.Pool {
-    return this.transactionPool;
-  }
-
-  /** For the adapters' own stores: statements on the committed tables. */
-  get committed(): Queryable {
-    return this.committedPool;
+  /** A client of its own, for the adapters that run their own short transactions (the rate limiter). */
+  async connect(): Promise<pg.PoolClient> {
+    await this.created;
+    return this.transactionPool.connect();
   }
 
   begin(): PostgresTransaction {
-    return new PostgresTransaction(this.transactionPool);
+    return new PostgresTransaction(() => this.connect());
   }
 
   async close(): Promise<void> {
@@ -148,7 +160,7 @@ export class PostgresTransaction implements Transaction, Queryable {
   private readonly beforeCommit: Promise<unknown>[] = [];
   private readonly onceDone: (() => void)[] = [];
 
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(private readonly connect: () => Promise<pg.PoolClient>) {}
 
   async query<Result extends pg.QueryResultRow = pg.QueryResultRow>(sql: string, values?: readonly unknown[]): Promise<pg.QueryResult<Result>> {
     const client = await this.connection();
@@ -216,7 +228,7 @@ export class PostgresTransaction implements Transaction, Queryable {
 
   private connection(): Promise<pg.PoolClient> {
     if (this.client === undefined) {
-      this.client = this.pool.connect().then(async (client) => {
+      this.client = this.connect().then(async (client) => {
         await client.query('BEGIN');
         return client;
       });

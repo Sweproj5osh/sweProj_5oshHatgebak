@@ -11,16 +11,19 @@
  * Run from the repository root:   npx tsx demo/known-gap-parallel-requests.ts
  * It prints how many tickets were issued for 5 spaces over 30 independent runs. It never changes src/.
  */
-import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import { composeTestApplication } from '../src/server/test-support/compose-test-application';
 import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
-import { bold, say, title } from './lib';
+import { bold, demoDatabase, say, title } from './lib';
 
 const RUNS = 30;
 const CAPACITY = 5;
 
+let runsSoFar = 0;
+
 async function oneRun(): Promise<number> {
-  const app = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET });
+  runsSoFar += 1;
+  const app = composeTestApplication({ database: await demoDatabase(`known_gap_${runsSoFar}`), tokenSecret: TEST_TOKEN_SECRET });
   const answers = await Promise.all(
     Array.from({ length: 20 }, (_, index) => {
       const number = String(index + 1).padStart(2, '0');
@@ -34,6 +37,7 @@ async function oneRun(): Promise<number> {
       });
     }),
   );
+  await app.database.close();
   return answers.filter((answer) => answer.status === 201).length;
 }
 

@@ -1,6 +1,6 @@
-import type pg from 'pg';
 import type { Clock } from '../../shared/clock';
 import type { RateLimit, RateLimiter, RateLimitVerdict } from '../../shared/rate-limiter';
+import type { PostgresDatabase } from './postgres-database';
 
 /**
  * The sliding window over `foundation.rate_limit_attempts`, shared by every server copy (ADR-15). One key is counted
@@ -9,14 +9,14 @@ import type { RateLimit, RateLimiter, RateLimitVerdict } from '../../shared/rate
  */
 export class PostgresSlidingWindowRateLimiter implements RateLimiter {
   constructor(
-    private readonly pool: pg.Pool,
+    private readonly database: PostgresDatabase,
     private readonly clock: Clock,
   ) {}
 
   async attempt(key: string, limit: RateLimit): Promise<RateLimitVerdict> {
     const now = this.clock.now();
     const windowStart = new Date(now.getTime() - limit.windowMilliseconds);
-    const client = await this.pool.connect();
+    const client = await this.database.connect();
     try {
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);

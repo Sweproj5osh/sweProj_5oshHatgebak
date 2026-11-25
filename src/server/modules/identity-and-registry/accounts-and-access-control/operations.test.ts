@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { verifyToken } from '../../../http/auth/token';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../composition/compose-server';
+import { composeTestServer, type ComposedApplication } from '../../../test-support/compose-test-application';
 import type { HttpRequest } from '../../../http/http';
 import { loggedReadRequest, publicRequest, readRequest, TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../test-support/test-helpers';
 import { FixedClock } from '../../../shared/clock';
@@ -11,7 +11,7 @@ import { REQUEST_SIGN_IN_CODE_PATH, SIGN_IN_PATH, SIGN_IN_WITH_SECOND_STEP_PATH 
  * This module's requests through the composed in-memory server: the real accounts module answers live status and
  * scope, the pipeline writes one redacted audit entry per write or logged read, and sign-in is the one door without a token.
  */
-let application: InMemoryApplication;
+let application: ComposedApplication;
 let clock: FixedClock;
 let chair: PersonId;
 let driver: PersonId;
@@ -65,7 +65,7 @@ async function codeSentTo(phone: string): Promise<string> {
 
 beforeEach(async () => {
   clock = new FixedClock(new Date('2026-11-05T08:00:00Z'));
-  application = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET, clock });
+  application = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET, clock });
   const { accounts, siteRegistry } = application.moduleDependencies;
   chair = valueOf(await accounts.bootstrapChair('01000000000', 'The Chair'));
   driver = valueOf(await accounts.personalData.createPerson('self registration', 'driver', DRIVER_PHONE, 'Mona Adel'));

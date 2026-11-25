@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { TEST_TOKEN_SECRET, loggedReadRequest, readRequest, tokenFor, writeRequest } from '../../../test-support/test-helpers';
 import { PLATE_UNAVAILABLE } from './index';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
 async function application() {
   const world = await buildTicketingWorld();
-  const app = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock: world.clock, moduleDependencies: world.dependencies });
+  const app = composeTestApplication({ tokenSecret: TEST_TOKEN_SECRET, clock: world.clock, moduleDependencies: world.dependencies });
   const opened = await app.handle(writeRequest('/tickets', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
   const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;
   return { ...world, app, ticketId };

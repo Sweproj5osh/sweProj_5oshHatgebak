@@ -37,10 +37,10 @@ and `npm run fitness` (7 static architecture checks pass).
 - **Real:** the single entry point (token, role, request id, server clock, body checks, repeat check, one audit entry per
   successful write, outbox events), accounts and sign-in, sites and areas, ticketing, committee prices and fee
   calculation, payments, the hash-chained audit log.
-- **Stand-ins (the project's own, by design):** in-memory storage instead of PostgreSQL; sign-in codes are recorded in
-  memory instead of being sent by SMS; the payment provider is a scripted fake (the last digit of the amount decides:
+- **Storage:** a real PostgreSQL named by `POSTGRES_URL` (each demo gets its own fresh database, `demo/lib.ts`).
+- **Stand-ins (the project's own, by design):** sign-in codes are recorded in memory instead of being sent by SMS; the payment provider is a scripted fake (the last digit of the amount decides:
   ...1 paid, ...2 declined, ...3 pending).
-- **Demo 02 uses the project's test composition** (`composeInMemoryApplication`), because on the real server wiring the
+- **Demo 02 uses the project's test composition** (`composeTestApplication`), because on the real server wiring the
   committee's price approval is not composed yet (see below), so no price can be applied there. Demo 02 also moves a
   clock forward so hours can pass in a second. Say this out loud if asked.
 

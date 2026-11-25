@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { operations, type PaymentStatus } from './index';
 import { buildTicketingWorld, openCommand } from './testing/ticketing-world';
 
@@ -123,7 +123,7 @@ describe('B9 payment status on the ticket', () => {
     const world = await buildTicketingWorld();
     const writes = operations(world.dependencies).filter((operation) => operation.kind === 'write').map((operation) => operation.name);
     expect(writes.filter((name) => /payment|status|waive|dispute/i.test(name))).toEqual([]);
-    expect(composeInMemoryApplication).toBeDefined();
+    expect(composeTestApplication).toBeDefined();
   });
 
   it('has the forbidden invented status phrase nowhere in the code', () => {

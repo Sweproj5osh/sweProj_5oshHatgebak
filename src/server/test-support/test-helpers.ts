@@ -3,7 +3,7 @@ import type { Role } from '../shared/identifiers';
 import type { HttpMethod } from '../shared/operation-contract';
 import { REQUEST_ID_HEADER } from '../shared/request-id';
 import { signToken, type TokenIdentity } from '../http/auth/token';
-import { composeInMemoryApplication, type InMemoryApplication, type InMemoryApplicationOptions } from './compose-test-application';
+import { composeTestApplication, type ComposedApplication, type TestApplicationOptions } from './compose-test-application';
 import type { HttpRequest } from '../http/http';
 
 export const TEST_TOKEN_SECRET = 'test-secret-that-is-long-enough';
@@ -12,8 +12,8 @@ export const TEST_TOKEN_SECRET = 'test-secret-that-is-long-enough';
 const FAR_FUTURE = '2099-01-01T00:00:00.000Z';
 
 /** The in-memory application as the pipeline tests want it: the test secret, everyone live unless overridden. */
-export function testApplication(overrides: Partial<InMemoryApplicationOptions> = {}): InMemoryApplication {
-  return composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, ...overrides });
+export function testApplication(overrides: Partial<TestApplicationOptions> = {}): ComposedApplication {
+  return composeTestApplication({ tokenSecret: TEST_TOKEN_SECRET, ...overrides });
 }
 
 /** A documentation-range address (RFC 5737) standing for the client in every test request. */

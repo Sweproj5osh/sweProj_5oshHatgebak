@@ -1,19 +1,30 @@
 import type { CarPresence } from '../modules/identity-and-registry/accounts-and-access-control/index';
 import type { AccessChecks } from '../http/auth/access-checks';
-import { compose, type InMemoryApplication, type InMemoryApplicationOptions, type TicketingPorts } from '../composition/compose-server';
+import type { PostgresDatabase } from '../adapters/postgres/postgres-database';
+import { compose, composeServer, type ApplicationOptions, type ComposedApplication, type TicketingPorts } from '../composition/compose-server';
 import { fail, succeed } from '../shared/result';
 
-export type { InMemoryApplication, InMemoryApplicationOptions } from '../composition/compose-server';
+import { freshTestDatabase } from './postgres-test-database';
+
+export type { ComposedApplication } from '../composition/compose-server';
+
+/** The application's options in a test: the database defaults to a fresh one cloned for this composition. */
+export type TestApplicationOptions = Omit<ApplicationOptions, 'database'> & { readonly database?: PostgresDatabase };
+
+/** The server's own composition (`composeServer`, real modules everywhere) over a fresh test database. */
+export function composeTestServer(options: Omit<Parameters<typeof composeServer>[0], 'database'> & { readonly database?: PostgresDatabase }): ComposedApplication {
+  return composeServer({ ...options, database: options.database ?? freshTestDatabase() });
+}
 
 /**
- * Test-only (F14): the in-memory application the tests compose, and every stand-in it uses in place of the real
- * modules' answers. Nothing outside tests, test worlds and the demo scripts may import this file.
+ * Test-only (F14): the application the tests compose, and every stand-in it uses in place of the real modules'
+ * answers. Nothing outside tests, test worlds and the demo scripts may import this file.
  */
 
 /**
  * A stand-in that knows every person as active, bound to no site and inside every scope. The in-memory application
  * uses it unless told otherwise, so pipeline tests sign tokens for people no accounts module holds; the server
- * (`composeInMemoryServer`, `main.ts`) never does (see docs/team/QUESTIONS.md).
+ * (`composeServer`, `main.ts`) never does (see docs/team/QUESTIONS.md).
  */
 export const EVERYONE_IS_LIVE: AccessChecks = {
   may: async () => true,
@@ -21,9 +32,9 @@ export const EVERYONE_IS_LIVE: AccessChecks = {
   boundSite: async () => undefined,
 };
 
-/** The in-memory application for tests: stand-ins answer live status and ticketing's ports unless the test passes its own. */
-export function composeInMemoryApplication(options: InMemoryApplicationOptions): InMemoryApplication {
-  return compose(options, {
+/** The application for tests: stand-ins answer live status and ticketing's ports unless the test passes its own. */
+export function composeTestApplication(options: TestApplicationOptions): ComposedApplication {
+  return compose({ ...options, database: options.database ?? freshTestDatabase() }, {
     chooseAccessChecks: () => options.accessChecks ?? EVERYONE_IS_LIVE_AND_CLOCKED_IN,
     chooseTicketingPorts: () => TICKETING_PORTS_FOR_TESTS,
     chooseCarPresence: () => EVERY_CAR_IS_PRESENT,

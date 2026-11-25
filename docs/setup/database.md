@@ -1,7 +1,7 @@
 # The database: PostgreSQL through POSTGRES_URL
 
-The system runs only against PostgreSQL (ADR-21). There is no in-memory fallback: the tests refuse to start without
-`POSTGRES_URL`, and (from phase R10 of the restructure) so does the server.
+The system runs only against PostgreSQL (ADR-21). There is no in-memory fallback: the server, the tests and the demos
+all need `POSTGRES_URL`.
 
 ## Getting a PostgreSQL
 Any PostgreSQL 14 or later works.
@@ -35,5 +35,8 @@ and never update or delete it (ADR-10). In production `POSTGRES_URL` names a log
 every migration to it, and makes sure the login role `sayes_test_application` (a member of `sayes_application`)
 exists. Each test application calls `createTestDatabase()` (`src/server/test-support/postgres-test-database.ts`), which
 clones the template into a fresh database and connects as that role, so every test starts empty and every audit grant
-is enforced. At the end of the run every database of the run is dropped. Nothing truncates or deletes `audit_log` rows.
+is enforced (`composeTestApplication` and `composeTestServer` in `src/server/test-support/compose-test-application.ts`
+do this by default). At the end of the run every database of the run is dropped. Nothing truncates or deletes
+`audit_log` rows. The two proofs that edit records underneath the log work on a test-only array copy
+(`src/server/test-support/array-audit-log-store.ts`). The demos get their own databases the same way (`demo/lib.ts`).
 In continuous integration a PostgreSQL service container provides the database (`.github/workflows/ci.yml`).

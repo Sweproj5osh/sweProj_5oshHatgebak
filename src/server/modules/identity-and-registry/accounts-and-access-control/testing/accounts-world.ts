@@ -1,4 +1,5 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import type { PostgresDatabase } from '../../../../adapters/postgres/postgres-database';
+import { freshTestDatabase } from '../../../../test-support/postgres-test-database';
 import { FixedClock } from '../../../../shared/clock';
 import type { TokenIssuer } from '../../../../shared/token-issuer';
 import {
@@ -41,7 +42,7 @@ export class FakeCarPresence implements CarPresence {
 /** This module over the in-memory database, a fixed clock, the recording code sender, a token issuer and a fake car presence. */
 export interface AccountsWorld {
   readonly accounts: AccountsAndAccessControl;
-  readonly database: InMemoryDatabase;
+  readonly database: PostgresDatabase;
   readonly stores: AccountsAndAccessControlStores;
   readonly codeSender: RecordingSignInCodeSender;
   readonly carPresence: FakeCarPresence;
@@ -49,7 +50,7 @@ export interface AccountsWorld {
 }
 
 export function createAccountsWorld(siteLocator: SiteLocator = NO_SITES, tokenIssuer: TokenIssuer = FAKE_TOKEN_ISSUER): AccountsWorld {
-  const database = new InMemoryDatabase();
+  const database = freshTestDatabase();
   const stores = createAccountsStores();
   const codeSender = new RecordingSignInCodeSender();
   const carPresence = new FakeCarPresence();

@@ -1,8 +1,9 @@
-import { InMemoryAuditLogStore } from '../adapters/in-memory/in-memory-audit-log-store';
-import { InMemoryDatabase } from '../adapters/in-memory/in-memory-database';
-import { InMemoryOutboxStore } from '../adapters/in-memory/in-memory-outbox-store';
-import { InMemorySlidingWindowRateLimiter } from '../adapters/in-memory/in-memory-rate-limiter';
-import { InMemoryResponseStore } from '../adapters/in-memory/in-memory-response-store';
+import pg from 'pg';
+import { PostgresAuditLogStore } from '../adapters/postgres/postgres-audit-log-store';
+import { PostgresDatabase } from '../adapters/postgres/postgres-database';
+import { PostgresOutboxStore } from '../adapters/postgres/postgres-outbox-store';
+import { PostgresSlidingWindowRateLimiter } from '../adapters/postgres/postgres-rate-limiter';
+import { PostgresResponseStore } from '../adapters/postgres/postgres-response-store';
 import {
   createAccountsAndAccessControl,
   createAccountsStores,
@@ -105,11 +106,14 @@ export function composeRegistry(dependencies: ModuleDependencies, additionalOper
 /** The declaration-reading fitness functions never issue a token; this secret only lets the registry be built. */
 const INSPECTION_ONLY_SECRET = 'fitness-inspection-never-signs-a-real-token';
 
-/** The composed registry over fresh in-memory dependencies, for the fitness functions that inspect declarations. */
+/**
+ * The composed registry, for the fitness functions that read declarations only. Its database is a pool that never
+ * connects: building the registry runs no statement, so the fitness functions need no database.
+ */
 export function composeDeclaredRegistry(): OperationRegistry {
-  const database = new InMemoryDatabase();
+  const database = new PostgresDatabase(new pg.Pool({ max: 1 }));
   const clock = new SystemClock();
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
+  const audit = createHashChainedAuditTrail(new PostgresAuditLogStore(database.committed), clock);
   const tokens = createTokenIssuer(INSPECTION_ONLY_SECRET, clock);
   const tickets = new TableTicketStore();
   const area2 = composeArea2({
@@ -123,11 +127,13 @@ export function composeDeclaredRegistry(): OperationRegistry {
   return composeRegistry(moduleDependenciesFor({ audit, clock, tokens }, area2, ticketingPortsFrom(area2), tickets));
 }
 
-export interface InMemoryApplicationOptions {
+export interface ApplicationOptions {
+  /** The PostgreSQL database the application runs on (ADR-21); there is no other storage. */
+  readonly database: PostgresDatabase;
   readonly tokenSecret: string;
   /**
    * The secret that signs site codes (`SITE_CODE_SECRET`) and the one that keys the stored sign-in code hashes. Absent,
-   * the token secret keys them too: the in-memory server and the tests have one secret to carry. main.ts passes the site one.
+   * the token secret keys them too: the tests have one secret to carry. main.ts passes the site one.
    */
   readonly siteCodeSecret?: string;
   readonly signInCodeSecret?: string;
@@ -146,15 +152,15 @@ export interface InMemoryApplicationOptions {
   readonly subscribers?: readonly EventSubscriber[];
 }
 
-export interface InMemoryApplication {
+export interface ComposedApplication {
   readonly handle: RequestHandler;
-  readonly database: InMemoryDatabase;
+  readonly database: PostgresDatabase;
   /** The accounts module as composed, so the operator and the tests can register people and change their status. */
   readonly accounts: AccountsAndAccessControl;
-  /** Where the sign-in codes of the in-memory stack end up (no messaging provider is chosen yet, Rule B): tests read them here. */
+  /** Where the sign-in codes end up (no messaging provider is chosen yet, Rule B): tests read them here. */
   readonly signInCodes: RecordingSignInCodeSender;
   readonly audit: AuditTrail;
-  readonly outbox: InMemoryOutboxStore;
+  readonly outbox: PostgresOutboxStore;
   readonly outboxDelivery: OutboxDeliveryJob;
   readonly permissions: PermissionTable;
   readonly registry: OperationRegistry;
@@ -165,12 +171,12 @@ export interface InMemoryApplication {
 }
 
 /**
- * The in-memory server as `main.ts` runs it: the real accounts module answers live status, bound site and scope, and
- * Area 2's modules fill ticketing's site, car-ownership and plate ports (P26 Q8b, P27 Q3, P28 #32–#33).
+ * The server as `main.ts` runs it: the real accounts module answers live status, bound site and scope, and Area 2's
+ * modules fill ticketing's site, car-ownership and plate ports (P26 Q8b, P27 Q3, P28 #32–#33).
  */
-export function composeInMemoryServer(
-  options: Pick<InMemoryApplicationOptions, 'tokenSecret' | 'siteCodeSecret' | 'signInCodeSecret' | 'clock'>,
-): InMemoryApplication {
+export function composeServer(
+  options: Pick<ApplicationOptions, 'database' | 'tokenSecret' | 'siteCodeSecret' | 'signInCodeSecret' | 'clock'>,
+): ComposedApplication {
   return compose(options, {
     chooseAccessChecks: (accounts) => accounts.authorization,
     chooseTicketingPorts: ticketingPortsFrom,
@@ -192,12 +198,12 @@ interface TicketPresenceSource {
   readonly clock: Clock;
 }
 
-/** The composition root for the in-memory stack: construction happens here and nowhere else (test-support passes its stand-ins). */
-export function compose(options: InMemoryApplicationOptions, standIns: StandIns): InMemoryApplication {
+/** The composition root: construction happens here and nowhere else (test-support passes its stand-ins). */
+export function compose(options: ApplicationOptions, standIns: StandIns): ComposedApplication {
   const clock = options.clock ?? new SystemClock();
-  const database = new InMemoryDatabase();
-  const outbox = new InMemoryOutboxStore(database, clock);
-  const audit = createHashChainedAuditTrail(new InMemoryAuditLogStore(database.tables), clock);
+  const database = options.database;
+  const outbox = new PostgresOutboxStore(database.committed, clock);
+  const audit = createHashChainedAuditTrail(new PostgresAuditLogStore(database.committed), clock);
   const tokens = createTokenIssuer(options.tokenSecret, clock);
   const tickets = new TableTicketStore();
   const area2 = composeArea2({
@@ -219,10 +225,10 @@ export function compose(options: InMemoryApplicationOptions, standIns: StandIns)
   const resources: UnitOfWorkResourcesFactory = {
     begin() {
       const transaction = database.begin();
-      const auditInTransaction = createHashChainedAuditTrail(new InMemoryAuditLogStore(transaction.tables), clock);
+      const auditInTransaction = createHashChainedAuditTrail(new PostgresAuditLogStore(transaction), clock);
       return {
         transaction,
-        events: outbox.publisherBoundTo(transaction.tables),
+        events: outbox.publisherBoundTo(transaction),
         appendAuditEntryAndCommit: (entry) =>
           chainCommits.run(async () => {
             await auditInTransaction.append(entry);
@@ -239,9 +245,9 @@ export function compose(options: InMemoryApplicationOptions, standIns: StandIns)
     database,
     resources,
     accessChecks: standIns.chooseAccessChecks(accounts),
-    responses: new InMemoryResponseStore(),
+    responses: new PostgresResponseStore(database.committed, clock),
     writeLocks: new KeyedSerialQueue(),
-    rateLimiter: new InMemorySlidingWindowRateLimiter(clock),
+    rateLimiter: new PostgresSlidingWindowRateLimiter(database, clock),
   });
   return {
     handle,
@@ -258,7 +264,7 @@ export function compose(options: InMemoryApplicationOptions, standIns: StandIns)
   };
 }
 
-function registryFor(options: InMemoryApplicationOptions, dependencies: ModuleDependencies): OperationRegistry {
+function registryFor(options: ApplicationOptions, dependencies: ModuleDependencies): OperationRegistry {
   if (options.operations !== undefined) {
     return new OperationRegistry(options.operations);
   }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { InMemoryDatabase } from '../../../adapters/in-memory/in-memory-database';
+import type { PostgresDatabase } from '../../../adapters/postgres/postgres-database';
 import type { PersonId, Role } from '../../../shared/identifiers';
 import {
   SCOPE_RULE_DESCRIPTIONS,
@@ -32,7 +32,7 @@ interface Cast {
 
 let stores: AccountsAndAccessControlStores;
 let accounts: AccountsAndAccessControl;
-let database: InMemoryDatabase;
+let database: PostgresDatabase;
 let cast: Cast;
 
 async function created(result: Promise<{ ok: true; value: PersonId } | { ok: false; error: string }>): Promise<PersonId> {

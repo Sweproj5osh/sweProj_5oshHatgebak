@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../test-support/test-helpers';
 import { buildTicketingWorld, clockedIn } from './testing/ticketing-world';
 
 /** The attendant of the test token (`attendant-1`) is clocked in at site-1 unless a test binds them elsewhere. */
 async function application(boundSites: Readonly<Record<string, string>> = { 'attendant-1': 'site-1' }) {
   const world = await buildTicketingWorld();
-  const app = composeInMemoryApplication({
+  const app = composeTestApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
     accessChecks: clockedIn(boundSites),

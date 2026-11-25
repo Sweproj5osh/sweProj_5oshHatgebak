@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../composition/compose-server';
+import { composeTestServer, type ComposedApplication } from '../../../test-support/compose-test-application';
 import type { HttpRequest } from '../../../http/http';
 import { readRequest, requestLine, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../test-support/test-helpers';
 import type { DistrictId, PersonId, Role, SiteId } from '../../../shared/identifiers';
@@ -23,7 +23,7 @@ interface ComposedWorld {
 }
 
 let world: ComposedWorld;
-let application: InMemoryApplication;
+let application: ComposedApplication;
 let requestCounter = 0;
 let nextPhoneSuffix = 1;
 
@@ -72,7 +72,7 @@ async function licensedAttendantAtSiteOne(): Promise<PersonId> {
 }
 
 beforeEach(async () => {
-  application = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET, siteCodeSecret: TEST_SITE_CODE_SECRET });
+  application = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET, siteCodeSecret: TEST_SITE_CODE_SECRET });
   world = await composedWorld();
 });
 

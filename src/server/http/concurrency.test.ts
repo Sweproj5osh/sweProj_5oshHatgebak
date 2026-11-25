@@ -24,6 +24,6 @@ describe('concurrent writes through the entry point (integrity, rank 1)', () => 
     expect(first.status).toBe(201);
     expect(second).toEqual(first);
     expect(await audit.readByScope(asChair())).toHaveLength(1);
-    expect(outbox.allEvents()).toHaveLength(1);
+    expect(await outbox.allEvents()).toHaveLength(1);
   });
 });

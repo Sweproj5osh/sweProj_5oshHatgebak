@@ -1,4 +1,5 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import type { PostgresDatabase } from '../../../../adapters/postgres/postgres-database';
+import { freshTestDatabase } from '../../../../test-support/postgres-test-database';
 import { FixedClock } from '../../../../shared/clock';
 import type { DomainEvent, EventPublisher } from '../../../../shared/events/event';
 import type { ApprovalRequestId, DistrictId, LicenceId, PersonId, Role, SiteId, ZoneId } from '../../../../shared/identifiers';
@@ -57,7 +58,7 @@ const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
  */
 export interface LicensingWorld {
   readonly clock: FixedClock;
-  readonly database: InMemoryDatabase;
+  readonly database: PostgresDatabase;
   readonly accounts: AccountsAndAccessControl;
   readonly registry: SiteRegistry;
   readonly licensing: LicensingAssignmentAttendance;
@@ -76,7 +77,7 @@ export interface LicensingWorld {
 
 export async function createLicensingWorld(): Promise<LicensingWorld> {
   const clock = new FixedClock(new Date('2026-11-05T08:00:00Z'));
-  const database = new InMemoryDatabase();
+  const database = freshTestDatabase();
   const sitesStores = createSitesStores();
   const accounts = createAccountsAndAccessControl({
     database,

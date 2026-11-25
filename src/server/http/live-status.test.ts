@@ -4,7 +4,7 @@ import { respond, type ReadOperation } from '../shared/operation-contract';
 import type { AccessChecks } from './auth/access-checks';
 import { issueToken, STAFF_TOKEN_LIFETIME_MILLISECONDS } from './auth/token';
 import { EVERYONE_IS_LIVE } from '../test-support/compose-test-application';
-import { composeInMemoryServer } from '../composition/compose-server';
+import { composeTestServer } from '../test-support/compose-test-application';
 import type { HttpRequest } from './http';
 import { readRequest, TEST_TOKEN_SECRET, testApplication, tokenFor, writeRequest } from '../test-support/test-helpers';
 
@@ -28,7 +28,7 @@ function withToken(request: HttpRequest, token: string): HttpRequest {
 
 describe('live status on every request (P26 Q4)', () => {
   it('refuses a correctly signed token for a person the accounts module does not know', async () => {
-    const { handle, audit } = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET });
+    const { handle, audit } = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET });
     const response = await handle(writeRequest('/example/approvals', 'chair', 'request-0001', chairApproval));
     expect(response.status).toBe(403);
     expect((response.body as { error: string }).error).toContain('revoked');
@@ -36,7 +36,7 @@ describe('live status on every request (P26 Q4)', () => {
   });
 
   it('admits the bootstrapped Chair through the real accounts module', async () => {
-    const { handle, accounts } = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET });
+    const { handle, accounts } = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET });
     const chair = await accounts.bootstrapChair('01001234567', 'The Chair');
     if (!chair.ok) {
       throw new Error(`could not bootstrap the Chair: ${chair.error}`);

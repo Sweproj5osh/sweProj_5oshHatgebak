@@ -1,4 +1,5 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import type { PostgresDatabase } from '../../../../adapters/postgres/postgres-database';
+import { freshTestDatabase } from '../../../../test-support/postgres-test-database';
 import {
   createAccountsAndAccessControl,
   createAccountsStores,
@@ -22,7 +23,7 @@ const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
 /** Access control and the site registry wired together over one in-memory database, the way the composition root wires them. */
 export interface RegistryWorld {
   readonly clock: FixedClock;
-  readonly database: InMemoryDatabase;
+  readonly database: PostgresDatabase;
   readonly accounts: AccountsAndAccessControl;
   readonly sitesStores: SitesAndAreasStores;
   readonly registry: SiteRegistry;
@@ -35,7 +36,7 @@ export interface RegistryWorld {
 
 export async function createRegistryWorld(): Promise<RegistryWorld> {
   const clock = new FixedClock(TEST_START);
-  const database = new InMemoryDatabase();
+  const database = freshTestDatabase();
   const sitesStores = createSitesStores();
   const accounts = createAccountsAndAccessControl({
     database,

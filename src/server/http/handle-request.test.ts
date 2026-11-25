@@ -136,7 +136,7 @@ describe('entry point: repeatable writes (Z5)', () => {
     expect(first.status).toBe(201);
     expect(second).toEqual(first);
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
-    expect(outbox.allEvents()).toHaveLength(1);
+    expect(await outbox.allEvents()).toHaveLength(1);
   });
 
   it('does not store a rolled-back failure: the same request id succeeds on retry and changes state once', async () => {
@@ -178,7 +178,7 @@ describe('entry point: repeatable writes (Z5)', () => {
     expect(first.status).toBe(201);
     expect(reused).toEqual({ status: 409, body: { error: REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT } });
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(1);
-    expect(outbox.allEvents()).toHaveLength(1);
+    expect(await outbox.allEvents()).toHaveLength(1);
   });
 
   it('treats the same body with its keys in another order as the same content', async () => {
@@ -225,7 +225,7 @@ describe('entry point: audit entry and events commit together', () => {
       reason: 'Old prices',
       input: { kind: 'price change', reason: 'Old prices' },
     });
-    expect(outbox.allEvents()).toHaveLength(1);
+    expect(await outbox.allEvents()).toHaveLength(1);
     expect(await audit.verifyChain()).toBe(true);
   });
 
@@ -249,6 +249,6 @@ describe('entry point: audit entry and events commit together', () => {
     const response = await handle(writeRequest('/explode', 'chair', 'request-0001', {}));
     expect(response.status).toBe(500);
     expect(await audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(0);
-    expect(outbox.allEvents()).toHaveLength(0);
+    expect(await outbox.allEvents()).toHaveLength(0);
   });
 });

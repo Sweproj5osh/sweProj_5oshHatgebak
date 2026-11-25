@@ -1,4 +1,5 @@
-import { InMemoryDatabase } from '../../../../adapters/in-memory/in-memory-database';
+import type { PostgresDatabase } from '../../../../adapters/postgres/postgres-database';
+import { freshTestDatabase } from '../../../../test-support/postgres-test-database';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../../committee-prices/index';
 import { FixedClock } from '../../../../shared/clock';
 import type { SiteId, TicketId } from '../../../../shared/identifiers';
@@ -163,7 +164,7 @@ export interface WorldOptions {
  * that needs several calls in one transaction uses `transact` directly.
  */
 export async function buildTicketingWorld(capacity = 5, options: WorldOptions = {}) {
-  const database = new InMemoryDatabase();
+  const database = freshTestDatabase();
   const sites = new FakeSites().withCapacity('site-1', capacity);
   const store = new TableTicketStore();
   const clock = new FixedClock(START);

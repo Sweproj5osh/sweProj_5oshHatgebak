@@ -10,7 +10,7 @@ import { InMemorySlidingWindowRateLimiter } from './in-memory-rate-limiter';
 /** The contract every RateLimiter adapter keeps (ADR-15, ADR-21), run against the in-memory and the PostgreSQL adapter. */
 const ADAPTERS: readonly (readonly [string, (clock: Clock) => Promise<RateLimiter>])[] = [
   ['', async (clock) => new InMemorySlidingWindowRateLimiter(clock)],
-  [' over PostgreSQL', async (clock) => new PostgresSlidingWindowRateLimiter((await createTestDatabase()).database.pool, clock)],
+  [' over PostgreSQL', async (clock) => new PostgresSlidingWindowRateLimiter((await createTestDatabase()).database, clock)],
 ];
 
 const THREE_PER_MINUTE: RateLimit = { maximumAttempts: 3, windowMilliseconds: 60_000 };

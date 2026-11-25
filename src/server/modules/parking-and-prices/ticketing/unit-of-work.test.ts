@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { TEST_TOKEN_SECRET, writeRequest } from '../../../test-support/test-helpers';
 import { refuse, type WriteOperation } from '../../../shared/operation-contract';
 import type { TicketPaymentStatus } from './index';
@@ -46,7 +46,7 @@ describe('ticket writes live inside the caller\'s unit of work (P1)', () => {
 
   it('through the entry point, a payment that marks the ticket paid and then fails leaves the ticket unpaid and no audit entry', async () => {
     const world = await buildTicketingWorld();
-    const app = composeInMemoryApplication({
+    const app = composeTestApplication({
       tokenSecret: TEST_TOKEN_SECRET,
       clock: world.clock,
       moduleDependencies: world.dependencies,

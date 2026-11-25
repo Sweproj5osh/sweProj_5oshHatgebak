@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../test-support/test-helpers';
 import {
   operations,
@@ -22,7 +22,7 @@ import { buildPaymentsWorld, closedTicket, DRIVER, openTicket, PAY_PATH } from '
  */
 function setUp(overrides: { readonly gateway?: PaymentGateway } = {}) {
   const world = buildPaymentsWorld(overrides);
-  const application = composeInMemoryApplication({
+  const application = composeTestApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
     additionalOperations: world.payments.operations,
@@ -78,7 +78,7 @@ describe('C2 paying in the app', () => {
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ operation: 'payments.payInApp', personId: DRIVER, requestId: 'request-pay-0001' });
 
-    const events = application.outbox.allEvents();
+    const events = await application.outbox.allEvents();
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       topic: TICKET_PAID_TOPIC,
@@ -98,7 +98,7 @@ describe('C2 paying in the app', () => {
     expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
     expect(await paymentRows()).toHaveLength(1);
     expect((await paymentRows())[0]).toMatchObject({ state: 'pending', providerReference: expect.stringMatching(/^fake-/) });
-    expect(application.outbox.allEvents()).toHaveLength(0);
+    expect(await application.outbox.allEvents()).toHaveLength(0);
   });
 
   it('P18: a ticket with a pending attempt refuses a second charge under a new request id', async () => {
@@ -127,7 +127,7 @@ describe('C2 paying in the app', () => {
     /** Reconciliation runs in its own unit of work, as the scheduler's job will; here the test opens it. */
     async function settleOnce(application: ReturnType<typeof setUp>['application'], payments: ReturnType<typeof setUp>['payments']): Promise<number> {
       const transaction = application.database.begin();
-      const settled = await payments.ledgerBoundTo(transaction, application.outbox.publisherBoundTo(transaction.tables)).settlePendingPayments();
+      const settled = await payments.ledgerBoundTo(transaction, application.outbox.publisherBoundTo(transaction)).settlePendingPayments();
       await transaction.commit();
       return settled;
     }
@@ -136,6 +136,7 @@ describe('C2 paying in the app', () => {
       const { tickets, gateway, application, payments, pay, paymentRows } = setUp();
       tickets.seed(closedTicket('ticket-1', 19));
       const paying = pay('request-pay-0016', 'ticket-1');
+      await untilTheProviderIsAsked(gateway, application);
       await vi.advanceTimersByTimeAsync(PROVIDER_TIMEOUT_MILLISECONDS);
       expect((await paying).status).toBe(202);
       await vi.advanceTimersByTimeAsync(1_000);
@@ -145,7 +146,7 @@ describe('C2 paying in the app', () => {
       expect(settled).toBe(1);
       expect((await paymentRows())[0]).toMatchObject({ state: 'paid', requestId: 'request-pay-0016', providerReference: expect.stringMatching(/^fake-/) });
       expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('paid');
-      expect(application.outbox.allEvents().map((event) => event.topic)).toEqual([TICKET_PAID_TOPIC]);
+      expect((await application.outbox.allEvents()).map((event) => event.topic)).toEqual([TICKET_PAID_TOPIC]);
       expect(gateway.chargeCallCount('request-pay-0016')).toBe(2);
       pendingSettledPerRun = settled;
     });
@@ -202,7 +203,7 @@ describe('C2 paying in the app', () => {
       expect((await paymentRows())[0]).toMatchObject({ state: 'pending', rawProviderOutcome: 'authorized' });
       expect(JSON.stringify(await auditRows())).not.toContain('authorized');
       expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
-      expect(application.outbox.allEvents()).toHaveLength(0);
+      expect(await application.outbox.allEvents()).toHaveLength(0);
     });
 
     it('treats a throwing adapter the same way: the attempt stays pending with the error as its raw outcome', async () => {
@@ -226,13 +227,14 @@ describe('C2 paying in the app', () => {
     });
 
     it('gives the slow provider exactly 8 seconds, then records a pending attempt, keeps the ticket unpaid and says pay later or pay cash', async () => {
-      const { tickets, gateway, pay, paymentRows } = setUp();
+      const { tickets, gateway, application, pay, paymentRows } = setUp();
       tickets.seed(closedTicket('ticket-1', 19));
       let answered = false;
       const paying = pay('request-pay-0013', 'ticket-1').then((response) => {
         answered = true;
         return response;
       });
+      await untilTheProviderIsAsked(gateway, application);
 
       await vi.advanceTimersByTimeAsync(PROVIDER_TIMEOUT_MILLISECONDS - 1);
       expect(answered).toBe(false);
@@ -261,7 +263,7 @@ describe('C2 paying in the app', () => {
     expect((await tickets.statusOf('ticket-1')).paymentStatus).toBe('unpaid');
     expect(await paymentRows()).toHaveLength(0);
     expect(await auditRows()).toHaveLength(0);
-    expect(application.outbox.allEvents()).toHaveLength(0);
+    expect(await application.outbox.allEvents()).toHaveLength(0);
   });
 
   it('refuses to pay a ticket that is still open', async () => {
@@ -325,7 +327,7 @@ describe('C2 paying in the app', () => {
   it('registers through operations(dependencies) beside the composed registry, as the composition root will call it (P4)', async () => {
     const { clock, tickets, gateway } = buildPaymentsWorld();
     tickets.seed(closedTicket('ticket-1', 11));
-    const application = composeInMemoryApplication({
+    const application = composeTestApplication({
       tokenSecret: TEST_TOKEN_SECRET,
       clock,
       additionalOperations: operations({ gateway, ticketDesk: tickets, ticketQuery: tickets, clock }),
@@ -342,3 +344,15 @@ describe('C2 paying in the app', () => {
     console.log(`C4 report: timeout honoured at ${(timeoutHonouredMilliseconds / 1000).toFixed(3)} s (the ledger's timer, measured with fake timers)`);
   });
 });
+
+/**
+ * With fake timers the test moves the clock itself, so it must not move it before the pay request has reached the
+ * provider and started the ledger's timer: against PostgreSQL the request first waits on real database work, which no
+ * fake clock speeds up. A database round trip lets that work go on without moving the clock.
+ */
+async function untilTheProviderIsAsked(gateway: { chargeCallCount(): number }, application: { database: { committed: { query(sql: string): Promise<unknown> } } }): Promise<void> {
+  const before = gateway.chargeCallCount();
+  while (gateway.chargeCallCount() === before) {
+    await application.database.committed.query('SELECT 1');
+  }
+}

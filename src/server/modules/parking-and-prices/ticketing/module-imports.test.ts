@@ -11,9 +11,14 @@ const entryPointFolders = ['http', 'composition', 'test-support'].map((folder) =
  * P5: a module's production files import the operation contract from the shared code, never from the entry point.
  * The two transitional re-export paths (docs/team/QUESTIONS.md item 15) were removed by the restructure (ADR-16).
  */
+/** The test world (`testing/`) is test-only code (F14), not a production file. */
+function isInATestWorld(file: string): boolean {
+  return file.split(path.sep).includes('testing');
+}
+
 describe('ticketing production files do not import the entry point', () => {
   it('finds no import whose target lies under src/entrypoint', async () => {
-    const productionFiles = (await listTypeScriptFiles(moduleFolder, () => false)).filter((file) => !file.endsWith('.test.ts'));
+    const productionFiles = (await listTypeScriptFiles(moduleFolder, () => false)).filter((file) => !file.endsWith('.test.ts') && !isInATestWorld(file));
     const imports = await allImports(productionFiles);
     const entryPointImports = imports
       .filter((edge) => edge.target !== undefined && entryPointFolders.some((folder) => edge.target?.startsWith(folder)))

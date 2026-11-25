@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pathWith } from '../../apps/shared-client/route-path';
 import { refuse, respond, type PublicWriteOperation, type ReadOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
-import type { InMemoryApplication } from '../composition/compose-server';
+import type { ComposedApplication } from '../test-support/compose-test-application';
 import type { HttpRequest } from './http';
 import { publicRequest, telemetryRequest, testApplication, writeRequest } from '../test-support/test-helpers';
 
@@ -113,7 +113,7 @@ describe('F5 runs an operation\'s fixture before its sample request', () => {
   });
 });
 
-async function expectOneAuditRowForTheValidExample(application: InMemoryApplication, operation: AuditedWrite): Promise<void> {
+async function expectOneAuditRowForTheValidExample(application: ComposedApplication, operation: AuditedWrite): Promise<void> {
   await fixtureOf(application, operation)?.(application.database);
   const response = await application.handle(sampleRequest(operation, 'request-valid-1', operation.examples.valid));
   expect(response.status, JSON.stringify(response.body)).toBeLessThan(400);
@@ -122,14 +122,14 @@ async function expectOneAuditRowForTheValidExample(application: InMemoryApplicat
   expect(rows[0]?.operation).toBe(operation.name);
 }
 
-async function expectNoAuditRowForTheInvalidExample(application: InMemoryApplication, operation: AuditedWrite): Promise<void> {
+async function expectNoAuditRowForTheInvalidExample(application: ComposedApplication, operation: AuditedWrite): Promise<void> {
   const response = await application.handle(sampleRequest(operation, 'request-invalid-1', operation.examples.invalid));
   expect(response.status).toBeGreaterThanOrEqual(400);
   expect(await application.audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(0);
 }
 
 /** The fixture of the application that answers the request: a fixture may close over that composition's own state (a module's price list, for example). */
-function fixtureOf(application: InMemoryApplication, operation: AuditedWrite): AuditedWrite['fixture'] {
+function fixtureOf(application: ComposedApplication, operation: AuditedWrite): AuditedWrite['fixture'] {
   const composedHere = application.registry.find(operation.method, operation.path);
   return composedHere !== undefined && 'fixture' in composedHere ? composedHere.fixture : undefined;
 }

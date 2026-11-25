@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryDatabase } from '../../adapters/in-memory/in-memory-database';
-import { InMemoryOutboxStore } from '../../adapters/in-memory/in-memory-outbox-store';
+import type { PostgresDatabase } from '../../adapters/postgres/postgres-database';
+import { freshTestDatabase } from '../../test-support/postgres-test-database';
+import { PostgresOutboxStore } from '../../adapters/postgres/postgres-outbox-store';
 import { FixedClock } from '../clock';
 import type { EventSubscriber, StoredEvent } from './event';
 import { OutboxDeliveryJob } from './outbox-delivery-job';
@@ -33,8 +34,8 @@ class RecordingSubscriber implements EventSubscriber {
 }
 
 function setUp(...subscribers: EventSubscriber[]) {
-  const database = new InMemoryDatabase();
-  const outbox = new InMemoryOutboxStore(database, clock);
+  const database = freshTestDatabase();
+  const outbox = new PostgresOutboxStore(database.committed, clock);
   const job = new OutboxDeliveryJob(outbox, subscribers, clock);
   return { database, outbox, job };
 }
@@ -43,17 +44,17 @@ describe('outbox', () => {
   it('writes nothing when the publishing transaction rolls back', async () => {
     const { database, outbox } = setUp();
     const transaction = database.begin();
-    outbox.publisherBoundTo(transaction.tables).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
+    outbox.publisherBoundTo(transaction).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
     await transaction.rollback();
-    expect(outbox.allEvents()).toHaveLength(0);
+    expect(await outbox.allEvents()).toHaveLength(0);
   });
 
   it('writes one row when the publishing transaction commits', async () => {
     const { database, outbox } = setUp();
     const transaction = database.begin();
-    outbox.publisherBoundTo(transaction.tables).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
+    outbox.publisherBoundTo(transaction).publish({ topic: 'TicketClosed', payload: { ticketId: 't-1' } });
     await transaction.commit();
-    expect(outbox.allEvents()).toHaveLength(1);
+    expect(await outbox.allEvents()).toHaveLength(1);
     expect(await outbox.undelivered()).toHaveLength(1);
   });
 
@@ -69,7 +70,7 @@ describe('outbox', () => {
     expect(notifications.deliveries).toBe(1);
     expect(dashboard.deliveries).toBe(1);
     expect(await outbox.undelivered()).toHaveLength(0);
-    expect(outbox.allEvents()[0]?.deliveredAt).toBe('2026-11-04T10:00:00.000Z');
+    expect((await outbox.allEvents())[0]?.deliveredAt).toBe('2026-11-04T10:00:00.000Z');
   });
 
   it('loses no event when a subscriber crashes mid-way; the rerun redelivers and handlers tolerate the duplicate', async () => {
@@ -94,8 +95,8 @@ describe('outbox', () => {
   });
 });
 
-async function publishCommitted(database: InMemoryDatabase, outbox: InMemoryOutboxStore, topic: string) {
+async function publishCommitted(database: PostgresDatabase, outbox: PostgresOutboxStore, topic: string) {
   const transaction = database.begin();
-  outbox.publisherBoundTo(transaction.tables).publish({ topic, payload: { topic } });
+  outbox.publisherBoundTo(transaction).publish({ topic, payload: { topic } });
   await transaction.commit();
 }

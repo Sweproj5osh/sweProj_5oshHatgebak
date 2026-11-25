@@ -4,13 +4,13 @@
  *
  * Why this demo uses the project's test composition: on the real server wiring the committee's price approval
  * (the Approvals module) is not composed yet, so no price can be applied there and a ticket cannot close with a fee.
- * The tests solve this with `composeInMemoryApplication`, and so does this demo: same entry point, same Ticketing,
+ * The tests solve this with `composeTestApplication`, and so does this demo: same entry point, same Ticketing,
  * Committee Prices and Payments modules; only the site register and the approval check are stand-ins, and the time
  * is a clock the script moves forward.
  *
  * Run from the repository root:   npx tsx demo/02-fees-and-payment.ts
  */
-import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import { composeTestApplication } from '../src/server/test-support/compose-test-application';
 import { pathWith } from '../src/apps/shared-client/route-path';
 import type { HttpRequest } from '../src/server/http/http';
 import type { HttpMethod } from '../src/server/shared/operation-contract';
@@ -21,7 +21,7 @@ import { createTicketPaymentStatus, createTicketReading, TableTicketStore, type 
 import { FixedClock } from '../src/server/shared/clock';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
 import { fail, succeed } from '../src/server/shared/result';
-import { bodyOf, bold, dim, expectThat, money, note, say, scene, showExchange, table, title } from './lib';
+import { bodyOf, bold, dim, expectThat, money, note, say, scene, showExchange, table, title, demoDatabase } from './lib';
 
 const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));
 const hoursLater = (hours: number): void => clock.advanceByMilliseconds(hours * 60 * 60 * 1000);
@@ -61,7 +61,8 @@ const payments = createPayments({
   ticketQuery: createTicketReading({ store, plates, fees }),
   clock,
 });
-const app = composeInMemoryApplication({
+const app = composeTestApplication({
+  database: await demoDatabase('fees_and_payment'),
   tokenSecret: TEST_TOKEN_SECRET,
   clock,
   moduleDependencies: { prices, fees, plates, tickets: store },
@@ -208,7 +209,7 @@ async function main(): Promise<void> {
   table(rows);
   note('Closed-ticket events went to the outbox in the same transaction as each close, ready for the delivery job.');
   const topics = new Map<string, number>();
-  for (const event of app.outbox.allEvents()) {
+  for (const event of await app.outbox.allEvents()) {
     topics.set(event.topic, (topics.get(event.topic) ?? 0) + 1);
   }
   say(dim(`Events in the outbox: ${[...topics].map(([topic, count]) => `${count} x ${topic}`).join(', ')}`));

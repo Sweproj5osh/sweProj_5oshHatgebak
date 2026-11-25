@@ -6,14 +6,14 @@
  *
  * Run from the repository root:   npx tsx demo/01-driver-journey.ts
  */
-import { composeInMemoryServer } from '../src/server/composition/compose-server';
+import { composeTestServer } from '../src/server/test-support/compose-test-application';
 import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/server/composition/bootstrap';
 import { pathWith } from '../src/apps/shared-client/route-path';
 import type { HttpRequest } from '../src/server/http/http';
 import type { HttpMethod } from '../src/server/shared/operation-contract';
 import { signedSiteCodes } from '../src/server/modules/identity-and-registry/sites-and-areas/index';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
-import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title } from './lib';
+import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title, demoDatabase } from './lib';
 
 const TOKEN_SECRET = 'demo-token-secret-that-is-long-enough';
 const SITE_CODE_SECRET = 'demo-site-code-secret-long-enough';
@@ -24,7 +24,7 @@ const CLIENT_ADDRESS = '203.0.113.7';
 /** The recording sender keys codes by the international form of the number: 01012345678 becomes +201012345678. */
 const international = (phone: string): string => `+20${phone.slice(1)}`;
 
-const app = composeInMemoryServer({ tokenSecret: TOKEN_SECRET, siteCodeSecret: SITE_CODE_SECRET });
+const app = composeTestServer({ database: await demoDatabase('driver_journey'), tokenSecret: TOKEN_SECRET, siteCodeSecret: SITE_CODE_SECRET });
 
 let requestCounter = 0;
 /** Request ids of writes the server refused: the audit trail must hold no entry for any of them. */

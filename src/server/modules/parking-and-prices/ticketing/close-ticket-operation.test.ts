@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { composeTestApplication } from '../../../test-support/compose-test-application';
 import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../test-support/test-helpers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import { buildTicketingWorld } from './testing/ticketing-world';
 
 async function application(options: Parameters<typeof buildTicketingWorld>[1] = {}) {
   const world = await buildTicketingWorld(5, options);
-  const app = composeInMemoryApplication({
+  const app = composeTestApplication({
     tokenSecret: TEST_TOKEN_SECRET,
     clock: world.clock,
     moduleDependencies: world.dependencies,
