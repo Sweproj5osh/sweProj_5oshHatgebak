@@ -12,7 +12,7 @@ import {
   type CarPresence,
 } from '../modules/identity-and-registry/accounts-and-access-control/index';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/foundation/audit-log/index';
-import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../../modules/committee-prices/public';
+import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../modules/parking-and-prices/committee-prices/index';
 import {
   createLicensingAssignmentAttendance,
   createLicensingStores,
@@ -36,7 +36,7 @@ import {
   type PlateLookup,
   type TicketStore,
   type TicketingSites,
-} from '../../modules/ticketing/public';
+} from '../modules/parking-and-prices/ticketing/index';
 import { SystemClock, type Clock } from '../shared/clock';
 import type { EventSubscriber } from '../shared/events/event';
 import { OutboxDeliveryJob } from '../shared/events/outbox-delivery-job';

@@ -17,7 +17,7 @@ export const f1CommitteePricesIsPure = defineFitnessFunction(
   'F1',
   `${PURE_MODULE} production files import nothing outside the module's own folder`,
   async (repositoryRoot) => {
-    const moduleFolder = path.join(repositoryRoot, 'src', 'modules', PURE_MODULE);
+    const moduleFolder = path.join(repositoryRoot, 'src', 'server', 'modules', 'parking-and-prices', PURE_MODULE);
     const files = await listTypeScriptFiles(moduleFolder, (file) => isUnderFixtures(repositoryRoot, file) || file.endsWith(TEST_FILE_SUFFIX));
     const imports = await allImports(files);
     const violations = imports

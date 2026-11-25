@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { TicketDesk, TicketQuery } from '../../ticketing/public';
+import type { TicketDesk, TicketQuery } from '../../../server/modules/parking-and-prices/ticketing/index';
 import type { Clock } from '../../../server/shared/clock';
 import type { EventPublisher } from '../../../server/shared/events/event';
 import type { PaymentId, PersonId, SiteId, TicketId } from '../../../server/shared/identifiers';

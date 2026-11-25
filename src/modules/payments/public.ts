@@ -10,7 +10,7 @@ import type { PaymentId, PersonId, SiteId, TicketId } from '../../server/shared/
 import type { RequestId } from '../../server/shared/request-id';
 import type { Result } from '../../server/shared/result';
 import type { Transaction } from '../../server/shared/unit-of-work';
-import type { TicketDesk, TicketQuery } from '../ticketing/public';
+import type { TicketDesk, TicketQuery } from '../../server/modules/parking-and-prices/ticketing/index';
 import { payInAppOperation } from './internal/operations/pay-in-app';
 import { PaymentLedgerService } from './internal/payment-ledger';
 import { TableAccessPaymentStore } from './internal/adapters/table-access-payment-store';

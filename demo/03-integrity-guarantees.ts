@@ -14,8 +14,8 @@ import { AUDIT_LOG_HEAD_TABLE, AUDIT_LOG_TABLE, InMemoryDatabase } from '../src/
 import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
 import type { HttpRequest } from '../src/server/http/http';
 import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
-import { createFeeCalculator, type PriceVersion } from '../src/modules/committee-prices/public';
-import { createTicketOpening, TableTicketStore } from '../src/modules/ticketing/public';
+import { createFeeCalculator, type PriceVersion } from '../src/server/modules/parking-and-prices/committee-prices/index';
+import { createTicketOpening, TableTicketStore } from '../src/server/modules/parking-and-prices/ticketing/index';
 import { FixedClock } from '../src/server/shared/clock';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
 import { fail, succeed } from '../src/server/shared/result';

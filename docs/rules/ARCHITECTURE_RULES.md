@@ -40,8 +40,8 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 |---|---|---|---|
 | `identity-and-registry/accounts-and-access-control` | `Authorization`, `PersonalData` | Lino (Teammate A) | must stay on |
 | `identity-and-registry/sites-and-areas` | `SiteRegistry` | Lino (Teammate A) | must stay on |
-| `ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
-| `committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
+| `parking-and-prices/ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
+| `parking-and-prices/committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
 | `payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
 | `foundation/audit-log` | `AuditTrail` | Zeyad | must stay on |
 | `cash-custody` | `DepositLedger` | Amina (Teammate C) | may fail |

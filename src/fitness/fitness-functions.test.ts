@@ -31,7 +31,7 @@ describe('each fitness function fails on its planted violation', () => {
     const result = await f1CommitteePricesIsPure(fixture('f1-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations).toHaveLength(2);
-    expect(result.violations.every((violation) => violation.startsWith('src/modules/committee-prices/internal/leaky-fee-calculator.ts'))).toBe(true);
+    expect(result.violations.every((violation) => violation.startsWith('src/server/modules/parking-and-prices/committee-prices/leaky-fee-calculator.ts'))).toBe(true);
     expect(result.checked).toBe(1);
   });
 
