@@ -31,8 +31,8 @@ modules, public interfaces, owners and sets is in [docs/architecture/modules.md]
 npm ci                 # install (Node.js 24)
 npm run typecheck      # TypeScript, strict mode
 npm test               # Vitest: every test runs on in-memory adapters, no database needed
-npm run fitness        # the static fitness functions F1, F2, F8, F10, F11, F12, F13
-npx tsx src/fitness/f2-cross-module-imports-use-public-interfaces.ts   # one fitness function alone
+npm run fitness        # the static fitness functions F1, F10, F11, F12, F13, F14
+npx tsx src/fitness/f14-production-code-never-reaches-test-code.ts     # one fitness function alone
 cp .env.example .env && npm start                                      # the HTTP entry point, in-memory storage
 ```
 The database test for task Z2 (the application role cannot update or delete `audit_log`) runs only when
@@ -59,7 +59,7 @@ test (`src/entrypoint/audit-coverage.test.ts`) then checks every registered writ
 7. Until the foundation lands, build against in-memory stand-ins and unit tests.
 
 ## Where to read more
-- [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the eleven fitness functions.
+- [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the fitness functions.
 - [docs/adr/](docs/adr/README.md): the Architecture Decision Records (ADR-01 to ADR-22).
 - [docs/team/TEAM_TASKS.md](docs/team/TEAM_TASKS.md): every task, its test and its report numbers.
 - [docs/pdf/UML_Component_Architecture_V3_diagrams.pdf](docs/pdf/UML_Component_Architecture_V3_diagrams.pdf): the component diagrams.

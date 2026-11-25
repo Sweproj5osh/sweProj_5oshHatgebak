@@ -1,11 +1,13 @@
 import path from 'node:path';
-import { PURE_MODULE } from './module-sets';
 import { defineFitnessFunction } from './support/fitness-result';
 import { allImports, describeEdge, isUnderFixtures, listTypeScriptFiles } from './support/import-scanner';
 import { runWhenInvokedDirectly } from './support/run-as-script';
 
 /** Test files import the test runner, so they live beside the module and F1 leaves them out (P28 #28). */
 const TEST_FILE_SUFFIX = '.test.ts';
+
+/** The one module that must stay pure arithmetic (Rule C). */
+export const PURE_MODULE = 'committee-prices';
 
 /**
  * F1: the production files of committee-prices import nothing outside the module's own folder, not even Node built-ins

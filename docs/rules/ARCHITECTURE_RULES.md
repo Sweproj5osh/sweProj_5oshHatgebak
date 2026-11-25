@@ -57,23 +57,26 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 
 ## 6. Module boundaries
 - A module exposes only what its `public.ts` exports. Everything under `internal/` is private.
-- Code in one module may import another module **only** through that module's `public.ts`. Fitness function F2
-  fails the build otherwise.
+- Code in one module should import another module only through that module's `public.ts`; review checks it (the
+  build check F2 was dropped by ADR-16).
 - You write only inside the modules you own. Changes to another owner's module go through that owner.
 - Shared code lives in `src/shared/` and holds no business rule: identifiers, results, request ids, clock, events,
   unit of work, the operation contract and body schema, the rate-limiter port, the token-issuer port, the keyed serial
   queue. A module never imports
-  `src/entrypoint` (F2): the entry point depends on the modules, not the reverse.
+  `src/entrypoint`: the entry point depends on the modules, not the reverse (review; `module-imports.test.ts` for ticketing).
+- No production file imports test-only code: a `*.test.ts` file, a `test-support/` or `testing/` folder, or
+  `src/fitness` (F14).
 - `committee-prices` imports nothing outside its own folder (F1): it is pure arithmetic, testable with plain numbers.
-- A must-stay-on module never calls a may-fail module synchronously (Rule D, F8). It publishes an event instead.
+- A must-stay-on module never calls a may-fail module synchronously (Rule D; review and the behavioural test Z14). It
+  publishes an event instead.
 
 ## 7. The nine rules (A to I)
 | Rule | Statement | Checked by |
 |---|---|---|
 | A | No business rule in the apps. The apps display and collect; the server decides. | Review |
-| B | Every outside provider sits behind a port owned by the module that uses it. Adapters are the only code that names a provider. Ports are frozen before any provider is chosen. | Review, F2 |
+| B | Every outside provider sits behind a port owned by the module that uses it. Adapters are the only code that names a provider. Ports are frozen before any provider is chosen. | Review |
 | C | Fee arithmetic exists only in `committee-prices`. Ticketing asks; it never computes. | F1, review |
-| D | Nothing in the must-stay-on set calls anything in the may-fail set synchronously. | F8 |
+| D | Nothing in the must-stay-on set calls anything in the may-fail set synchronously. | Review, Z14 |
 | E | One transaction for integrity: capacity check + ticket + audit entry; freeze time + fee + audit; payment + ticket status + audit. All or nothing. | F3, F5, review |
 | F | Names, phones and plates live only in the `personal_data` schema. Other tables hold a reference. Showing a plate is a role-checked, logged join. | F10 |
 | G | Derived data (totals, dashboards, the free-space display) is never the truth. The tickets win. | Review |
@@ -172,18 +175,22 @@ web build. Formatting and naming follow the code already in the repository.
 Every "Test it by" step in `docs/team/TEAM_TASKS.md` passes, as an automated test where possible; the "Report" numbers are
 in the pull request; tests and fitness functions are green; one review by Zeyad.
 
-## 14. The thirteen fitness functions (`npm run fitness`)
-F1 Prices imports nothing outside itself · F2 cross-module imports only through `public.ts`, and no file under
-`src/modules` or `src/apps` imports `src/entrypoint` · F3 twenty parallel opens on five spaces give five tickets · F4
-fee ≤ cap for any input · F5 one audit entry per successful write or public write, none per failed one, none per
-telemetry post, and every read that touches personal data is logged; it reads the composed registry and runs an
-operation's `fixture` first · F6 the application role cannot update or delete `audit_log`, and the hash chain
-verifies · F7 the same request id twice gives the same response and one change · F8 no synchronous call from
-must-stay-on into may-fail · F9 the main-system suite passes with the assistant stopped · F10 no plate, phone or name
-column outside `personal_data` · F11 no body schema in the composed registry accepts a timestamp, and `localDateTime`
-appears only on committee operations · F12 every personal field (plate, phone, name, password, latitude, longitude) in
-a write or public schema has an `omit` or `replace` rule · F13 the public operations are exactly a subset of
-`requestSignInCode` and `signIn`.
+## 14. The fitness functions
+Static, in `npm run fitness` (ADR-16): F1 Prices imports nothing outside itself · F10 no plate, phone or name column
+outside `personal_data` · F11 no body schema in the composed registry accepts a timestamp, and `localDateTime` appears
+only on committee operations · F12 every personal field (plate, phone, name, password, latitude, longitude) in a write
+or public schema has an `omit` or `replace` rule · F13 the public operations are exactly a subset of
+`requestSignInCode` and `signIn` · F14 no production file imports test-only code.
+
+Tests, in `npm test`: F3 twenty parallel opens on five spaces give five tickets · F4 fee ≤ cap for any input · F5 one
+audit entry per successful write or public write, none per failed one, none per telemetry post, and every read that
+touches personal data is logged; it reads the composed registry and runs an operation's `fixture` first · F6 the
+application role cannot update or delete `audit_log`, and the hash chain verifies · F7 the same request id twice gives
+the same response and one change · F8-behavioural (task Z14) a failing may-fail reactor never fails the action it reacts
+to · F9 the main-system suite passes with the assistant stopped (task Z15).
+
+Dropped by ADR-16: F2 (imports only through `public.ts`) and F8-static (no import from must-stay-on into may-fail).
+Why, for each one, is in `docs/architecture/fitness-functions.md`.
 
 ## 15. Writing style for code, comments, documents and pull requests
 Plain English. No abbreviation without its full form first (write "Architecture Decision Record (ADR)" once, then

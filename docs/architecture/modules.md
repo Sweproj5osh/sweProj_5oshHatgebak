@@ -1,9 +1,9 @@
 # Modules
 
-One folder per module under `src/modules/`. Another module may import only the module's `public.ts`; everything under
-`internal/` is private (fitness function F2). "Must stay on" modules keep a driver parking; "may fail" modules fail
-alone, and no must-stay-on module imports a may-fail one (fitness function F8, Rule D). Sets are declared in code in
-`src/fitness/module-sets.ts`.
+One folder per module under `src/modules/`. Another module should import only the module's `public.ts`; everything
+under `internal/` is private (review; the build check F2 was dropped by ADR-16). "Must stay on" modules keep a driver
+parking; "may fail" modules fail alone, and no must-stay-on module calls a may-fail one synchronously (Rule D, review
+and the behavioural test Z14).
 
 **The code is the catalogue (P25).** The names below are the ones actually exported from each `public.ts` on `main`.
 An owner who adds, renames or removes a public name edits this file's row in the same pull request; review checks it.
