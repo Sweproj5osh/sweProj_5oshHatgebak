@@ -1,6 +1,6 @@
-import type { TicketId } from '../../../../server/shared/identifiers';
-import type { RequestId } from '../../../../server/shared/request-id';
-import type { TableAccess } from '../../../../server/shared/unit-of-work';
+import type { TicketId } from '../../../../shared/identifiers';
+import type { RequestId } from '../../../../shared/request-id';
+import type { TableAccess } from '../../../../shared/unit-of-work';
 import type { PaymentStore, StoredPayment } from '../ports';
 
 /** The table name inside the foundation's database, mirroring the `payments` schema. */

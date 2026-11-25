@@ -3,18 +3,18 @@
  * Payment records (app and cash), corrections as new rows, one charge per request id. Needs TicketDesk, AuditTrail
  * and the PaymentGateway port.
  */
-import type { Operation } from '../../server/shared/operation-contract';
-import type { Clock } from '../../server/shared/clock';
-import type { EventPublisher } from '../../server/shared/events/event';
-import type { PaymentId, PersonId, SiteId, TicketId } from '../../server/shared/identifiers';
-import type { RequestId } from '../../server/shared/request-id';
-import type { Result } from '../../server/shared/result';
-import type { Transaction } from '../../server/shared/unit-of-work';
-import type { TicketDesk, TicketQuery } from '../../server/modules/parking-and-prices/ticketing/index';
-import { payInAppOperation } from './internal/operations/pay-in-app';
-import { PaymentLedgerService } from './internal/payment-ledger';
-import { TableAccessPaymentStore } from './internal/adapters/table-access-payment-store';
-import { InFlightAttempts } from './internal/in-flight-attempts';
+import type { Operation } from '../../../shared/operation-contract';
+import type { Clock } from '../../../shared/clock';
+import type { EventPublisher } from '../../../shared/events/event';
+import type { PaymentId, PersonId, SiteId, TicketId } from '../../../shared/identifiers';
+import type { RequestId } from '../../../shared/request-id';
+import type { Result } from '../../../shared/result';
+import type { Transaction } from '../../../shared/unit-of-work';
+import type { TicketDesk, TicketQuery } from '../../parking-and-prices/ticketing/index';
+import { payInAppOperation } from './payments-controller';
+import { PaymentLedgerService } from './payment-ledger';
+import { TableAccessPaymentStore } from './adapters/table-access-payment-store';
+import { InFlightAttempts } from './in-flight-attempts';
 
 /** The provider's answer to a charge. Anything else an adapter lets through is an adapter error (Rule B). */
 export type ChargeOutcome = 'paid' | 'declined' | 'pending';
@@ -42,7 +42,7 @@ export interface PaymentGateway {
 export type AttemptState = 'pending' | 'paid' | 'failed';
 
 /** The fake provider for tests and the in-memory server (C1); the composition root builds it through this function. */
-export { createFakePaymentGateway, type FakePaymentGateway } from './internal/adapters/fake-payment-gateway';
+export { createFakePaymentGateway, type FakePaymentGateway } from './adapters/fake-payment-gateway';
 
 export interface PaymentRecord {
   readonly paymentId: PaymentId;
@@ -111,5 +111,5 @@ export function operations(dependencies: PaymentsDependencies): readonly Operati
   return createPayments(dependencies).operations;
 }
 
-export { PAYMENTS_TABLE } from './internal/adapters/table-access-payment-store';
-export { PAY_LATER_OR_PAY_CASH, PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './internal/payment-ledger';
+export { PAYMENTS_TABLE } from './adapters/table-access-payment-store';
+export { PAY_LATER_OR_PAY_CASH, PROVIDER_TIMEOUT_MILLISECONDS, TICKET_PAID_TOPIC, type TicketPaidPayload } from './payment-ledger';

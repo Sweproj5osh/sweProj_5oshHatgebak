@@ -42,13 +42,13 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 | `identity-and-registry/sites-and-areas` | `SiteRegistry` | Lino (Teammate A) | must stay on |
 | `parking-and-prices/ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
 | `parking-and-prices/committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
-| `payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
+| `money-and-governance/payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
 | `foundation/audit-log` | `AuditTrail` | Zeyad | must stay on |
-| `cash-custody` | `DepositLedger` | Amina (Teammate C) | may fail |
+| `money-and-governance/cash-custody.ts` | `DepositLedger` | Amina (Teammate C) | may fail |
 | `identity-and-registry/licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
-| `approvals` | `ApprovalDesk` | Amina (Teammate C) | may fail |
+| `money-and-governance/approvals.ts` | `ApprovalDesk` | Amina (Teammate C) | may fail |
 | `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
-| `money-check-dashboard` | `MoneyCheck` | Amina (Teammate C) | may fail |
+| `money-and-governance/money-check-dashboard.ts` | `MoneyCheck` | Amina (Teammate C) | may fail |
 | `foundation/scheduler.ts` | none (it calls others) | Zeyad | may fail |
 | `notifications` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
 | `evidence` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |

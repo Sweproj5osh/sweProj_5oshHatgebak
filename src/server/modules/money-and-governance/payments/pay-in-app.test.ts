@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { composeInMemoryApplication } from '../../../server/test-support/compose-test-application';
-import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../server/test-support/test-helpers';
+import { composeInMemoryApplication } from '../../../test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, tokenFor, writeRequest } from '../../../test-support/test-helpers';
 import {
   operations,
   PAY_LATER_OR_PAY_CASH,
@@ -11,9 +11,9 @@ import {
   type ChargeOutcome,
   type PaymentGateway,
   type PaymentRecord,
-} from '../public';
+} from './index';
 import type { StoredPayment } from './ports';
-import { buildPaymentsWorld, closedTicket, DRIVER, openTicket, PAY_PATH } from './test-support/payments-test-world';
+import { buildPaymentsWorld, closedTicket, DRIVER, openTicket, PAY_PATH } from './testing/payments-test-world';
 
 /**
  * Task C2: paying in the app. Charge through the port with the request id as the idempotency key, record the

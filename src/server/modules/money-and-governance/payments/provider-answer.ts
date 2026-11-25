@@ -1,4 +1,4 @@
-import type { ChargeOutcome, ChargeResult } from '../public';
+import type { ChargeOutcome, ChargeResult } from './index';
 
 /**
  * What the ledger makes of one call to the provider: a final answer, a provisional one, or no usable answer: the timer

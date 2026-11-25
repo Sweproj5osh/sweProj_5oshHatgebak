@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { RequestId } from '../../../../server/shared/request-id';
-import type { ChargeOutcome, ChargeResult, PaymentGateway } from '../../public';
+import type { RequestId } from '../../../../shared/request-id';
+import type { ChargeOutcome, ChargeResult, PaymentGateway } from '../index';
 import { PROVIDER_TIMEOUT_MILLISECONDS } from '../payment-ledger';
 
 /**

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFakePaymentGateway } from '../../public';
+import { createFakePaymentGateway } from '../index';
 import { behaviourForAmount } from './fake-payment-gateway';
 
 /**

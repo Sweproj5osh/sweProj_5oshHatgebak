@@ -1,5 +1,5 @@
-import type { TicketId } from '../../../server/shared/identifiers';
-import type { RequestId } from '../../../server/shared/request-id';
+import type { TicketId } from '../../../shared/identifiers';
+import type { RequestId } from '../../../shared/request-id';
 
 /**
  * The per-ticket lock of the ledger (P18, integrity rank 1: never two charges). Two units of work on one ticket cannot

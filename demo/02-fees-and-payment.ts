@@ -14,7 +14,7 @@ import { composeInMemoryApplication } from '../src/server/test-support/compose-t
 import type { HttpRequest } from '../src/server/http/http';
 import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../src/server/modules/parking-and-prices/committee-prices/index';
-import { createFakePaymentGateway, createPayments } from '../src/modules/payments/public';
+import { createFakePaymentGateway, createPayments } from '../src/server/modules/money-and-governance/payments/index';
 import { createTicketPaymentStatus, createTicketReading, TableTicketStore, type PlateLookup } from '../src/server/modules/parking-and-prices/ticketing/index';
 import { FixedClock } from '../src/server/shared/clock';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';

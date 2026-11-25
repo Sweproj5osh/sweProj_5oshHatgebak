@@ -1,6 +1,6 @@
-import type { TicketId } from '../../../server/shared/identifiers';
-import type { RequestId } from '../../../server/shared/request-id';
-import type { PaymentRecord } from '../public';
+import type { TicketId } from '../../../shared/identifiers';
+import type { RequestId } from '../../../shared/request-id';
+import type { PaymentRecord } from './index';
 
 /**
  * Storage ports owned by this module. The in-memory adapter in `adapters/` implements them for every test; the
