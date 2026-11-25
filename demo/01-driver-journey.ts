@@ -9,7 +9,7 @@
 import { composeInMemoryServer } from '../src/server/composition/compose-server';
 import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/server/composition/bootstrap';
 import type { HttpRequest } from '../src/server/http/http';
-import { signedSiteCodes } from '../src/modules/sites-and-areas/public';
+import { signedSiteCodes } from '../src/server/modules/identity-and-registry/sites-and-areas/index';
 import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
 import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title } from './lib';
 

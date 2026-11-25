@@ -1,4 +1,4 @@
-import type { AccountsAndAccessControl } from '../../modules/accounts-and-access-control/public';
+import type { AccountsAndAccessControl } from '../modules/identity-and-registry/accounts-and-access-control/index';
 import type { AuditTrail } from '../modules/foundation/audit-log/index';
 import { refuse, respond } from '../shared/operation-contract';
 import { runAudited } from '../http/audited-execution';

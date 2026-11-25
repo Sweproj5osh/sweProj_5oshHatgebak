@@ -1,4 +1,4 @@
-import type { Authorization, Scope } from '../../../modules/accounts-and-access-control/public';
+import type { Authorization, Scope } from '../../modules/identity-and-registry/accounts-and-access-control/index';
 
 /**
  * The slice of Lino's Authorization the entry point depends on (P10, P26 Q4): the scope ladder for staff-scoped reads,

@@ -1,4 +1,4 @@
-import type { CarPresence } from '../../modules/accounts-and-access-control/public';
+import type { CarPresence } from '../modules/identity-and-registry/accounts-and-access-control/index';
 import type { AccessChecks } from '../http/auth/access-checks';
 import { compose, type InMemoryApplication, type InMemoryApplicationOptions, type TicketingPorts } from '../composition/compose-server';
 import { fail, succeed } from '../shared/result';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Scope } from '../../modules/accounts-and-access-control/public';
+import type { Scope } from '../modules/identity-and-registry/accounts-and-access-control/index';
 import { ALL_ROLES, type PersonId } from '../shared/identifiers';
 import { respond, type ReadOperation, type ReadScope } from '../shared/operation-contract';
 import type { AccessChecks } from './auth/access-checks';

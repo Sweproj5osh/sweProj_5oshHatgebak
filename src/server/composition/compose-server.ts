@@ -10,7 +10,7 @@ import {
   RecordingSignInCodeSender,
   type AccountsAndAccessControl,
   type CarPresence,
-} from '../../modules/accounts-and-access-control/public';
+} from '../modules/identity-and-registry/accounts-and-access-control/index';
 import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/foundation/audit-log/index';
 import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../../modules/committee-prices/public';
 import {
@@ -19,7 +19,7 @@ import {
   operations as licensingOperations,
   type ApprovalVerifier,
   type LicensingAssignmentAttendance,
-} from '../../modules/licensing-assignment-attendance/public';
+} from '../modules/identity-and-registry/licensing-assignment-attendance/index';
 import {
   createSiteLocator,
   createSiteRegistry,
@@ -28,7 +28,7 @@ import {
   type FreeSpaceSource,
   type PriceSource,
   type SiteRegistry,
-} from '../../modules/sites-and-areas/public';
+} from '../modules/identity-and-registry/sites-and-areas/index';
 import {
   operations as ticketingOperations,
   TableTicketStore,

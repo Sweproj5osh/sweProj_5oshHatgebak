@@ -1,4 +1,4 @@
-import { readSiteCodeSecret } from '../modules/sites-and-areas/public';
+import { readSiteCodeSecret } from './modules/identity-and-registry/sites-and-areas/index';
 import { readTokenSecret } from './http/auth/token';
 import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE, type BootstrapOutcome } from './composition/bootstrap';
 import { composeInMemoryServer } from './composition/compose-server';
