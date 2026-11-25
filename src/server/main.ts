@@ -2,10 +2,11 @@ import { readSiteCodeSecret } from './modules/identity-and-registry/sites-and-ar
 import { readTokenSecret } from './http/auth/token';
 import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE, type BootstrapOutcome } from './composition/bootstrap';
 import { composeInMemoryServer } from './composition/compose-server';
-import { createHttpServer } from './http/server';
+import { createHttpsServer, readTlsCertificate } from './http/server';
 
 const DEFAULT_PORT = 3000;
 
+const certificate = await readTlsCertificate(process.env);
 const application = composeInMemoryServer({ tokenSecret: readTokenSecret(process.env), siteCodeSecret: readSiteCodeSecret(process.env) });
 const port = Number(process.env['PORT'] ?? DEFAULT_PORT);
 
@@ -25,7 +26,7 @@ function describe(outcome: BootstrapOutcome): string {
   }
 }
 
-createHttpServer(application.handle).listen(port, () => {
-  console.log(`Street parking server listening on port ${port} with in-memory storage`);
+createHttpsServer(application.handle, certificate).listen(port, () => {
+  console.log(`Street parking server listening on https://localhost:${port} with in-memory storage`);
   console.log(`Permission table holds ${application.permissions.operationCount()} operations`);
 });

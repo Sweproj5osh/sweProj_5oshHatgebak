@@ -158,8 +158,8 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - Commits directly to `main`.
 
 ## 11. Stack
-TypeScript on Node.js 24, ECMAScript modules, strict mode. Vitest for tests, `tsx` to run scripts. HTTP through Node's
-built-in `http` module behind our own small router. PostgreSQL through SQL migrations in `db/migrations/`; in-memory
+TypeScript on Node.js 24, ECMAScript modules, strict mode. Vitest for tests, `tsx` to run scripts. HTTPS only, through
+Node's built-in `https` module behind our own small router (ADR-22); no plain-HTTP listener. PostgreSQL through SQL migrations in `db/migrations/`; in-memory
 adapters so every test runs without a database. The apps: Expo (React Native) for iPhone, Android and the committee
 web build. Formatting and naming follow the code already in the repository.
 

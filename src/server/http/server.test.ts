@@ -1,15 +1,20 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHttpServer } from './server';
+import { createHttpsServer } from './server';
+import { httpsFetch } from '../test-support/https-fetch';
 import { testApplication, tokenFor } from '../test-support/test-helpers';
+import { throwawayCertificate } from '../test-support/throwaway-certificate';
+
+const certificate = throwawayCertificate();
+const fetch = (url: string, init: Parameters<typeof httpsFetch>[1] = {}) => httpsFetch(url, init, certificate.cert);
 
 describe('http server adapter', () => {
-  const server = createHttpServer(testApplication().handle);
+  const server = createHttpsServer(testApplication().handle, certificate);
   let baseUrl = '';
 
   beforeAll(async () => {
     await new Promise<void>((resolve) => server.listen(0, resolve));
-    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    baseUrl = `https://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   afterAll(async () => {

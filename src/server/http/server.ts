@@ -1,13 +1,45 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer, type Server } from 'node:https';
 import type { RequestHandler } from './handle-request';
 import type { HttpMethod } from '../shared/operation-contract';
 import type { HttpRequest } from './http';
 
 const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
-/** The humble adapter between Node's http module and the pipeline: parse, hand over, serialise. No rules here. */
-export function createHttpServer(handle: RequestHandler): Server {
-  return createServer(async (incoming, outgoing) => {
+export const TLS_CERT_PATH_VARIABLE = 'TLS_CERT_PATH';
+export const TLS_KEY_PATH_VARIABLE = 'TLS_KEY_PATH';
+
+/** The server's certificate and private key, as PEM text. */
+export interface TlsCertificate {
+  readonly cert: string;
+  readonly key: string;
+}
+
+/**
+ * The certificate named by the environment (ADR-22). Plain HTTP never serves the API, so a missing or unreadable
+ * certificate stops start-up with the variable's name in the message.
+ */
+export async function readTlsCertificate(environment: NodeJS.ProcessEnv): Promise<TlsCertificate> {
+  const [cert, key] = await Promise.all([readPem(environment, TLS_CERT_PATH_VARIABLE), readPem(environment, TLS_KEY_PATH_VARIABLE)]);
+  return { cert, key };
+}
+
+async function readPem(environment: NodeJS.ProcessEnv, variable: string): Promise<string> {
+  const file = environment[variable];
+  if (file === undefined || file === '') {
+    throw new Error(`${variable} must name a PEM file: the server answers over HTTPS only and never over plain HTTP`);
+  }
+  try {
+    return await readFile(file, 'utf8');
+  } catch (error) {
+    throw new Error(`${variable} names ${file}, which cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** The humble adapter between Node's https module and the pipeline: parse, hand over, serialise. No rules here. */
+export function createHttpsServer(handle: RequestHandler, certificate: TlsCertificate): Server {
+  return createServer({ cert: certificate.cert, key: certificate.key }, async (incoming, outgoing) => {
     try {
       const request = await toHttpRequest(incoming);
       const response = await handle(request);
@@ -19,7 +51,7 @@ export function createHttpServer(handle: RequestHandler): Server {
 }
 
 async function toHttpRequest(incoming: IncomingMessage): Promise<HttpRequest> {
-  const url = new URL(incoming.url ?? '/', 'http://localhost');
+  const url = new URL(incoming.url ?? '/', 'https://localhost');
   const rawBody = await readBody(incoming);
   return {
     method: parseMethod(incoming.method),

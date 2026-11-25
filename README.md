@@ -35,7 +35,7 @@ npm run typecheck      # TypeScript, strict mode
 npm test               # Vitest: every test runs on in-memory adapters, no database needed
 npm run fitness        # the static fitness functions F1, F10, F11, F12, F13, F14
 npx tsx src/fitness/f14-production-code-never-reaches-test-code.ts     # one fitness function alone
-cp .env.example .env && npm start                                      # the HTTP entry point, in-memory storage
+cp .env.example .env && npm start                                      # the HTTPS entry point (TLS_CERT_PATH, TLS_KEY_PATH: docs/setup/https.md)
 ```
 The database test for task Z2 (the application role cannot update or delete `audit_log`) runs only when
 `DATABASE_URL` points at a PostgreSQL you own and the `pg` package is installed (`npm install --no-save pg`); it says
