@@ -127,6 +127,9 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - A failed handler answers a plain "internal error" and a correlation id; the cause goes to the server log only.
 - The token is checked before the route: an unknown path answers 401 without a token, so the route table is not
   discoverable.
+- Routes are resource-style REST endpoints (ADR-22), one controller file per resource, listed in
+  `docs/architecture/rest-routes.md`. A path parameter joins the read's query or the write's body before any check reads
+  it; repeating it with another value is refused with 400. Status codes are each operation's own.
 - Live status on every request: after the token check the pipeline asks `Authorization.liveStatus` and refuses anything
   but active; the session's bound site rides on the actor. Tokens expire: staff after 14 hours, drivers after 30 days;
   the live-status check is what locks a person out, the expiry only bounds a stolen token.

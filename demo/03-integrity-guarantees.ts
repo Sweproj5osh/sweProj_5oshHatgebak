@@ -24,7 +24,7 @@ import { bodyOf, bold, expectThat, note, say, scene, showExchange, title } from 
 const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));
 const app = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock });
 
-function driverRequest(personId: string, requestId: string, body: unknown, path = '/tickets/open'): HttpRequest {
+function driverRequest(personId: string, requestId: string, body: unknown, path = '/tickets'): HttpRequest {
   return {
     method: 'POST',
     path,
@@ -111,7 +111,7 @@ async function main(): Promise<void> {
   for (let attempt = 1; attempt <= 7; attempt += 1) {
     const guess = await app.handle({
       method: 'POST',
-      path: '/sign-in',
+      path: '/sessions',
       query: {},
       headers: { [REQUEST_ID_HEADER]: `guess-request-${String(attempt).padStart(4, '0')}` },
       address: TEST_ADDRESS,

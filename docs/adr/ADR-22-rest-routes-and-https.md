@@ -13,7 +13,11 @@ Paths used verbs (`/tickets/open`, `/tickets/close`, `/payments/app`) and the se
   the same order as before, so the registry, the permission table and the audit-coverage harness see the same sequence.
 - The pipeline order is unchanged. Path parameters are merged into the query of a read and into the body of a write,
   before the server-clock rule, the schema, the body hash and the audit input, so every handler, refusal, repeat answer
-  and audit entry sees exactly the input it saw before. A body that repeats a field the path names is refused with 400.
+  and audit entry sees exactly the input it saw before. The body or query may repeat a field the path names with the
+  same value (the shared client does, so its requests change only in their URL); another value is refused with 400.
+- An operation whose only body field is the id of what it acts on (erasure, releasing an attendant, paying) keeps the
+  id in the body at a noun path (`POST /erasures`, `POST /attendant-releases`, `POST /payments`), so a request with a
+  wrong body still reaches the operation and is refused there.
 - Status codes are unchanged.
 - The server listens with Node's `node:https` only; `TLS_CERT_PATH` and `TLS_KEY_PATH` are required at start-up.
   There is no plain-HTTP listener.

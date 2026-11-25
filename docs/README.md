@@ -7,7 +7,7 @@ folder. A pull request that changes code updates the documents that describe it.
 | Folder | What it holds |
 |---|---|
 | [rules/](rules/ARCHITECTURE_RULES.md) | The binding rules, with their reasons |
-| [architecture/](architecture/overview.md) | The overview and folder map, the modules and their owners, the fitness functions, and (as the restructure lands) the controller pattern and the REST route catalogue |
+| [architecture/](architecture/overview.md) | The overview and folder map, the modules and their owners, the controller pattern, the REST route catalogue and the fitness functions |
 | [setup/](setup/) | Setting up the database, HTTPS and the app (as the restructure lands) |
 | [adr/](adr/README.md) | The Architecture Decision Records, ADR-01 to ADR-22 |
 | [team/](team/TEAM_TASKS.md) | The task sheet, the open questions, test reports and the restructure plan |

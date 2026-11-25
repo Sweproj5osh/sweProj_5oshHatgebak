@@ -11,7 +11,9 @@
  * Run from the repository root:   npx tsx demo/02-fees-and-payment.ts
  */
 import { composeInMemoryApplication } from '../src/server/test-support/compose-test-application';
+import { pathWith } from '../src/apps/shared-client/route-path';
 import type { HttpRequest } from '../src/server/http/http';
+import type { HttpMethod } from '../src/server/shared/operation-contract';
 import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
 import { createFeeCalculator, createPriceList, type PriceVersion } from '../src/server/modules/parking-and-prices/committee-prices/index';
 import { createFakePaymentGateway, createPayments } from '../src/server/modules/money-and-governance/payments/index';
@@ -71,18 +73,18 @@ const nextRequestId = (): string => `fee-demo-${String((requestCounter += 1)).pa
 
 async function send(
   label: string,
-  method: 'GET' | 'POST',
+  method: HttpMethod,
   path: string,
   person: string,
   options: { body?: unknown; query?: Record<string, string>; withRequestId?: boolean; quiet?: boolean } = {},
 ) {
   const headers: Record<string, string> = { authorization: `Bearer ${tokenFor('driver', { personId: person })}` };
-  if (method === 'POST' || options.withRequestId === true) {
+  if (method !== 'GET' || options.withRequestId === true) {
     headers[REQUEST_ID_HEADER] = nextRequestId();
   }
   const request: HttpRequest = {
     method,
-    path,
+    path: pathWith(path, { ...options.query, ...(options.body as Record<string, unknown> | undefined) }),
     query: options.query ?? {},
     headers,
     address: TEST_ADDRESS,
@@ -100,7 +102,7 @@ interface TicketBody {
 }
 
 async function park(person: string, carRef: string, siteId: string): Promise<string> {
-  const opened = await send(`${person} scans the entry sign at ${siteId}`, 'POST', '/tickets/open', person, {
+  const opened = await send(`${person} scans the entry sign at ${siteId}`, 'POST', '/tickets', person, {
     body: { siteId, carRef, entryCode: `entry-${siteId}` },
   });
   expectThat(opened.status === 201, `${person}: ticket opened at ${clockText()}`);
@@ -108,7 +110,7 @@ async function park(person: string, carRef: string, siteId: string): Promise<str
 }
 
 async function leave(person: string, ticketId: string, siteId: string) {
-  return send(`${person} scans the exit sign`, 'POST', '/tickets/close', person, { body: { ticketId, exitCode: `exit-${siteId}` } });
+  return send(`${person} scans the exit sign`, 'POST', '/tickets/:ticketId/closure', person, { body: { ticketId, exitCode: `exit-${siteId}` } });
 }
 
 async function main(): Promise<void> {
@@ -141,9 +143,9 @@ async function main(): Promise<void> {
   hoursLater(1);
   const saraExit = await leave('driver-sara', sara, 'site-2');
   expectThat(saraExit.status === 200 && bodyOf<TicketBody>(saraExit).ticket.fee === 12, 'Fee for 1 started hour at site-2 = 12 EGP');
-  const saraPay = await send('Pay in the app', 'POST', '/payments/app', 'driver-sara', { body: { ticketId: sara } });
+  const saraPay = await send('Pay in the app', 'POST', '/payments', 'driver-sara', { body: { ticketId: sara } });
   expectThat(saraPay.status === 402 && bodyOf<{ error: string }>(saraPay).error === 'declined', 'The provider declined: the driver is told "declined" (HTTP 402)');
-  const saraStatus = await send('Ticket status after the declined payment', 'GET', '/tickets/status', 'driver-sara', { query: { ticketId: sara } });
+  const saraStatus = await send('Ticket status after the declined payment', 'GET', '/tickets/:ticketId', 'driver-sara', { query: { ticketId: sara } });
   expectThat(bodyOf<TicketBody>(saraStatus).ticket.paymentStatus === 'unpaid', 'The ticket stays unpaid (nothing is guessed, nothing is lost)');
   note('The fake payment provider is scripted by the last digit of the amount: ...1 paid, ...2 declined, ...3 pending.');
 
@@ -151,9 +153,9 @@ async function main(): Promise<void> {
   scene(4, 'Omar leaves site-3 (13 EGP). The provider answers "pending": the app says "pay later or pay cash"');
   const omarExit = await leave('driver-omar', omar, 'site-3');
   expectThat(omarExit.status === 200 && bodyOf<TicketBody>(omarExit).ticket.fee === 13, 'Fee for 1 started hour at site-3 = 13 EGP');
-  const omarPay = await send('Pay in the app', 'POST', '/payments/app', 'driver-omar', { body: { ticketId: omar } });
+  const omarPay = await send('Pay in the app', 'POST', '/payments', 'driver-omar', { body: { ticketId: omar } });
   expectThat(omarPay.status === 202, 'A pending answer is recorded and polled later, never guessed (HTTP 202)');
-  const omarAgain = await send('Omar taps "pay" again right away', 'POST', '/payments/app', 'driver-omar', { body: { ticketId: omar } });
+  const omarAgain = await send('Omar taps "pay" again right away', 'POST', '/payments', 'driver-omar', { body: { ticketId: omar } });
   expectThat(omarAgain.status === 409, 'A ticket with a pending payment takes no second charge');
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -163,13 +165,13 @@ async function main(): Promise<void> {
   const amiraTicket = bodyOf<TicketBody>(amiraExit).ticket;
   expectThat(amiraExit.status === 200 && amiraTicket.fee === 25, 'Fee = 25 EGP, computed by the server (Committee Prices module only)');
   expectThat(amiraTicket.closedAt === clock.now().toISOString(), 'The exit time is frozen at the server clock, not at the phone');
-  const stolen = await send("Karim tries to pay Amira's ticket", 'POST', '/payments/app', 'driver-karim', { body: { ticketId: amira } });
+  const stolen = await send("Karim tries to pay Amira's ticket", 'POST', '/payments', 'driver-karim', { body: { ticketId: amira } });
   expectThat(stolen.status === 403, "Nobody can pay or touch someone else's ticket");
-  const amiraPay = await send('Amira pays in the app', 'POST', '/payments/app', 'driver-amira', { body: { ticketId: amira } });
+  const amiraPay = await send('Amira pays in the app', 'POST', '/payments', 'driver-amira', { body: { ticketId: amira } });
   expectThat(amiraPay.status === 201 && bodyOf<{ payment: { state: string } }>(amiraPay).payment.state === 'paid', 'Payment recorded as paid');
-  const paidAgain = await send('Amira taps "pay" a second time (a new request)', 'POST', '/payments/app', 'driver-amira', { body: { ticketId: amira } });
+  const paidAgain = await send('Amira taps "pay" a second time (a new request)', 'POST', '/payments', 'driver-amira', { body: { ticketId: amira } });
   expectThat(paidAgain.status === 409 && bodyOf<{ error: string }>(paidAgain).error === 'nothing to pay', 'Nothing to pay: a ticket cannot be charged twice');
-  const receipt = await send('Amira opens her receipt (showing a plate is a logged, role-checked read)', 'GET', '/tickets/receipt', 'driver-amira', {
+  const receipt = await send('Amira opens her receipt (showing a plate is a logged, role-checked read)', 'GET', '/tickets/:ticketId/receipt', 'driver-amira', {
     query: { ticketId: amira },
     withRequestId: true,
   });
@@ -199,7 +201,7 @@ async function main(): Promise<void> {
     ['driver-sara', sara],
     ['driver-omar', omar],
   ] as const) {
-    const status = await send('', 'GET', '/tickets/status', person, { query: { ticketId }, quiet: true });
+    const status = await send('', 'GET', '/tickets/:ticketId', person, { query: { ticketId }, quiet: true });
     const ticket = bodyOf<{ ticket: { siteId: string; openedAt: string; closedAt: string; fee: number; paymentStatus: string } }>(status).ticket;
     rows.push([person, ticket.siteId, ticket.openedAt.slice(11, 16), ticket.closedAt.slice(11, 16), money(ticket.fee), ticket.paymentStatus]);
   }

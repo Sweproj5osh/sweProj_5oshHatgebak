@@ -21,7 +21,7 @@ const audit = (app: Awaited<ReturnType<typeof application>>['app']) => app.audit
 describe('assisted tickets through the entry point', () => {
   it('lets an attendant open one, with one audit entry naming the attendant and the photo', async () => {
     const { app } = await application();
-    const response = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
+    const response = await app.handle(writeRequest('/assisted-tickets', 'attendant', 'assisted-request-1', openBody));
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ ticket: { assisted: true, driverRef: 'walk-in-driver' } });
     const rows = await audit(app);
@@ -32,14 +32,14 @@ describe('assisted tickets through the entry point', () => {
 
   it('does not let a driver call it', async () => {
     const { app } = await application();
-    const response = await app.handle(writeRequest('/tickets/open-assisted', 'driver', 'assisted-request-1', openBody));
+    const response = await app.handle(writeRequest('/assisted-tickets', 'driver', 'assisted-request-1', openBody));
     expect(response.status).toBe(403);
     expect(await audit(app)).toHaveLength(0);
   });
 
   it('refuses an attendant whose session is bound to another site, and leaves no audit entry', async () => {
     const { app } = await application({ 'attendant-1': 'site-9' });
-    const response = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
+    const response = await app.handle(writeRequest('/assisted-tickets', 'attendant', 'assisted-request-1', openBody));
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ error: 'attendant not clocked in at this site' });
     expect(await audit(app)).toHaveLength(0);
@@ -47,20 +47,20 @@ describe('assisted tickets through the entry point', () => {
 
   it('refuses an attendant who has not clocked in anywhere', async () => {
     const { app } = await application({});
-    const response = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
+    const response = await app.handle(writeRequest('/assisted-tickets', 'attendant', 'assisted-request-1', openBody));
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ error: 'attendant not clocked in at this site' });
   });
 
   it('closes it with one more audit entry and one "ticket closed" event, and refuses a wrong car without either', async () => {
     const { app, clock } = await application();
-    const opened = await app.handle(writeRequest('/tickets/open-assisted', 'attendant', 'assisted-request-1', openBody));
+    const opened = await app.handle(writeRequest('/assisted-tickets', 'attendant', 'assisted-request-1', openBody));
     const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;
     clock.advanceByMilliseconds(2 * 60 * 60 * 1000);
-    const wrongCar = await app.handle(writeRequest('/tickets/close-assisted', 'attendant', 'assisted-close-1', { ticketId, carRef: 'car-other', exitCode: 'exit-site-1', photoId: 'photo-2' }));
+    const wrongCar = await app.handle(writeRequest('/assisted-tickets/:ticketId/closure', 'attendant', 'assisted-close-1', { ticketId, carRef: 'car-other', exitCode: 'exit-site-1', photoId: 'photo-2' }));
     expect(wrongCar.status).toBe(409);
     expect(await app.outbox.undelivered()).toHaveLength(0);
-    const closed = await app.handle(writeRequest('/tickets/close-assisted', 'attendant', 'assisted-close-2', { ticketId, carRef: 'car-a', exitCode: 'exit-site-1', photoId: 'photo-2' }));
+    const closed = await app.handle(writeRequest('/assisted-tickets/:ticketId/closure', 'attendant', 'assisted-close-2', { ticketId, carRef: 'car-a', exitCode: 'exit-site-1', photoId: 'photo-2' }));
     expect(closed.status).toBe(200);
     expect(closed.body).toMatchObject({ ticket: { state: 'closed', fee: 15 } });
     expect((await audit(app)).map((row) => row.operation)).toEqual(['ticketing.openAssistedTicket', 'ticketing.closeAssistedTicket']);
@@ -69,7 +69,7 @@ describe('assisted tickets through the entry point', () => {
 
   it('does not let a driver call the assisted close', async () => {
     const { app } = await application();
-    const response = await app.handle(writeRequest('/tickets/close-assisted', 'driver', 'assisted-close-1', { ticketId: 'x', carRef: 'car-a', exitCode: 'exit-site-1', photoId: '' }));
+    const response = await app.handle(writeRequest('/assisted-tickets/:ticketId/closure', 'driver', 'assisted-close-1', { ticketId: 'x', carRef: 'car-a', exitCode: 'exit-site-1', photoId: '' }));
     expect(response.status).toBe(403);
   });
 });

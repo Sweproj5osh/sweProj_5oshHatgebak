@@ -8,6 +8,7 @@
  */
 import type { HttpMethod, HttpResponse } from '../../server/shared/operation-contract';
 import { REQUEST_ID_HEADER, type RequestId } from '../../server/shared/request-id';
+import { pathWith } from './route-path';
 import { asRecord, type ServerAnswer } from './server-answer';
 
 /** What the app sends: the same plain data the entry point's HTTP adapter builds from a Node request. */
@@ -86,7 +87,10 @@ export class ServerCall {
     };
   }
 
-  private async send(request: ServerRequest): Promise<ServerAnswer> {
+  /** The path may be a route template (ADR-22); its `:name` segments are filled from the body or query the call carries. */
+  private async send(template: ServerRequest): Promise<ServerAnswer> {
+    const values = { ...template.query, ...(isRecord(template.body) ? template.body : {}) };
+    const request = { ...template, path: pathWith(template.path, values) };
     const response = await this.answerOf(request);
     if (response.status >= FIRST_REFUSAL_STATUS) {
       throw new ServerRefusedError(response.status, refusalWordOf(response));
@@ -119,6 +123,10 @@ export function asTransportFailureIfServerFailed(error: unknown): never {
 function refusalWordOf(response: HttpResponse): string {
   const error = asRecord(response.body)['error'];
   return typeof error === 'string' ? error : `request refused with status ${response.status}`;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function describe(error: unknown): string {

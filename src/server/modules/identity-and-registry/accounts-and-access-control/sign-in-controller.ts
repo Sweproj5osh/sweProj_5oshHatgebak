@@ -5,11 +5,11 @@ import { createAccountsStores, type AccountsAndAccessControl, type SignedIn, typ
 import { hashOfCode, minutesAfter, SIGN_IN_POLICY } from './domain/one-time-code';
 import { seedPerson } from './controller-support';
 
-export const REQUEST_SIGN_IN_CODE_PATH = '/sign-in/code';
+export const REQUEST_SIGN_IN_CODE_PATH = '/sign-in-codes';
 
-export const SIGN_IN_PATH = '/sign-in';
+export const SIGN_IN_PATH = '/sessions';
 
-export const SIGN_IN_WITH_SECOND_STEP_PATH = '/sign-in/committee';
+export const SIGN_IN_WITH_SECOND_STEP_PATH = '/committee-sessions';
 
 /** The one public sign-in operation name (F13), served at two paths: the phone and code, or those plus the committee's password. */
 const SIGN_IN_OPERATION = 'signIn';

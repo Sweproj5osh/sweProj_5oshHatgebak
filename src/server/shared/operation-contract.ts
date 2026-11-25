@@ -10,7 +10,7 @@ import type { RequestId } from './request-id';
 import type { TableAccess, Transaction } from './unit-of-work';
 
 /** Plain data crossing the boundary between the HTTP adapter and the pipeline. No framework types. */
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface HttpResponse {
   readonly status: number;

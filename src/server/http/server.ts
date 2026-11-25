@@ -3,7 +3,7 @@ import type { RequestHandler } from './handle-request';
 import type { HttpMethod } from '../shared/operation-contract';
 import type { HttpRequest } from './http';
 
-const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
+const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** The humble adapter between Node's http module and the pipeline: parse, hand over, serialise. No rules here. */
 export function createHttpServer(handle: RequestHandler): Server {

@@ -52,11 +52,11 @@ describe('ticket writes live inside the caller\'s unit of work (P1)', () => {
       moduleDependencies: world.dependencies,
       additionalOperations: [paymentThatFailsAfterMarkingPaid(world.payments)],
     });
-    const opened = await app.handle(writeRequest('/tickets/open', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
+    const opened = await app.handle(writeRequest('/tickets', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
     expect(opened.status, JSON.stringify(opened.body)).toBe(201);
     const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;
     world.clock.advanceByMilliseconds(HOUR);
-    await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', { ticketId, exitCode: 'exit-site-1' }));
+    await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', { ticketId, exitCode: 'exit-site-1' }));
 
     const failed = await app.handle(writeRequest('/test/failing-payment', 'driver', 'payment-request-1', { ticketId }));
     expect(failed.status).toBe(502);

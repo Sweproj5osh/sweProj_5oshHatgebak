@@ -32,7 +32,7 @@ function asPerson(request: HttpRequest, personId: PersonId, role: Role): HttpReq
 }
 
 function plateLookUp(query: Record<string, string>): HttpRequest {
-  return asPerson(loggedReadRequest('/plates/look-up', 'inspector', nextRequestId(), query), inspector, 'inspector');
+  return asPerson(loggedReadRequest('/cars/:carRef/plate', 'inspector', nextRequestId(), query), inspector, 'inspector');
 }
 
 function valueOf<Value>(outcome: { ok: true; value: Value } | { ok: false; error: string }): Value {
@@ -148,7 +148,7 @@ describe('A1 sign-in through the entry point (P3, ADR-15)', () => {
 
   it('needs a password as the second step for a member, set through the audited write that drops the password (A15, P2)', async () => {
     const member = valueOf(await application.moduleDependencies.accounts.personalData.createPerson(chair, 'member', '01022222222', 'A Member'));
-    const set = await application.handle(asPerson(writeRequest('/committee/password', 'chair', nextRequestId(), { personId: member, password: 'correct horse battery staple' }), chair, 'chair'));
+    const set = await application.handle(asPerson(writeRequest('PUT /people/:personId/committee-password', 'chair', nextRequestId(), { personId: member, password: 'correct horse battery staple' }), chair, 'chair'));
     expect(set.status).toBe(200);
     const code = await codeSentTo('+201022222222');
     expect(await signIn('+201022222222', code)).toEqual({ status: 401, body: { error: 'second step required' } });
@@ -205,14 +205,14 @@ describe('A4 through the entry point', () => {
 
   it('refuses the look-up without a request id, and outside the inspector\'s scope, each with no audit entry', async () => {
     await parkTheCarAt(siteId);
-    const withoutId = await application.handle(readRequest('/plates/look-up', tokenFor('inspector', { personId: inspector }), { carRef, siteId }));
+    const withoutId = await application.handle(readRequest('/cars/:carRef/plate', tokenFor('inspector', { personId: inspector }), { carRef, siteId }));
     const elsewhere = await application.handle(plateLookUp({ carRef, siteId: 'site-x' }));
     expect([withoutId.status, elsewhere.status]).toEqual([400, 403]);
     expect(await auditOperationsSeenBy(driver, 'driver')).toEqual([]);
   });
 
   it('lets a driver erase themself, with one audit entry that holds no personal data', async () => {
-    const response = await application.handle(asPerson(writeRequest('/people/erasure', 'driver', nextRequestId(), { personId: driver }), driver, 'driver'));
+    const response = await application.handle(asPerson(writeRequest('/erasures', 'driver', nextRequestId(), { personId: driver }), driver, 'driver'));
     expect(response.status).toBe(200);
     const entries = await application.audit.readByScope({ personId: driver, role: 'driver' });
     expect(entries.map((entry) => entry.operation)).toEqual(['personalData.erase']);

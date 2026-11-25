@@ -20,7 +20,7 @@ function openAssisted(opening: TicketOpening): WriteOperation {
     kind: 'write',
     name: 'ticketing.openAssistedTicket',
     method: 'POST',
-    path: '/tickets/open-assisted',
+    path: '/assisted-tickets',
     allowedRoles: ['attendant'],
     bodySchema: { fields: { siteId: 'string', carRef: 'string', driverRef: 'string', entryCode: 'string', photoId: 'string' } },
     examples: {
@@ -47,7 +47,7 @@ function closeAssisted(closing: TicketClosing, seedSampleTicket: SampleSeeder): 
     kind: 'write',
     name: 'ticketing.closeAssistedTicket',
     method: 'POST',
-    path: '/tickets/close-assisted',
+    path: '/assisted-tickets/:ticketId/closure',
     allowedRoles: ['attendant'],
     bodySchema: { fields: { ticketId: 'string', carRef: 'string', exitCode: 'string', photoId: 'string' } },
     examples: {

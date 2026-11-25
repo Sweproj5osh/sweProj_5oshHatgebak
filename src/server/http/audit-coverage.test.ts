@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pathWith } from '../../apps/shared-client/route-path';
 import { refuse, respond, type PublicWriteOperation, type ReadOperation, type TelemetryOperation, type WriteOperation } from '../shared/operation-contract';
 import type { InMemoryApplication } from '../composition/compose-server';
 import type { HttpRequest } from './http';
@@ -80,7 +81,7 @@ describe('F5 ignores telemetry operations explicitly: a telemetry post leaves no
     it(`${operation.name}: a valid reading is accepted with 204 and leaves zero audit rows`, async () => {
       const application = testApplication({ additionalOperations: [reading] });
       await operation.fixture?.(application.database);
-      const response = await application.handle(telemetryRequest(operation.path, firstAllowedRole(operation), operation.examples.valid));
+      const response = await application.handle(telemetryRequest(`${operation.method} ${pathWith(operation.path, operation.examples.valid)}`, firstAllowedRole(operation), operation.examples.valid));
       expect(response.status).toBe(204);
       expect(await application.audit.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(0);
     });
@@ -133,11 +134,17 @@ function fixtureOf(application: InMemoryApplication, operation: AuditedWrite): A
   return composedHere !== undefined && 'fixture' in composedHere ? composedHere.fixture : undefined;
 }
 
+/**
+ * The operation's own method and route (ADR-22), its path filled from the sample body, or from the valid sample for a
+ * value the invalid sample lacks: a request the operation refuses must reach the operation.
+ */
 function sampleRequest(operation: AuditedWrite, requestId: string, body: unknown): HttpRequest {
+  const values = { ...operation.examples.valid, ...(typeof body === 'object' && body !== null ? body : {}) };
+  const endpoint = `${operation.method} ${pathWith(operation.path, values)}`;
   if (operation.kind === 'public') {
-    return publicRequest(operation.path, requestId, body);
+    return publicRequest(endpoint, requestId, body);
   }
-  return writeRequest(operation.path, firstAllowedRole(operation), requestId, body);
+  return writeRequest(endpoint, firstAllowedRole(operation), requestId, body);
 }
 
 function firstAllowedRole(operation: WriteOperation | TelemetryOperation) {

@@ -23,8 +23,8 @@ export function relabelDistrict(registry: SiteRegistry): WriteOperation {
   return {
     kind: 'write',
     name: 'sites.relabelDistrict',
-    method: 'POST',
-    path: '/districts/label',
+    method: 'PATCH',
+    path: '/districts/:districtId',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { districtId: 'string', label: 'string' } },
     examples: { valid: { districtId: SAMPLE.districtId, label: 'Zamalek North' }, invalid: {} },

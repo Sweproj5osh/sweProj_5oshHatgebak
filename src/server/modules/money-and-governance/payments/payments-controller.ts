@@ -33,7 +33,7 @@ export function payInAppOperation(payments: LedgerFactory): WriteOperation {
     kind: 'write',
     name: PAY_IN_APP_OPERATION,
     method: 'POST',
-    path: '/payments/app',
+    path: '/payments',
     allowedRoles: ['driver'],
     bodySchema: { fields: { ticketId: 'string' } },
     examples: { valid: { ticketId: 'ticket-1' }, invalid: {} },

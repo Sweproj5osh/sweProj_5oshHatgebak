@@ -18,7 +18,8 @@ export function assignmentEndpoints(
   return {
     assignAttendant: assignmentWrite({
       name: 'assignments.assignAttendant',
-      path: '/assignments/attendants',
+      method: 'POST',
+      path: '/attendant-assignments',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string', siteId: 'string', shiftId: 'string' },
       example: { attendantId: SAMPLE.attendant, siteId: SAMPLE.siteId, shiftId: 'morning' },
@@ -29,7 +30,8 @@ export function assignmentEndpoints(
     }),
     changeShift: assignmentWrite({
       name: 'assignments.changeShift',
-      path: '/assignments/attendants/shift',
+      method: 'PATCH',
+      path: '/attendant-assignments/:attendantId',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string', shiftId: 'string' },
       example: { attendantId: SAMPLE.attendant, shiftId: 'evening' },
@@ -40,7 +42,8 @@ export function assignmentEndpoints(
     }),
     releaseAttendant: assignmentWrite({
       name: 'assignments.releaseAttendant',
-      path: '/assignments/attendants/release',
+      method: 'POST',
+      path: '/attendant-releases',
       allowedRoles: ['member', 'chair'],
       fields: { attendantId: 'string' },
       example: { attendantId: SAMPLE.attendant },
@@ -51,7 +54,8 @@ export function assignmentEndpoints(
     }),
     assignInspector: assignmentWrite({
       name: 'assignments.assignInspector',
-      path: '/assignments/inspectors',
+      method: 'PUT',
+      path: '/inspector-assignments/:inspectorId',
       allowedRoles: ['member', 'chair'],
       fields: { inspectorId: 'string', zoneId: 'string' },
       example: { inspectorId: SAMPLE.inspector, zoneId: SAMPLE.zoneId },
@@ -65,7 +69,8 @@ export function assignmentEndpoints(
     }),
     appointMember: assignmentWrite({
       name: 'assignments.appointMember',
-      path: '/assignments/members',
+      method: 'PUT',
+      path: '/member-appointments/:memberId',
       allowedRoles: ['chair'],
       fields: { memberId: 'string', districtId: 'string' },
       example: { memberId: SAMPLE.member, districtId: SAMPLE.districtId },
@@ -82,6 +87,7 @@ export function assignmentEndpoints(
 
 interface AssignmentWriteSpec {
   readonly name: string;
+  readonly method: WriteOperation['method'];
   readonly path: string;
   readonly allowedRoles: readonly Role[];
   readonly fields: BodySchema['fields'];
@@ -98,7 +104,7 @@ function assignmentWrite(spec: AssignmentWriteSpec): WriteOperation {
   return {
     kind: 'write',
     name: spec.name,
-    method: 'POST',
+    method: spec.method,
     path: spec.path,
     allowedRoles: spec.allowedRoles,
     bodySchema: { fields: spec.fields },

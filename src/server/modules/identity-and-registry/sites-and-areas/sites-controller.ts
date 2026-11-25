@@ -33,8 +33,8 @@ export function replaceSiteOutline(registry: SiteRegistry): WriteOperation {
   return {
     kind: 'write',
     name: 'sites.replaceOutline',
-    method: 'POST',
-    path: '/sites/outline',
+    method: 'PUT',
+    path: '/sites/:siteId/outline',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { siteId: 'string', outline: { list: 'point' } } },
     examples: { valid: { siteId: SAMPLE.siteId, outline: EXAMPLE_OUTLINE }, invalid: { siteId: SAMPLE.siteId } },
@@ -52,7 +52,7 @@ export function changeCapacity(registry: SiteRegistry): WriteOperation {
     kind: 'write',
     name: 'sites.changeCapacity',
     method: 'POST',
-    path: '/sites/capacity',
+    path: '/sites/:siteId/capacity-changes',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { siteId: 'string', capacity: 'number', reason: 'string' } },
     examples: { valid: { siteId: SAMPLE.siteId, capacity: 8, reason: 'Two spaces repainted' }, invalid: { siteId: SAMPLE.siteId, capacity: 8 } },
@@ -78,8 +78,8 @@ export function setWeeklyHours(registry: SiteRegistry): WriteOperation {
   return {
     kind: 'write',
     name: 'sites.setWeeklyHours',
-    method: 'POST',
-    path: '/sites/hours',
+    method: 'PUT',
+    path: '/sites/:siteId/opening-hours',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { siteId: 'string', hours: 'string' } },
     examples: { valid: { siteId: SAMPLE.siteId, hours: 'daily 08:00-23:00' }, invalid: { siteId: SAMPLE.siteId } },
@@ -107,7 +107,7 @@ export function declareSpecialEvent(registry: SiteRegistry): WriteOperation {
     kind: 'write',
     name: 'sites.declareSpecialEvent',
     method: 'POST',
-    path: '/sites/special-events',
+    path: '/sites/:siteId/special-events',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { siteId: 'string', kind: 'string', from: 'localDateTime', until: 'localDateTime', reason: 'string' } },
     examples: {
@@ -148,7 +148,7 @@ export function readSiteStatus(registry: SiteRegistry, clock: Clock): ReadOperat
     kind: 'read',
     name: 'sites.statusNow',
     method: 'GET',
-    path: '/sites/status',
+    path: '/sites/:siteId/status',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
     scope: 'open',
     async handle({ query }) {
@@ -164,7 +164,7 @@ export function readNearbySites(registry: SiteRegistry): ReadOperation {
     kind: 'read',
     name: 'sites.nearby',
     method: 'GET',
-    path: '/sites/nearby',
+    path: '/sites',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
     scope: 'open',
     async handle({ query }) {
@@ -181,7 +181,7 @@ export function readCapacityHistory(registry: SiteRegistry): ReadOperation {
     kind: 'read',
     name: 'sites.capacityHistory',
     method: 'GET',
-    path: '/sites/capacity-history',
+    path: '/sites/:siteId/capacity-changes',
     allowedRoles: ['inspector', 'member', 'chair'],
     scope: 'staff-scoped',
     async handle({ query }) {
@@ -199,7 +199,7 @@ export function readSiteDetails(registry: SiteRegistry): ReadOperation {
     kind: 'read',
     name: 'sites.details',
     method: 'GET',
-    path: '/sites/details',
+    path: '/sites/:siteId',
     allowedRoles: ['driver', 'attendant', 'inspector', 'member', 'chair'],
     scope: 'open',
     async handle({ query }) {

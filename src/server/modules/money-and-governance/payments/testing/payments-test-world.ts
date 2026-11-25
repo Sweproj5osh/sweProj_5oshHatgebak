@@ -11,7 +11,7 @@ import { createFakePaymentGateway, createPayments, type FakePaymentGateway, type
  * module composed over them. Test files add only what the entry point needs (the composed application) on top. This
  * file is imported by tests alone; it holds no business rule, only the stand-in's bookkeeping.
  */
-export const PAY_PATH = '/payments/app';
+export const PAY_PATH = '/payments';
 export const DRIVER: PersonId = 'driver-1';
 export const CAR: CarReference = 'car-1';
 export const TEST_START = new Date('2026-11-06T10:05:00Z');

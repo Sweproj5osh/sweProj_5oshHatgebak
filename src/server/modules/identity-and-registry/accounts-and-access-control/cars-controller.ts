@@ -51,7 +51,7 @@ export function lookUpPlate(accounts: AccountsAndAccessControl): ReadOperation {
     kind: 'read',
     name: 'personalData.lookUpPlate',
     method: 'GET',
-    path: '/plates/look-up',
+    path: '/cars/:carRef/plate',
     allowedRoles: ['inspector', 'member', 'chair'],
     scope: 'staff-scoped',
     logged: true,

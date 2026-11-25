@@ -42,7 +42,7 @@ describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
     expect(requests).toEqual([
       {
         method: 'POST',
-        path: '/payments/app',
+        path: '/payments',
         query: {},
         headers: { authorization: 'Bearer driver-token', [REQUEST_ID_HEADER]: 'request-0001' },
         body: { ticketId: 'ticket-1' },
@@ -86,7 +86,7 @@ describe('D4 data layer: pay and receipt over the HTTP entry point', () => {
     expect(requests).toEqual([
       {
         method: 'GET',
-        path: '/tickets/receipt',
+        path: '/tickets/ticket-1/receipt',
         query: { ticketId: 'ticket-1' },
         headers: { authorization: 'Bearer driver-token', [REQUEST_ID_HEADER]: 'request-0002' },
       },

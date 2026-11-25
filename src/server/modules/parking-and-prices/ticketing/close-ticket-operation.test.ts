@@ -11,7 +11,7 @@ async function application(options: Parameters<typeof buildTicketingWorld>[1] = 
     clock: world.clock,
     moduleDependencies: world.dependencies,
   });
-  const opened = await app.handle(writeRequest('/tickets/open', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
+  const opened = await app.handle(writeRequest('/tickets', 'driver', 'open-request-1', { siteId: 'site-1', carRef: 'car-a', entryCode: 'entry-site-1' }));
   const ticketId = (opened.body as { ticket: { ticketId: string } }).ticket.ticketId;
   world.clock.advanceByMilliseconds(2 * 60 * 60 * 1000);
   return { ...world, app, ticketId };
@@ -26,7 +26,7 @@ function auditRows(app: Awaited<ReturnType<typeof application>>['app']) {
 describe('closing a ticket through the entry point', () => {
   it('closes the ticket and leaves one more audit entry and one "ticket closed" event', async () => {
     const { app, ticketId } = await application();
-    const response = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId)));
+    const response = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', closeBody(ticketId)));
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ ticket: { state: 'closed', fee: 15 } });
     const rows = await auditRows(app);
@@ -37,7 +37,7 @@ describe('closing a ticket through the entry point', () => {
 
   it('writes a failed resident lookup into the audit entry\'s reason, and charges the normal fee', async () => {
     const { app, ticketId } = await application({ residentLookupFails: true });
-    const response = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId)));
+    const response = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', closeBody(ticketId)));
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ ticket: { fee: 15 } });
     const closeEntry = (await auditRows(app)).find((row) => row.operation === 'ticketing.closeTicket');
@@ -46,7 +46,7 @@ describe('closing a ticket through the entry point', () => {
 
   it('leaves no audit entry and no event for a refused close', async () => {
     const { app, ticketId } = await application();
-    const response = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId, 'exit-site-2')));
+    const response = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', closeBody(ticketId, 'exit-site-2')));
     expect(response.status).toBe(403);
     expect((await auditRows(app)).map((row) => row.operation)).toEqual(['ticketing.openTicket']);
     expect(await app.outbox.undelivered()).toHaveLength(0);
@@ -54,8 +54,8 @@ describe('closing a ticket through the entry point', () => {
 
   it('answers a repeated request id with the same response, one audit entry and one event', async () => {
     const { app, ticketId } = await application();
-    const first = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId)));
-    const second = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', closeBody(ticketId)));
+    const first = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', closeBody(ticketId)));
+    const second = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', closeBody(ticketId)));
     expect(second).toEqual(first);
     expect((await auditRows(app)).filter((row) => row.operation === 'ticketing.closeTicket')).toHaveLength(1);
     expect(await app.outbox.undelivered()).toHaveLength(1);
@@ -65,7 +65,7 @@ describe('closing a ticket through the entry point', () => {
     const { app, ticketId, store } = await application();
     const response = await app.handle({
       method: 'POST',
-      path: '/tickets/close',
+      path: `/tickets/${ticketId}/closure`,
       query: {},
       headers: { authorization: `Bearer ${tokenFor('driver', { personId: 'driver-2' })}`, [REQUEST_ID_HEADER]: 'close-request-9' },
       body: closeBody(ticketId),
@@ -76,7 +76,7 @@ describe('closing a ticket through the entry point', () => {
 
   it('rejects a body that carries a time', async () => {
     const { app, ticketId } = await application();
-    const response = await app.handle(writeRequest('/tickets/close', 'driver', 'close-request-1', { ...closeBody(ticketId), closedAt: '2026-11-09T09:00:00Z' }));
+    const response = await app.handle(writeRequest('/tickets/:ticketId/closure', 'driver', 'close-request-1', { ...closeBody(ticketId), closedAt: '2026-11-09T09:00:00Z' }));
     expect(response.status).toBe(400);
   });
 });

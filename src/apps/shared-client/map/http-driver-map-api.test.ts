@@ -28,7 +28,7 @@ describe('D2 data layer: the map reads Lino\'s sites.nearby and displays the ban
     const sites = await api.nearbySites({ latitude: 30.06, longitude: 31.22 }, 1500);
 
     expect(requests).toEqual([
-      { method: 'GET', path: '/sites/nearby', query: { latitude: '30.06', longitude: '31.22', radius: '1500' }, headers: { authorization: 'Bearer driver-token' } },
+      { method: 'GET', path: '/sites', query: { latitude: '30.06', longitude: '31.22', radius: '1500' }, headers: { authorization: 'Bearer driver-token' } },
     ]);
     expect(sites).toEqual([SITE_WITH_FEE, SITE_WITHOUT_FEE]);
   });

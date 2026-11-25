@@ -26,7 +26,7 @@ async function oneRun(): Promise<number> {
       const number = String(index + 1).padStart(2, '0');
       return app.handle({
         method: 'POST',
-        path: '/tickets/open',
+        path: '/tickets',
         query: {},
         headers: { authorization: `Bearer ${tokenFor('driver', { personId: `driver-${number}` })}`, [REQUEST_ID_HEADER]: `gap-request-${number}` },
         address: TEST_ADDRESS,

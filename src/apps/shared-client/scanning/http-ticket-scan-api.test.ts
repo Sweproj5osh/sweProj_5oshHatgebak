@@ -29,7 +29,7 @@ async function buildStack(drops: AnswerDrops = { remaining: 0 }, moduleDependenc
   const driverEntries = async () => (await app.audit.readByScope({ personId: DRIVER_OF_THE_TOKEN, role: 'driver' })).map((entry) => entry.operation);
   /** Counted through Karim's open read `ticketing.freeSpaces`, so the count is the server's (Rule G). */
   const openTicketsAt = async (siteId: string) => {
-    const answer = await app.handle(readRequest('/tickets/free-spaces', tokenFor('driver'), { siteId }));
+    const answer = await app.handle(readRequest('/sites/:siteId/free-spaces', tokenFor('driver'), { siteId }));
     return STAND_IN_CAPACITY - Number((answer.body as { freeSpaces: number }).freeSpaces);
   };
   return { client, clock, driverEntries, openTicketsAt };

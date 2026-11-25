@@ -55,7 +55,7 @@ export function readLicenceStatus(module: LicensingAssignmentAttendance, authori
     kind: 'read',
     name: LICENCE_STATUS_OPERATION,
     method: 'GET',
-    path: '/licences/status',
+    path: '/attendants/:attendantId/licence',
     allowedRoles: ['inspector', 'member', 'chair'],
     scope: 'staff-scoped',
     async handle({ actor, query }) {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { composeInMemoryServer, type InMemoryApplication } from '../../../composition/compose-server';
 import type { HttpRequest } from '../../../http/http';
-import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../test-support/test-helpers';
+import { readRequest, requestLine, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../test-support/test-helpers';
 import type { DistrictId, PersonId, Role, SiteId } from '../../../shared/identifiers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
 import type { AccountsAndAccessControl } from '../accounts-and-access-control/index';
@@ -48,8 +48,7 @@ async function composedWorld(): Promise<ComposedWorld> {
 
 function post(path: string, personId: PersonId, role: Role, body: unknown): HttpRequest {
   return {
-    method: 'POST',
-    path,
+    ...requestLine(path, body, 'POST'),
     query: {},
     headers: {
       authorization: `Bearer ${tokenFor(role, { personId })}`,
@@ -62,7 +61,7 @@ function post(path: string, personId: PersonId, role: Role, body: unknown): Http
 
 /** A telemetry post (P7): token and body, no request id. */
 function reading(personId: PersonId, latitude: number, longitude: number): HttpRequest {
-  return { method: 'POST', path: '/attendance/location-readings', query: {}, headers: { authorization: `Bearer ${tokenFor('attendant', { personId })}` }, address: TEST_ADDRESS, body: { latitude, longitude } };
+  return { method: 'POST', path: '/location-readings', query: {}, headers: { authorization: `Bearer ${tokenFor('attendant', { personId })}` }, address: TEST_ADDRESS, body: { latitude, longitude } };
 }
 
 async function licensedAttendantAtSiteOne(): Promise<PersonId> {
@@ -81,7 +80,7 @@ describe('A12 through the entry point', () => {
   it('assigns an attendant with one audit entry the attendant and the district member can both read', async () => {
     const attendant = await createPerson('attendant');
     const response = await application.handle(
-      post('/assignments/attendants', world.memberOfDistrictOne, 'member', { attendantId: attendant, siteId: world.siteOne, shiftId: 'morning' }),
+      post('/attendant-assignments', world.memberOfDistrictOne, 'member', { attendantId: attendant, siteId: world.siteOne, shiftId: 'morning' }),
     );
     expect(response.status).toBe(200);
     const asAttendant = await application.audit.readByScope({ personId: attendant, role: 'attendant' });
@@ -92,15 +91,15 @@ describe('A12 through the entry point', () => {
 
   it('answers a second site with 409 "one site per attendant" and no audit entry', async () => {
     const attendant = await createPerson('attendant');
-    await application.handle(post('/assignments/attendants', world.chair, 'chair', { attendantId: attendant, siteId: world.siteOne, shiftId: 'morning' }));
-    const second = await application.handle(post('/assignments/attendants', world.chair, 'chair', { attendantId: attendant, siteId: world.siteTwo, shiftId: 'morning' }));
+    await application.handle(post('/attendant-assignments', world.chair, 'chair', { attendantId: attendant, siteId: world.siteOne, shiftId: 'morning' }));
+    const second = await application.handle(post('/attendant-assignments', world.chair, 'chair', { attendantId: attendant, siteId: world.siteTwo, shiftId: 'morning' }));
     expect(second).toEqual({ status: 409, body: { error: 'one site per attendant' } });
     expect(await application.audit.readByScope({ personId: world.chair, role: 'chair' })).toHaveLength(1);
   });
 
   it('keeps member appointments to the Chair in the permission table itself', async () => {
     const member = await createPerson('member');
-    const response = await application.handle(post('/assignments/members', world.memberOfDistrictOne, 'member', { memberId: member, districtId: world.districtOne }));
+    const response = await application.handle(post('PUT /member-appointments/:memberId', world.memberOfDistrictOne, 'member', { memberId: member, districtId: world.districtOne }));
     expect(response.status).toBe(403);
   });
 });
@@ -119,7 +118,7 @@ describe('A11 through the entry point', () => {
   it('answers the licence status of an attendant never licensed with 200, no state and an empty history (P23 #10)', async () => {
     const attendant = await createPerson('attendant');
     valueOf(await world.licensing.assignments.assignAttendantToSite(world.chair, attendant, world.siteOne, 'morning'));
-    const response = await application.handle(readRequest('/licences/status', tokenFor('chair', { personId: world.chair }), { attendantId: attendant, siteId: world.siteOne }));
+    const response = await application.handle(readRequest('/attendants/:attendantId/licence', tokenFor('chair', { personId: world.chair }), { attendantId: attendant, siteId: world.siteOne }));
     expect(response).toEqual({ status: 200, body: { attendantId: attendant, licenceId: null, state: null, history: [] } });
   });
 
@@ -128,15 +127,15 @@ describe('A11 through the entry point', () => {
     valueOf(await world.licensing.assignments.assignAttendantToSite(world.chair, elsewhere, world.siteTwo, 'morning'));
     const unassigned = await createPerson('attendant');
     const memberToken = tokenFor('member', { personId: world.memberOfDistrictOne });
-    const ownDistrictNamed = await application.handle(readRequest('/licences/status', memberToken, { attendantId: elsewhere, siteId: world.siteOne }));
-    const unassignedAttendant = await application.handle(readRequest('/licences/status', memberToken, { attendantId: unassigned, siteId: world.siteOne }));
-    const otherDistrictNamed = await application.handle(readRequest('/licences/status', memberToken, { attendantId: elsewhere, siteId: world.siteTwo }));
+    const ownDistrictNamed = await application.handle(readRequest('/attendants/:attendantId/licence', memberToken, { attendantId: elsewhere, siteId: world.siteOne }));
+    const unassignedAttendant = await application.handle(readRequest('/attendants/:attendantId/licence', memberToken, { attendantId: unassigned, siteId: world.siteOne }));
+    const otherDistrictNamed = await application.handle(readRequest('/attendants/:attendantId/licence', memberToken, { attendantId: elsewhere, siteId: world.siteTwo }));
     expect([ownDistrictNamed, unassignedAttendant]).toEqual([
       { status: 403, body: { error: 'not allowed here' } },
       { status: 403, body: { error: 'not allowed here' } },
     ]);
     expect(otherDistrictNamed.status).toBe(403);
-    expect((await application.handle(readRequest('/licences/status', tokenFor('chair', { personId: world.chair }), { attendantId: unassigned }))).status).toBe(200);
+    expect((await application.handle(readRequest('/attendants/:attendantId/licence', tokenFor('chair', { personId: world.chair }), { attendantId: unassigned }))).status).toBe(200);
   });
 });
 
@@ -145,15 +144,15 @@ describe('A13 and A14 through the entry point', () => {
     const attendant = await licensedAttendantAtSiteOne();
     const { entryCode, exitCode } = await world.registry.issueEntryAndExitCodes(world.siteOne);
     const siteTwoCodes = await world.registry.issueEntryAndExitCodes(world.siteTwo);
-    const wrongSite = await application.handle(post('/attendance/clock-in', attendant, 'attendant', { siteCode: siteTwoCodes.entryCode }));
+    const wrongSite = await application.handle(post('/attendances', attendant, 'attendant', { siteCode: siteTwoCodes.entryCode }));
     expect(wrongSite).toEqual({ status: 403, body: { error: 'wrong site' } });
-    const notClockedIn = await application.handle(post('/attendance/clock-out', attendant, 'attendant', { siteCode: exitCode }));
+    const notClockedIn = await application.handle(post('PATCH /attendances/current', attendant, 'attendant', { siteCode: exitCode }));
     expect(notClockedIn).toEqual({ status: 409, body: { error: 'not clocked in' } });
-    expect((await application.handle(post('/attendance/clock-in', attendant, 'attendant', { siteCode: entryCode }))).status).toBe(200);
-    const twice = await application.handle(post('/attendance/clock-in', attendant, 'attendant', { siteCode: entryCode }));
+    expect((await application.handle(post('/attendances', attendant, 'attendant', { siteCode: entryCode }))).status).toBe(200);
+    const twice = await application.handle(post('/attendances', attendant, 'attendant', { siteCode: entryCode }));
     expect(twice).toEqual({ status: 409, body: { error: 'already clocked in' } });
-    expect((await application.handle(post('/attendance/clock-out', attendant, 'attendant', { siteCode: exitCode }))).status).toBe(200);
-    const alreadyOut = await application.handle(post('/attendance/clock-out', attendant, 'attendant', { siteCode: exitCode }));
+    expect((await application.handle(post('PATCH /attendances/current', attendant, 'attendant', { siteCode: exitCode }))).status).toBe(200);
+    const alreadyOut = await application.handle(post('PATCH /attendances/current', attendant, 'attendant', { siteCode: exitCode }));
     expect(alreadyOut).toEqual({ status: 409, body: { error: 'already clocked out' } });
     const entries = await application.audit.readByScope({ personId: attendant, role: 'attendant' });
     expect(entries.map((entry) => entry.operation)).toEqual(['attendance.clockIn', 'attendance.clockOut']);
@@ -162,7 +161,7 @@ describe('A13 and A14 through the entry point', () => {
   it('takes a location reading as telemetry (P7): 204, no request id, no audit entry, only the distance kept', async () => {
     const attendant = await licensedAttendantAtSiteOne();
     const { entryCode } = await world.registry.issueEntryAndExitCodes(world.siteOne);
-    await application.handle(post('/attendance/clock-in', attendant, 'attendant', { siteCode: entryCode }));
+    await application.handle(post('/attendances', attendant, 'attendant', { siteCode: entryCode }));
     const response = await application.handle(reading(attendant, 30.0626 + 600 / 111_195, 31.2197));
     expect(response.status).toBe(204);
     const [shift] = await world.stores.attendance.all(application.database);
@@ -179,8 +178,8 @@ describe('A13 and A14 through the entry point', () => {
     const zoneOne = (await world.registry.locateSite(world.siteOne))?.zoneId ?? '';
     valueOf(await world.licensing.assignments.assignInspectorToZone(world.chair, inspectorOfZoneTwo, zoneTwo));
     const token = tokenFor('inspector', { personId: inspectorOfZoneTwo });
-    expect((await application.handle(readRequest('/attendance/off-site-flags', token, { zoneId: zoneOne }))).status).toBe(403);
-    expect(await application.handle(readRequest('/attendance/off-site-flags', token, { zoneId: zoneTwo }))).toEqual({ status: 200, body: { flags: [] } });
+    expect((await application.handle(readRequest('/off-site-flags', token, { zoneId: zoneOne }))).status).toBe(403);
+    expect(await application.handle(readRequest('/off-site-flags', token, { zoneId: zoneTwo }))).toEqual({ status: 200, body: { flags: [] } });
   });
 
   it('drops a reading from an attendant who is not clocked in, with 204 and nothing stored', async () => {

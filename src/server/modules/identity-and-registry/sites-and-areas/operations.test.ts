@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { composeInMemoryServer, type InMemoryApplication } from '../../../composition/compose-server';
 import type { HttpRequest } from '../../../http/http';
-import { readRequest, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../test-support/test-helpers';
+import { readRequest, requestLine, TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../../../test-support/test-helpers';
 import { FixedClock } from '../../../shared/clock';
 import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';
 import { REQUEST_ID_HEADER } from '../../../shared/request-id';
@@ -33,8 +33,7 @@ let requestCounter = 0;
 
 function post(path: string, personId: PersonId, role: Role, body: unknown, requestId = `request-${String(++requestCounter).padStart(4, '0')}`): HttpRequest {
   return {
-    method: 'POST',
-    path,
+    ...requestLine(path, body, 'POST'),
     query: {},
     headers: { authorization: `Bearer ${tokenFor(role, { personId })}`, [REQUEST_ID_HEADER]: requestId },
     address: TEST_ADDRESS,
@@ -81,7 +80,7 @@ describe('A6 through the entry point', () => {
 
   it('refuses a member writing in another district with 403 and leaves no audit entry', async () => {
     const districtTwo = valueOf(await world.registry.createDistrict(world.chair, 'Dokki'));
-    const response = await application.handle(post('/districts/label', memberOfDistrictOne, 'member', { districtId: districtTwo, label: 'Dokki West' }));
+    const response = await application.handle(post('PATCH /districts/:districtId', memberOfDistrictOne, 'member', { districtId: districtTwo, label: 'Dokki West' }));
     expect(response).toEqual({ status: 403, body: { error: 'not allowed here' } });
     expect(await application.audit.readByScope({ personId: world.chair, role: 'chair' })).toHaveLength(0);
   });
@@ -103,9 +102,9 @@ describe('A6 through the entry point', () => {
     const zoneTwo = valueOf(await world.registry.createZone(world.chair, districtTwo, 'Dokki zone 1'));
     const siteInDistrictTwo = valueOf(await world.registry.createSite(world.chair, zoneTwo, 'Tahrir Street', squareAround(30.0385, 31.2118), 8));
     const memberToken = tokenFor('member', { personId: memberOfDistrictOne });
-    expect((await application.handle(readRequest('/sites/capacity-history', memberToken, { siteId: siteInDistrictTwo }))).status).toBe(403);
+    expect((await application.handle(readRequest('/sites/:siteId/capacity-changes', memberToken, { siteId: siteInDistrictTwo }))).status).toBe(403);
     const siteInDistrictOne = await createSiteInDistrictOne();
-    expect((await application.handle(readRequest('/sites/capacity-history', memberToken, { siteId: siteInDistrictOne }))).status).toBe(200);
+    expect((await application.handle(readRequest('/sites/:siteId/capacity-changes', memberToken, { siteId: siteInDistrictOne }))).status).toBe(200);
   });
 
   it('declares no timestamp field in any write body (fitness function F11 for this module)', () => {
@@ -115,9 +114,9 @@ describe('A6 through the entry point', () => {
 
   it('changes capacity with the reason in the audit entry, and refuses a change without one', async () => {
     const siteId = await createSiteInDistrictOne();
-    const withoutReason = await application.handle(post('/sites/capacity', memberOfDistrictOne, 'member', { siteId, capacity: 8, reason: ' ' }));
+    const withoutReason = await application.handle(post('/sites/:siteId/capacity-changes', memberOfDistrictOne, 'member', { siteId, capacity: 8, reason: ' ' }));
     expect(withoutReason).toEqual({ status: 400, body: { error: 'reason required' } });
-    const changed = await application.handle(post('/sites/capacity', memberOfDistrictOne, 'member', { siteId, capacity: 8, reason: 'Two spaces repainted' }));
+    const changed = await application.handle(post('/sites/:siteId/capacity-changes', memberOfDistrictOne, 'member', { siteId, capacity: 8, reason: 'Two spaces repainted' }));
     expect(changed).toEqual({ status: 200, body: { siteId, capacity: 8 } });
     const entries = await application.audit.readByScope({ personId: memberOfDistrictOne, role: 'member', districtId: districtOne });
     expect(entries.map((entry) => [entry.operation, entry.reason])).toEqual([['sites.changeCapacity', 'Two spaces repainted']]);
@@ -127,21 +126,21 @@ describe('A6 through the entry point', () => {
     const siteId = await createSiteInDistrictOne();
     const driver = valueOf(await world.accounts.personalData.createPerson('self registration', 'driver', '01099999999', 'A Driver'));
     const token = tokenFor('driver', { personId: driver });
-    const map = await application.handle(readRequest('/sites/nearby', token, { latitude: '30.0626', longitude: '31.2197', radius: '500' }));
+    const map = await application.handle(readRequest('/sites', token, { latitude: '30.0626', longitude: '31.2197', radius: '500' }));
     expect(map.status).toBe(200);
     expect((map.body as { sites: { siteId: string; band: string }[] }).sites).toMatchObject([{ siteId, band: 'unknown', firstHourFee: null }]);
-    const missingPoint = await application.handle(readRequest('/sites/nearby', token, { radius: '500' }));
+    const missingPoint = await application.handle(readRequest('/sites', token, { radius: '500' }));
     expect(missingPoint).toEqual({ status: 400, body: { error: 'invalid point' } });
   });
 });
 
 describe('A9 through the entry point (P23 #12)', () => {
-  const statusNow = (siteId: string) => application.handle(readRequest('/sites/status', tokenFor('chair', { personId: world.chair }), { siteId }));
+  const statusNow = (siteId: string) => application.handle(readRequest('/sites/:siteId/status', tokenFor('chair', { personId: world.chair }), { siteId }));
 
   it('keeps a new site closed until the committee declares hours, and opens it around the clock on an explicit 00:00-24:00 row', async () => {
     const siteId = await createSiteInDistrictOne();
     expect(await statusNow(siteId)).toEqual({ status: 200, body: { open: false, free: false, reason: 'no opening hours declared' } });
-    const declared = await application.handle(post('/sites/hours', memberOfDistrictOne, 'member', { siteId, hours: 'daily 00:00-24:00' }));
+    const declared = await application.handle(post('PUT /sites/:siteId/opening-hours', memberOfDistrictOne, 'member', { siteId, hours: 'daily 00:00-24:00' }));
     expect(declared.status).toBe(200);
     expect(await statusNow(siteId)).toEqual({ status: 200, body: { open: true, free: false, reason: 'open' } });
     world.clock.advanceByMilliseconds(13 * 60 * 60 * 1000);
@@ -150,7 +149,7 @@ describe('A9 through the entry point (P23 #12)', () => {
 
   it('declares a closure with two calendar times (P6) and refuses the same closure sent as instants (Rule I)', async () => {
     const siteId = await createSiteInDistrictOne();
-    await application.handle(post('/sites/hours', memberOfDistrictOne, 'member', { siteId, hours: 'daily 00:00-24:00' }));
+    await application.handle(post('PUT /sites/:siteId/opening-hours', memberOfDistrictOne, 'member', { siteId, hours: 'daily 00:00-24:00' }));
     const closure = {
       siteId,
       kind: 'closure',
@@ -158,10 +157,10 @@ describe('A9 through the entry point (P23 #12)', () => {
       until: { year: 2026, month: 11, day: 5, hour: 12, minute: 0 },
       reason: 'Road works',
     };
-    const declared = await application.handle(post('/sites/special-events', memberOfDistrictOne, 'member', closure));
+    const declared = await application.handle(post('/sites/:siteId/special-events', memberOfDistrictOne, 'member', closure));
     expect(declared.status).toBe(201);
     expect(await statusNow(siteId)).toEqual({ status: 200, body: { open: false, free: false, reason: 'closed: Road works' } });
-    const asInstants = await application.handle(post('/sites/special-events', memberOfDistrictOne, 'member', { ...closure, from: '2026-11-05T09:00:00Z', until: '2026-11-05T12:00:00Z' }));
+    const asInstants = await application.handle(post('/sites/:siteId/special-events', memberOfDistrictOne, 'member', { ...closure, from: '2026-11-05T09:00:00Z', until: '2026-11-05T12:00:00Z' }));
     expect(asInstants.status).toBe(400);
     const entries = await application.audit.readByScope({ personId: memberOfDistrictOne, role: 'member', districtId: districtOne });
     expect(entries.map((entry) => [entry.operation, entry.reason])).toEqual([

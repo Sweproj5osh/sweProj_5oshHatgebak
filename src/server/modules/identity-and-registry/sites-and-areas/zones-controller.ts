@@ -24,8 +24,8 @@ export function relabelZone(registry: SiteRegistry): WriteOperation {
   return {
     kind: 'write',
     name: 'sites.relabelZone',
-    method: 'POST',
-    path: '/zones/label',
+    method: 'PATCH',
+    path: '/zones/:zoneId',
     allowedRoles: ['member', 'chair'],
     bodySchema: { fields: { zoneId: 'string', label: 'string' } },
     examples: { valid: { zoneId: SAMPLE.zoneId, label: 'Zamalek zone 1 north' }, invalid: {} },

@@ -655,4 +655,10 @@ questions of section 8 were settled with the defaults this plan already recommen
 - the column tables of 0002 and 0004 stay unused; price versions, the sign-in code recorder, the fake payment gateway
   and the `/example/*` writes are untouched; the site lock stays a later task;
 - `CODEOWNERS` keeps its one line until the owners' GitHub names are known;
+- three routes differ from the table in section 3.2, because each operation's only field is the id it acts on: with
+  the id in the URL no request could fail the body check any more. `personalData.erase` is `POST /erasures`,
+  `assignments.releaseAttendant` is `POST /attendant-releases`, `payments.payInApp` is `POST /payments`;
+  `docs/architecture/rest-routes.md` is the current table;
+- a body or query may repeat a path field with the same value (another value is refused with 400), so the client's
+  requests and the tests' bodies are unchanged apart from the URL;
 - the root PDFs and the local `.env.example` and `.gitignore` edits stay uncommitted.
