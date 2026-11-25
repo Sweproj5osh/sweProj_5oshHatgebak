@@ -34,3 +34,4 @@ qualities are from ADR-01.
 | [ADR-20](ADR-20-app-runtime-dependencies.md) | Runtime dependencies of the app: Expo, React, React Native, expo-crypto |
 | [ADR-21](ADR-21-postgresql-only.md) | PostgreSQL only, through `POSTGRES_URL`; no in-memory database |
 | [ADR-22](ADR-22-rest-routes-and-https.md) | Resource-style REST routes, one controller per resource, HTTPS only |
+| [ADR-23](ADR-23-site-lock-on-opening.md) | The PostgreSQL ticket store locks the site while it opens a ticket |

@@ -15,7 +15,9 @@ export interface TestDatabase {
   readonly database: PostgresDatabase;
 }
 
-const opened: PostgresDatabase[] = [];
+/** Every open test database, and whether a test (rather than a file's set-up) opened it. */
+const opened: { readonly database: PostgresDatabase; readonly byATest: boolean }[] = [];
+let insideATest = false;
 let admin: pg.Pool | undefined;
 let counter = 0;
 
@@ -31,9 +33,10 @@ export function freshTestDatabase(): PostgresDatabase {
   admin ??= new pg.Pool({ connectionString: adminUrl, max: 2 });
   const created = admin.query(`CREATE DATABASE "${name}" TEMPLATE "${prefix}template"`).then(() => undefined);
   const url = urlFor(adminUrl, name, { user: TEST_APPLICATION_ROLE, password: TEST_APPLICATION_PASSWORD });
-  const pool = () => new pg.Pool({ connectionString: url, max: 10, idleTimeoutMillis: 1_000, allowExitOnIdle: true });
-  const database = new PostgresDatabase(pool(), pool(), created);
-  opened.push(database);
+  // Small pools: many test databases are open at once across the workers, and PostgreSQL allows about a hundred connections.
+  const pool = (max: number) => new pg.Pool({ connectionString: url, max, idleTimeoutMillis: 200, allowExitOnIdle: true });
+  const database = new PostgresDatabase(pool(3), pool(5), created);
+  opened.push({ database, byATest: insideATest });
   return database;
 }
 
@@ -44,12 +47,29 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   return { database };
 }
 
-/** Closes every test database this test file opened; postgres-test-cleanup.ts calls it after each file. */
+/** postgres-test-cleanup.ts marks where a test starts and ends, so a database a test opened closes with it. */
+export function markInsideATest(inside: boolean): void {
+  insideATest = inside;
+}
+
+/** Closes the test databases the test that just ended opened. */
+export async function closeTheTestsDatabases(): Promise<void> {
+  await closeWhere((entry) => entry.byATest);
+}
+
+/** Closes every test database this test file still holds, and the file's admin pool. */
 export async function closeTestDatabases(): Promise<void> {
-  const closing = opened.splice(0).map((database) => withinSeconds(database.close(), 5));
-  await Promise.all(closing);
-  await withinSeconds(admin?.end() ?? Promise.resolve(), 5);
+  await closeWhere(() => true);
+  await withinSeconds(admin?.end() ?? Promise.resolve(), 2);
   admin = undefined;
+}
+
+async function closeWhere(chosen: (entry: (typeof opened)[number]) => boolean): Promise<void> {
+  const closing = opened.filter(chosen);
+  for (const entry of closing) {
+    opened.splice(opened.indexOf(entry), 1);
+  }
+  await Promise.all(closing.map((entry) => withinSeconds(entry.database.close(), 2)));
 }
 
 /** A pool still lending a client to an unfinished transaction never ends; the run's teardown drops its database anyway. */

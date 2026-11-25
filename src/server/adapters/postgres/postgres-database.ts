@@ -90,6 +90,7 @@ async function removeRecord(through: Queryable, table: string, key: string): Pro
  */
 export class PostgresDatabase implements TableAccess {
   private readonly created: Promise<void>;
+  private closing: Promise<void> | undefined;
   /** Statements on the committed tables, for the adapters' own stores. */
   readonly committed: Queryable;
 
@@ -139,11 +140,15 @@ export class PostgresDatabase implements TableAccess {
     return new PostgresTransaction(() => this.connect());
   }
 
-  async close(): Promise<void> {
-    await this.committedPool.end();
-    if (this.transactionPool !== this.committedPool) {
-      await this.transactionPool.end();
-    }
+  /** Ends both pools; closing twice is harmless. */
+  close(): Promise<void> {
+    this.closing ??= (async () => {
+      await this.committedPool.end();
+      if (this.transactionPool !== this.committedPool) {
+        await this.transactionPool.end();
+      }
+    })();
+    return this.closing;
   }
 }
 

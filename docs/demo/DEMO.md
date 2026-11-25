@@ -46,13 +46,10 @@ and `npm run fitness` (7 static architecture checks pass).
 
 ## Known gaps found while building the demos (tell your team before you present)
 
-1. **Simultaneous separate requests can take more spaces than exist.** `demo/known-gap-parallel-requests.ts` sends
-   20 separate simultaneous opens for 5 spaces through the entry point: 6 tickets are issued, in 30 of 30 runs. The
-   ticket store's contract (`src/server/modules/parking-and-prices/ticketing/ticket-store.ts`) says the PostgreSQL adapter must lock the
-   site, but `src/server/adapters/` holds only in-memory code so far, and the in-memory database does not lock across
-   transactions (the project's F3 test races the 20 opens inside one unit of work, which passes). Demo 03 therefore
-   shows only what holds today: arrivals one after another, the F3 single-unit-of-work race, and 10 simultaneous
-   retries of the same request id. Not part of the presentation; run it only to show the team.
+1. **Simultaneous separate requests: closed by ADR-23.** `demo/known-gap-parallel-requests.ts` sends 20 separate
+   simultaneous opens for 5 spaces through the entry point. In memory it issued 6 tickets in 30 of 30 runs; on
+   PostgreSQL without a site lock, 11 to 14. With the PostgreSQL ticket store's site lock (ADR-23) it issues exactly 5 in
+   30 of 30 runs, and the test "B6 the last-space rule across separate transactions" pins it.
 2. **Approvals are not composed yet** (see `ticketingPortsFrom` and `APPROVALS_NOT_COMPOSED_YET` in `src/server/composition/compose-server.ts`): on the real server a
    price cannot be applied, so a ticket cannot close with a fee; and licence changes are never applied, so the
    attendant flow (clock-in, assisted tickets, cash) cannot be driven there. Demo 02 works around the first with the

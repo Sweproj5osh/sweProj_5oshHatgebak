@@ -4,6 +4,7 @@ import { PostgresDatabase } from '../adapters/postgres/postgres-database';
 import { PostgresOutboxStore } from '../adapters/postgres/postgres-outbox-store';
 import { PostgresSlidingWindowRateLimiter } from '../adapters/postgres/postgres-rate-limiter';
 import { PostgresResponseStore } from '../adapters/postgres/postgres-response-store';
+import { PostgresTicketStore } from '../adapters/postgres/postgres-ticket-store';
 import {
   createAccountsAndAccessControl,
   createAccountsStores,
@@ -32,7 +33,6 @@ import {
 } from '../modules/identity-and-registry/sites-and-areas/index';
 import {
   operations as ticketingOperations,
-  TableTicketStore,
   type CarOwnership,
   type PlateLookup,
   type TicketStore,
@@ -115,7 +115,7 @@ export function composeDeclaredRegistry(): OperationRegistry {
   const clock = new SystemClock();
   const audit = createHashChainedAuditTrail(new PostgresAuditLogStore(database.committed), clock);
   const tokens = createTokenIssuer(INSPECTION_ONLY_SECRET, clock);
-  const tickets = new TableTicketStore();
+  const tickets = new PostgresTicketStore();
   const area2 = composeArea2({
     database,
     clock,
@@ -205,7 +205,7 @@ export function compose(options: ApplicationOptions, standIns: StandIns): Compos
   const outbox = new PostgresOutboxStore(database.committed, clock);
   const audit = createHashChainedAuditTrail(new PostgresAuditLogStore(database.committed), clock);
   const tokens = createTokenIssuer(options.tokenSecret, clock);
-  const tickets = new TableTicketStore();
+  const tickets = new PostgresTicketStore();
   const area2 = composeArea2({
     database,
     clock,
