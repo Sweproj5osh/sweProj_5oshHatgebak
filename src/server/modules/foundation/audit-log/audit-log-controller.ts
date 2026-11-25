@@ -1,6 +1,6 @@
-import type { Operation, ReadOperation } from '../../../server/shared/operation-contract';
-import { respond } from '../../../server/shared/operation-contract';
-import type { AuditTrail } from '../public';
+import type { Operation, ReadOperation } from '../../../shared/operation-contract';
+import { respond } from '../../../shared/operation-contract';
+import type { AuditTrail } from './index';
 
 export interface AuditLogOperationsDependencies {
   /** The audit trail read outside any transaction. */

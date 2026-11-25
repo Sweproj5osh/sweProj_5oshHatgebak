@@ -1,4 +1,4 @@
-import type { AuditEntry } from '../../modules/audit-log/public';
+import type { AuditEntry } from '../modules/foundation/audit-log/index';
 import type { EventPublisher } from '../shared/events/event';
 import type { Transaction } from '../shared/unit-of-work';
 

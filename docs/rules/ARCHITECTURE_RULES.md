@@ -43,13 +43,13 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 | `ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
 | `committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
 | `payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
-| `audit-log` | `AuditTrail` | Zeyad | must stay on |
+| `foundation/audit-log` | `AuditTrail` | Zeyad | must stay on |
 | `cash-custody` | `DepositLedger` | Amina (Teammate C) | may fail |
 | `licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
 | `approvals` | `ApprovalDesk` | Amina (Teammate C) | may fail |
 | `complaints-inspections-ratings` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
 | `money-check-dashboard` | `MoneyCheck` | Amina (Teammate C) | may fail |
-| `scheduler` | none (it calls others) | Zeyad | may fail |
+| `foundation/scheduler.ts` | none (it calls others) | Zeyad | may fail |
 | `notifications` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
 | `evidence` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |
 

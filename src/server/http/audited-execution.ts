@@ -1,4 +1,4 @@
-import type { AuditActor, AuditEntry } from '../../modules/audit-log/public';
+import type { AuditActor, AuditEntry } from '../modules/foundation/audit-log/index';
 import type { AuditRedaction, HttpResponse, WriteOutcome } from '../shared/operation-contract';
 import type { RequestId } from '../shared/request-id';
 import { redactForAudit, type AuditInput } from './audit-redaction';

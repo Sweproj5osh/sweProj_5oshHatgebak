@@ -11,7 +11,7 @@ import {
   type AccountsAndAccessControl,
   type CarPresence,
 } from '../../modules/accounts-and-access-control/public';
-import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../../modules/audit-log/public';
+import { createHashChainedAuditTrail, operations as auditLogOperations, type AuditTrail } from '../modules/foundation/audit-log/index';
 import { createFeeCalculator, createPriceList, type FeeCalculator, type PriceList, type PriceListOptions } from '../../modules/committee-prices/public';
 import {
   createLicensingAssignmentAttendance,

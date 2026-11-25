@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
-import { canonicalJson } from '../../../server/shared/canonical-json';
-import type { Clock } from '../../../server/shared/clock';
-import { SerialQueue } from '../../../server/shared/serial-queue';
-import type { AuditActor, AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail, ChainHead } from '../public';
+import { canonicalJson } from '../../../shared/canonical-json';
+import type { Clock } from '../../../shared/clock';
+import { SerialQueue } from '../../../shared/serial-queue';
+import type { AuditActor, AuditEntry, AuditLogStore, AuditReader, AuditRecord, AuditTrail, ChainHead } from './index';
 import { isVisibleTo } from './read-scope';
 
 /** The previous hash of the very first entry. */

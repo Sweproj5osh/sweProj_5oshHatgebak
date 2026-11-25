@@ -1,5 +1,5 @@
 import type { AccountsAndAccessControl } from '../../modules/accounts-and-access-control/public';
-import type { AuditTrail } from '../../modules/audit-log/public';
+import type { AuditTrail } from '../modules/foundation/audit-log/index';
 import { refuse, respond } from '../shared/operation-contract';
 import { runAudited } from '../http/audited-execution';
 import type { UnitOfWorkResourcesFactory } from '../http/unit-of-work-resources';

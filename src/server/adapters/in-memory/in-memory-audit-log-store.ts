@@ -1,4 +1,4 @@
-import type { AuditLogStore, AuditRecord, ChainHead } from '../../../modules/audit-log/public';
+import type { AuditLogStore, AuditRecord, ChainHead } from '../../modules/foundation/audit-log/index';
 import { AUDIT_LOG_HEAD_TABLE, AUDIT_LOG_TABLE, type RowTables } from './in-memory-database';
 
 const THE_ONE_HEAD_ROW = 'head';

@@ -1,4 +1,4 @@
-import type { AuditReader, AuditRecord } from '../public';
+import type { AuditReader, AuditRecord } from './index';
 
 /** Member: own district. Chair: everything. Everyone else: entries they made or entries naming them (ADR-10). */
 export function isVisibleTo(reader: AuditReader, record: AuditRecord): boolean {
