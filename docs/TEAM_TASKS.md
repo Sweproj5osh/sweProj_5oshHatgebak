@@ -158,6 +158,27 @@ notifications, photo evidence, complaints, inspections, ratings and disputes, an
 
 ---
 
+## Restructure (25 November 2026, `docs/team/RESTRUCTURE_PLAN.md`)
+A structural change only: no business rule, calculation, refusal, state transition, permission, audit behaviour or
+validation changes, and no test's expected values are edited. Records: ADR-16 to ADR-22.
+
+| # | Build | It must | Test it by | Report |
+|---|---|---|---|---|
+| R0 | Baseline | Record typecheck, tests, fitness and CI before anything moves | Run the four checks | 719 passed, 1 skipped; fitness 7/7 |
+| R1 | Decision records | Write ADR-16 to ADR-22 and the amendments | Review | Records added |
+| R2 | Documents into `docs/` | Move every document; fix every link | No old link target remains | Files moved |
+| R3 | Fitness set | Drop F2 and F8-static; add F14 | Each kept function fails on its planted violation | Functions kept |
+| R4 | Foundation folders | Move the entry point, shared code and adapters under `src/server/`; split the test stand-ins out | Registry unchanged; suite unchanged | Files moved |
+| R5 | Five area modules | Move each module into its area; flatten `internal/`; one controller file per resource | Registry unchanged; suite unchanged | Files moved |
+| R6 | REST routes | Resource-style paths, path parameters, `PATCH`; client constants and demos in step | Registry differs only in method and path | Routes changed |
+| R7 | HTTPS only | `node:https` with a certificate from the environment | No answer over plain HTTP | Pass/fail |
+| R8 | PostgreSQL adapters | The five ports over PostgreSQL; migration 0005; `POSTGRES_URL` | Contract tests pass on both adapters | Tests added |
+| R9 | Tests on PostgreSQL | Every test on a real database, one per composition | Same names and counts, three runs | Suite time |
+| R10 | PostgreSQL only | Start-up refuses without a reachable, migrated database; in-memory adapters deleted | Start-up refusals; F14 | Pass/fail |
+| R11 | The app workspace | Expo app at `src/apps/mobile`, role screen, shared client over HTTPS | App type check and bundle | Pass/fail |
+
+---
+
 ## First-week checklist (everyone)
 - [ ] Read `adr/README.md` and your area's records.
 - [ ] Create your module folders with their public interfaces; the boundary check is green.

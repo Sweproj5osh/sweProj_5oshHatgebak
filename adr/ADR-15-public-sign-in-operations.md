@@ -31,3 +31,8 @@ two operations; Mahi removes her bypass.
 
 ## Related
 ADR-08 (repeatable writes), ADR-10 (one person, one role per token), ADR-13, ADR-14.
+
+## Amendment 2026-11-25 (ADR-21, ADR-22)
+The two public operations answer at `POST /sign-in-codes` (`requestSignInCode`) and `POST /sessions` (`signIn`), and the
+committee's second step at `POST /committee-sessions`. The shared rate-limiter store the consequences asked for is the
+PostgreSQL table `foundation.rate_limit_attempts`. F13 is unchanged.

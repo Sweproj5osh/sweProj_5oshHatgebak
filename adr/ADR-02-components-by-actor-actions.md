@@ -53,3 +53,8 @@ ADR-01 (ranks 1–2 motivate Cash Custody and Approvals), ADR-03, ADR-11, ADR-12
 Ticketing does not require LicenceStatus or Authorization to check the attendant. The entry point proves the attendant
 at sign-in (registered, licence live, re-checked on every request) and clock-in binds the session to the site; Ticketing
 only checks that the request's site equals the session's site. Rule D holds with no exception.
+
+## Amendment 2026-11-25 (ADR-16)
+The fourteen components stay, as sub-folders of five area modules (one per owner). The consequence "fourteen modules
+need fourteen public interfaces and a boundary check (fitness function F2)" no longer holds: the `public.ts` /
+`internal/` split and F2 are gone.

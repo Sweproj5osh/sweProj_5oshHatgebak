@@ -42,3 +42,8 @@ only lock is one site's row for milliseconds; different sites never block each o
 
 ## Related
 ADR-01, ADR-02, ADR-04 (the one exception), ADR-07.
+
+## Amendment 2026-11-25 (ADR-16)
+Still one deployable unit and one modular monolith. The fourteen modules are grouped into five area modules, and the
+build-time check that failed an import of another module's internals (F2) is dropped. Rule D stays; it is proven by the
+behavioural fault-containment test (Z14) and by review, no longer by the static import check (F8-static).

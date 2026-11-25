@@ -35,3 +35,8 @@ inserts, replaces and removes and applies them on commit. The `audit_log` table 
 
 ## Related
 ADR-06 (Rule E), ADR-07 (audit in the transaction), ADR-10 (append-only audit log), ADR-14, ADR-15.
+
+## Amendment 2026-11-25 (ADR-21)
+The in-memory database is gone. The PostgreSQL adapter implements `Transaction` once: the connection is taken and the
+transaction begun at the first statement, so `begin()` stays synchronous, and the audit log store takes the advisory
+lock inside the same transaction. The consequence "the in-memory database still does not lock" no longer applies.

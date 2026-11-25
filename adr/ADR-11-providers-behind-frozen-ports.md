@@ -23,3 +23,7 @@ named in earlier documents (Neon, Cloudflare Workers) are candidates, not choice
 
 ## Related
 ADR-02, ADR-03, ADR-04.
+
+## Amendment 2026-11-25 (ADR-21)
+The consequence "tests run against in-memory adapters" is replaced: tests run against a real PostgreSQL, and no
+in-memory adapter exists. The database driver `pg` is a library, not a provider (ADR-19).
