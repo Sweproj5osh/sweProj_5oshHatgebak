@@ -8,7 +8,7 @@ const entryPointFolder = path.join(repositoryRoot, 'src', 'entrypoint') + path.s
 
 /**
  * P5 and fitness function F2: a module's production files import the operation contract from `src/shared`, never from
- * `src/entrypoint`. F2 still exempts the two transitional re-export paths for modules already on main (QUESTIONS.md
+ * `src/entrypoint`. F2 still exempts the two transitional re-export paths for modules already on main (docs/team/QUESTIONS.md
  * item 15); this test closes that exemption for ticketing ahead of foundation 3.
  */
 describe('ticketing production files do not import the entry point', () => {

@@ -27,7 +27,7 @@ export interface BootstrapDependencies {
  * Creates the first Chair from the environment (Q2) exactly once: when both variables are set and the audit log holds
  * no bootstrap entry yet. The action is audited like any other, with `{ kind: 'system' }` as the actor and the phone
  * and name kept out of the entry; the new Chair is the entry's subject. The log is the memory of "done": the accounts
- * module offers no way to count people, so a store filled by any other means is not detected (see QUESTIONS.md).
+ * module offers no way to count people, so a store filled by any other means is not detected (see docs/team/QUESTIONS.md).
  */
 export async function bootstrapFirstChair(environment: NodeJS.ProcessEnv, dependencies: BootstrapDependencies): Promise<BootstrapOutcome> {
   const phone = environment[BOOTSTRAP_CHAIR_PHONE_VARIABLE];

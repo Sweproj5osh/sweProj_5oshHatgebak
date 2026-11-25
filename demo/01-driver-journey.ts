@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------------------------------------------
   scene(5, 'The driver looks at the map and checks free spaces before driving there');
   note('Expect two server log lines below: the map\'s free-space band and first-hour fee are not wired into the');
-  note('composition yet (known gap, QUESTIONS.md item 17), so the map answers "unknown" for them and keeps working.');
+  note('composition yet (known gap, docs/team/QUESTIONS.md item 17), so the map answers "unknown" for them and keeps working.');
   await send('Streets near the driver', 'GET', '/sites/nearby', {
     token: driverToken,
     query: { latitude: '30.0626', longitude: '31.2197', radius: '1500' },

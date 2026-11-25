@@ -1,6 +1,6 @@
 # Team task sheet — Street Parking Management System
 
-Written 4 November 2026 by Zeyad Khaled (architect) from the decisions in `adr/` and
+Written 4 November 2026 by Zeyad Khaled (architect) from the decisions in `docs/adr/` and
 `uml/architecture_walkthrough_decisions.md` section 16. Deadline 1 December 2026.
 
 Five areas, one owner each. Each task says **what to build**, **what it must do**, **how to test it** and **what to
@@ -17,7 +17,7 @@ passes, the numbers are reported, and the fitness functions stay green.
 6. Nothing merges without green tests, green fitness functions and one review by Zeyad.
 7. Until the foundation (area 1) lands on day 3 (Saturday 7 November), build against in-memory stand-ins and unit tests. Do not wait.
 
-Reading before you start: `adr/README.md`, then the records named in your area, then your area's rows in
+Reading before you start: `docs/adr/README.md`, then the records named in your area, then your area's rows in
 `uml/architecture_walkthrough_decisions.md` Q12.
 
 Two sprints, everything implemented by the end of the second.
@@ -48,7 +48,7 @@ Records: ADR-03, ADR-07, ADR-08, ADR-10, ADR-11.
 | Z13 | 2 | Retention job | Cut the ticket-to-person link 12 months after close; delete assistant history older than 90 days | Tickets aged 13 and 11 months → only the first loses its link | Links cut per run; history rows deleted |
 | Z14 | 2 | Fault-containment test (F8-behavioural) | A failing reactor (notifications) never fails the action it reacts to | Make notifications throw; close a ticket → success | Pass/fail |
 | Z15 | 2 | Assistant-isolation test (F9) | The whole main-system suite passes with the assistant service stopped | Stop the assistant; run everything | Pass/fail |
-| Z16 | all | The decision records | Every rule change during the build gets a record in `adr/` | Review of each merged pull request | Records added |
+| Z16 | all | The decision records | Every rule change during the build gets a record in `docs/adr/` | Review of each merged pull request | Records added |
 
 ---
 
@@ -180,7 +180,7 @@ validation changes, and no test's expected values are edited. Records: ADR-16 to
 ---
 
 ## First-week checklist (everyone)
-- [ ] Read `adr/README.md` and your area's records.
+- [ ] Read `docs/adr/README.md` and your area's records.
 - [ ] Create your module folders with their public interfaces; the boundary check is green.
 - [ ] Write the tests for your first three tasks before the code.
 - [ ] Use in-memory stand-ins until the foundation lands on day 3.

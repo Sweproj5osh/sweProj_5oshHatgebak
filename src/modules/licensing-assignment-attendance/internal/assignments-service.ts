@@ -8,7 +8,7 @@ import type { AssignmentRefusal, Assignments } from '../public';
 import type { AssignmentsStore } from './ports';
 
 export interface AssignmentsDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly assignments: AssignmentsStore;
   readonly authorization: Authorization;

@@ -1,8 +1,8 @@
 # Architecture rules and restrictions
 
 This file binds every person and every AI coding agent working in this repository. Read it before writing a line.
-The reasons behind each rule are in `adr/` (fifteen Architecture Decision Records) and the task list is in
-`docs/TEAM_TASKS.md`. When this file and a pull request disagree, this file wins until Zeyad Khaled (the architect
+The reasons behind each rule are in `docs/adr/` (fifteen Architecture Decision Records) and the task list is in
+`docs/team/TEAM_TASKS.md`. When this file and a pull request disagree, this file wins until Zeyad Khaled (the architect
 and the only decision maker) changes it through a new decision record.
 
 ## 1. What the system is
@@ -141,13 +141,13 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - A web framework or an object-relational mapper inside a module's domain or use cases. Frameworks are details that
   live in adapters.
 - Naming a provider (Neon, Supabase, Cloudflare, Paymob, Google Maps, any language-model vendor) anywhere except an
-  adapter and `adr/`. "Candidate" is allowed in documents; "chosen" is not.
+  adapter and `docs/adr/`. "Candidate" is allowed in documents; "chosen" is not.
 - A timestamp, fee or count accepted from a client.
 - A table outside `personal_data` with a column named `plate`, `phone` or `name`.
 - `UPDATE` or `DELETE` on `audit_log`; editing a payment row (add a correction row instead).
 - A status other than open/closed for a ticket, and other than unpaid/paid/disputed/waived for its payment. No
   "left unpaid", no "awaiting payment".
-- A new runtime dependency without a one-paragraph decision record in `adr/` saying why.
+- A new runtime dependency without a one-paragraph decision record in `docs/adr/` saying why.
 - Secrets in the repository. `.env.example` holds names only.
 - Swallowed errors (`catch {}` with nothing in it), `any` in production code, business logic in a test helper.
 - Commits directly to `main`.
@@ -166,10 +166,10 @@ web build. Formatting and naming follow the code already in the repository.
 3. `npm test` and `npm run fitness` are green on the branch; the continuous-integration run on the pull request is
    green.
 4. One review by Zeyad, then merge by squash. Nobody merges their own pull request without that review.
-5. A pull request that changes a rule in this file or in `adr/` is refused until the decision record exists.
+5. A pull request that changes a rule in this file or in `docs/adr/` is refused until the decision record exists.
 
 ## 13. Definition of done, for every task
-Every "Test it by" step in `docs/TEAM_TASKS.md` passes, as an automated test where possible; the "Report" numbers are
+Every "Test it by" step in `docs/team/TEAM_TASKS.md` passes, as an automated test where possible; the "Report" numbers are
 in the pull request; tests and fitness functions are green; one review by Zeyad.
 
 ## 14. The thirteen fitness functions (`npm run fitness`)
@@ -191,5 +191,5 @@ Plain English. No abbreviation without its full form first (write "Architecture 
 where the code cannot say it; errors carry context and are never swallowed.
 
 ## 16. Changing a rule
-Open a pull request that adds `adr/ADR-NN-<slug>.md` (context, decision, alternatives rejected, consequences,
+Open a pull request that adds `docs/adr/ADR-NN-<slug>.md` (context, decision, alternatives rejected, consequences,
 related) and edits this file in the same change. Zeyad decides. Until it is merged, the old rule stands.

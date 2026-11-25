@@ -1,9 +1,9 @@
 # Instructions for AI coding agents working in this repository
 
-1. Read `ARCHITECTURE_RULES.md` in full before writing or changing anything. It binds you exactly as it binds the
+1. Read `docs/rules/ARCHITECTURE_RULES.md` in full before writing or changing anything. It binds you exactly as it binds the
    people on the team.
-2. Then read `adr/README.md` and the decision records your area's tasks name, and your area's rows in
-   `docs/TEAM_TASKS.md`.
+2. Then read `docs/adr/README.md` and the decision records your area's tasks name, and your area's rows in
+   `docs/team/TEAM_TASKS.md`.
 3. Work only inside the modules your owner (the teammate who invoked you) owns. Never edit another area's module;
    propose the change to that area's owner instead.
 4. Work on a branch named `area-<letter>/<task-id>-<short-name>`, never on `main`. Open a pull request per task with

@@ -58,6 +58,6 @@ and `npm run fitness` (7 static architecture checks pass).
    attendant flow (clock-in, assisted tickets, cash) cannot be driven there. Demo 02 works around the first with the
    test composition; the attendant flow is not demoed.
 3. **The map shows no free-space band or first-hour fee** (`band: "unknown"`, `firstHourFee: null`) because those two ports
-   are not wired (`QUESTIONS.md` item 17). Demo 01 prints two server log lines at that step; they are expected.
+   are not wired (`docs/team/QUESTIONS.md` item 17). Demo 01 prints two server log lines at that step; they are expected.
 4. **A zero-fee ticket stays "unpaid"** (the resident in demo 02). Worth agreeing with the ticketing owner how a 0 EGP
    ticket should be shown.

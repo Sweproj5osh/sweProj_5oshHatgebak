@@ -10,7 +10,7 @@ import { isOffSite } from './off-site-rule-constants';
 import type { AssignmentsStore, AttendanceRow, AttendanceStore, OffSiteStore } from './ports';
 
 export interface AttendanceDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly attendance: AttendanceStore;
   readonly offSite: OffSiteStore;

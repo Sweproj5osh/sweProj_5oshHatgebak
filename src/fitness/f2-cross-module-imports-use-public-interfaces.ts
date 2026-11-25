@@ -15,7 +15,7 @@ const FOLDERS_THAT_NEVER_IMPORT_THE_ENTRY_POINT = [path.join('src', 'modules'), 
 const ENTRY_POINT_FOLDER = path.join('src', 'entrypoint');
 
 /**
- * Transitional (see QUESTIONS.md): the two old contract paths kept as one-line re-exports for modules already on
+ * Transitional (see docs/team/QUESTIONS.md): the two old contract paths kept as one-line re-exports for modules already on
  * main, and test files, which still compose the application through the entry point. Both exemptions end when Zeyad
  * says so.
  */

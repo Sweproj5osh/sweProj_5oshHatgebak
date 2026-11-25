@@ -1,5 +1,5 @@
 ## Task
-<!-- The task id from docs/TEAM_TASKS.md, for example C9, and its one-line "Build" text. -->
+<!-- The task id from docs/team/TEAM_TASKS.md, for example C9, and its one-line "Build" text. -->
 
 ## What it does
 <!-- The "It must" points, in your words, as built. -->

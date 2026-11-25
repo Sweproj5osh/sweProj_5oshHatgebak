@@ -26,7 +26,7 @@ import { roleMayReadPlateFor } from './domain/plate-access';
 import type { AccessFactsStore, CommitteePasswordStore, PeopleStore, PersonalDataStore, SignInChallengeStore } from './ports';
 
 export interface PersonalDataDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly people: PeopleStore;
   readonly personalData: PersonalDataStore;

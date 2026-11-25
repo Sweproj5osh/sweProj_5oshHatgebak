@@ -139,7 +139,7 @@ export interface InMemoryApplicationOptions {
   /** Test-only operations registered beside the composed ones. */
   readonly additionalOperations?: readonly Operation[];
   /**
-   * Transitional (see QUESTIONS.md): the whole registry instead of the composed one, for tests already on main that
+   * Transitional (see docs/team/QUESTIONS.md): the whole registry instead of the composed one, for tests already on main that
    * build their own list. New tests use `additionalOperations`.
    */
   readonly operations?: readonly Operation[];
@@ -363,7 +363,7 @@ interface TicketingPorts {
 /**
  * The server's ports, answered by Area 2's modules (P27 Q3, P28 #32–#33): the registry verifies codes, hours and
  * capacity; PersonalData answers whose car it is and the plate for the receipt. Approval stays "nothing is approved"
- * until Amina's desk is composed (P28 #34; transitional, see QUESTIONS.md).
+ * until Amina's desk is composed (P28 #34; transitional, see docs/team/QUESTIONS.md).
  */
 function ticketingPortsFrom(area2: Area2Modules): TicketingPorts {
   return {
@@ -397,11 +397,11 @@ function carPresenceFrom({ store, database, clock }: TicketPresenceSource): CarP
   };
 }
 
-/** The test application's car presence: every car was seen everywhere, so the sample requests of the F5 harness run (QUESTIONS.md item 21). */
+/** The test application's car presence: every car was seen everywhere, so the sample requests of the F5 harness run (docs/team/QUESTIONS.md item 21). */
 const EVERY_CAR_IS_PRESENT: CarPresence = { carSeenAt: async () => true };
 
 /**
- * Transitional (QUESTIONS.md item 17): the registry's free-space count and first-hour fee come from Karim's ticket
+ * Transitional (docs/team/QUESTIONS.md item 17): the registry's free-space count and first-hour fee come from Karim's ticket
  * counts and price list through two ports (P26 Q8b) that this file does not fill yet, so the map shows an unknown band
  * and no fee for every site, which the registry treats as "the source did not answer" (ADR-09).
  */
@@ -430,7 +430,7 @@ const STAND_IN_BOUND_SITE = 'site-1';
 
 /**
  * What the in-memory test application answers instead, so that the audit-coverage harness (F5) can run the modules'
- * sample requests (the EVERYONE_IS_LIVE precedent, QUESTIONS.md item 21): a code `entry-<site>` or `exit-<site>` is
+ * sample requests (the EVERYONE_IS_LIVE precedent, docs/team/QUESTIONS.md item 21): a code `entry-<site>` or `exit-<site>` is
  * genuine for that site, every site is open with STAND_IN_CAPACITY spaces, every car belongs to whoever asks, no plate
  * resolves, every approval request counts as approved. A test that needs other answers passes `moduleDependencies`.
  */

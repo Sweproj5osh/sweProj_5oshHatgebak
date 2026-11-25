@@ -18,7 +18,7 @@ import { isPermittedMove } from './domain/licence-transitions';
 import type { AssignmentsStore, LicencesStore, LicenceStateChangeRow } from './ports';
 
 export interface LicencesDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly licences: LicencesStore;
   readonly assignments: AssignmentsStore;

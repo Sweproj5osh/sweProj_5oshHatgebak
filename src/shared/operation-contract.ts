@@ -39,7 +39,7 @@ export interface ReadContext {
 
 /**
  * A write handler never calls the audit log itself. The pipeline appends exactly one entry per successful write
- * (ARCHITECTURE_RULES.md section 8) inside the same unit of work; the handler only adds the detail the pipeline
+ * (docs/rules/ARCHITECTURE_RULES.md section 8) inside the same unit of work; the handler only adds the detail the pipeline
  * cannot know.
  */
 export interface WriteContext {
@@ -139,7 +139,7 @@ export type ReadScope = 'open' | 'own' | 'staff-scoped';
 export interface ReadOperation extends OperationBase {
   readonly kind: 'read';
   readonly method: 'GET';
-  /** Absent means `own` (the role table alone), the behaviour reads had before P10; see QUESTIONS.md. */
+  /** Absent means `own` (the role table alone), the behaviour reads had before P10; see docs/team/QUESTIONS.md. */
   readonly scope?: ReadScope;
   readonly logged?: boolean;
   readonly audit?: ReadAuditDeclaration;

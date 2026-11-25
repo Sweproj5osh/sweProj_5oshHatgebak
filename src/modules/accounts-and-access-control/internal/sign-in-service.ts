@@ -10,7 +10,7 @@ import { normalisePhone } from './domain/person';
 import type { CommitteePasswordStore, PeopleStore, PersonalDataStore, SignInChallenge, SignInChallengeStore } from './ports';
 
 export interface SignInDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly people: PeopleStore;
   readonly personalData: PersonalDataStore;

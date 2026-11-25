@@ -13,7 +13,7 @@ export interface HttpRequest {
   readonly headers: Readonly<Record<string, string>>;
   /**
    * The client's network address, as the socket reports it: the only identity a public operation has (ADR-15). The
-   * server always fills it; it is optional only so that tests already on main compile (see QUESTIONS.md).
+   * server always fills it; it is optional only so that tests already on main compile (see docs/team/QUESTIONS.md).
    */
   readonly address?: string;
   /** The parsed JSON body, or undefined when the request carried none. */

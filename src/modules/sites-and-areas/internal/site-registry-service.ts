@@ -29,7 +29,7 @@ import type { CapacityStore, PlacesStore, SiteCalendarStore } from './ports';
 import type { SiteCodesService } from './site-codes-service';
 
 export interface SiteRegistryDependencies {
-  /** The committed tables, for every call that does not arrive with a unit of work (see QUESTIONS.md item 23). */
+  /** The committed tables, for every call that does not arrive with a unit of work (see docs/team/QUESTIONS.md item 23). */
   readonly database: TableAccess;
   readonly places: PlacesStore;
   readonly capacity: CapacityStore;

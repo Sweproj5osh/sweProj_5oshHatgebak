@@ -3,20 +3,20 @@
 A street parking management system for Cairo: a driver scans a site code to park, pays the committee's published
 price, and gets a receipt; the governorate committee stays in control of prices and licences, and every visit,
 payment, price change and decision leaves a record nobody can quietly alter. Every rule that binds this repository,
-with its reasons, is in [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md); read that file first.
+with its reasons, is in [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md); read that file first.
 
 ## Qualities, ranked
 1. Integrity · 2. Accountability · 3. Reliability and availability · 4. Security. The lower rank gives way in a
-conflict ([ADR-01](adr/ADR-01-ranked-qualities.md)).
+conflict ([ADR-01](docs/adr/ADR-01-ranked-qualities.md)).
 
 ## The two deployable units
 - **The main system** (this repository): one modular monolith, run as stateless copies, one PostgreSQL database.
 - **The AI Assistant service**: a separate small service with its own database that calls the main system with the
-  driver's own token ([ADR-04](adr/ADR-04-assistant-second-quantum.md)).
+  driver's own token ([ADR-04](docs/adr/ADR-04-assistant-second-quantum.md)).
 
 ## The fourteen modules
 `src/modules/<module>/public.ts` is the only file another module may import; `internal/` is private. The full table of
-modules, public interfaces, owners and sets is in [MODULES.md](MODULES.md).
+modules, public interfaces, owners and sets is in [docs/architecture/modules.md](docs/architecture/modules.md).
 
 | Owner | Modules |
 |---|---|
@@ -49,7 +49,7 @@ entry and inserting the next. Module owners
 register their operations as `WriteOperation` objects (see `src/entrypoint/operations/operation.ts`); the audit-coverage
 test (`src/entrypoint/audit-coverage.test.ts`) then checks every registered write automatically.
 
-## Rules for everyone (from `docs/TEAM_TASKS.md`)
+## Rules for everyone (from `docs/team/TEAM_TASKS.md`)
 1. Stay inside your area; use another area only through its `public.ts`.
 2. Every write accepts a client request id; the same id twice gives the same answer and changes the database once.
 3. Every write leaves exactly one audit entry, inside the same transaction; a failed write leaves none.
@@ -59,8 +59,9 @@ test (`src/entrypoint/audit-coverage.test.ts`) then checks every registered writ
 7. Until the foundation lands, build against in-memory stand-ins and unit tests.
 
 ## Where to read more
-- [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the eleven fitness functions.
-- [adr/](adr/README.md): the twelve Architecture Decision Records.
-- [docs/TEAM_TASKS.md](docs/TEAM_TASKS.md): every task, its test and its report numbers.
-- [docs/UML_Component_Architecture_V3_diagrams.pdf](docs/UML_Component_Architecture_V3_diagrams.pdf): the component diagrams.
+- [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the eleven fitness functions.
+- [docs/adr/](docs/adr/README.md): the Architecture Decision Records (ADR-01 to ADR-22).
+- [docs/team/TEAM_TASKS.md](docs/team/TEAM_TASKS.md): every task, its test and its report numbers.
+- [docs/pdf/UML_Component_Architecture_V3_diagrams.pdf](docs/pdf/UML_Component_Architecture_V3_diagrams.pdf): the component diagrams.
 - [AGENTS.md](AGENTS.md): instructions for AI coding agents working here.
+- [docs/README.md](docs/README.md): the index of every document.
