@@ -1,27 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 
 /**
  * Task Z2: as the application's database role, UPDATE and DELETE on audit_log must both be refused.
- * Runs only against a real PostgreSQL named by DATABASE_URL (connect as the database owner). Everything happens in one
- * transaction that is rolled back, so the database is left as it was. Needs the `pg` package installed locally.
+ * Runs against the PostgreSQL named by POSTGRES_URL, which every test run requires (ADR-21; connect as the database
+ * owner). Everything happens in one transaction that is rolled back, so the database is left as it was.
  */
-const databaseUrl = process.env['DATABASE_URL'];
+const databaseUrl = process.env['POSTGRES_URL'];
 const PERMISSION_DENIED = '42501';
 
-interface QueryClient {
-  connect(): Promise<void>;
-  query(sql: string, values?: unknown[]): Promise<unknown>;
-  end(): Promise<void>;
-}
-
-interface PostgresDriver {
-  Client: new (options: { connectionString: string }) => QueryClient;
-}
+type QueryClient = pg.Client;
 
 if (databaseUrl === undefined) {
-  console.log('Z2 test skipped: DATABASE_URL is not set, so there is no PostgreSQL to try UPDATE and DELETE against.');
+  console.log('Z2 test skipped: POSTGRES_URL is not set, so there is no PostgreSQL to try UPDATE and DELETE against.');
 }
 
 describe.skipIf(databaseUrl === undefined)('audit_log is append-only for the application role (Z2)', () => {
@@ -49,11 +42,7 @@ describe.skipIf(databaseUrl === undefined)('audit_log is append-only for the app
 });
 
 async function connect(connectionString: string): Promise<QueryClient> {
-  const driverName = 'pg';
-  const driver = (await import(driverName).catch(() => {
-    throw new Error('The Z2 test needs the pg package: run `npm install --no-save pg` first.');
-  })) as PostgresDriver;
-  const client = new driver.Client({ connectionString });
+  const client = new pg.Client({ connectionString });
   await client.connect();
   return client;
 }

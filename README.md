@@ -32,14 +32,14 @@ and the folder map in [docs/architecture/overview.md](docs/architecture/overview
 ```bash
 npm ci                 # install (Node.js 24)
 npm run typecheck      # TypeScript, strict mode
-npm test               # Vitest: every test runs on in-memory adapters, no database needed
+npm test               # Vitest, against the PostgreSQL named by POSTGRES_URL (docs/setup/database.md)
 npm run fitness        # the static fitness functions F1, F10, F11, F12, F13, F14
 npx tsx src/fitness/f14-production-code-never-reaches-test-code.ts     # one fitness function alone
 cp .env.example .env && npm start                                      # the HTTPS entry point (TLS_CERT_PATH, TLS_KEY_PATH: docs/setup/https.md)
 ```
-The database test for task Z2 (the application role cannot update or delete `audit_log`) runs only when
-`DATABASE_URL` points at a PostgreSQL you own and the `pg` package is installed (`npm install --no-save pg`); it says
-so and skips otherwise.
+Every test run needs a real PostgreSQL named by `POSTGRES_URL` (ADR-21): each test application gets its own database
+cloned from a migrated template, and the run drops them at the end. `npm run db:migrate` applies the migrations a
+database lacks. The database test for task Z2 (the application role cannot update or delete `audit_log`) always runs.
 
 ## How a write travels
 Token (one person, one role, signed by the server) → permission table → `X-Request-Id` required → body rejected if

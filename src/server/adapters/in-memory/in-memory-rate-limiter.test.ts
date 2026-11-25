@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../../shared/clock';
 import type { RateLimit } from '../../shared/rate-limiter';
+import { PostgresSlidingWindowRateLimiter } from '../postgres/postgres-rate-limiter';
+import { createTestDatabase } from '../../test-support/postgres-test-database';
+import type { Clock } from '../../shared/clock';
+import type { RateLimiter } from '../../shared/rate-limiter';
 import { InMemorySlidingWindowRateLimiter } from './in-memory-rate-limiter';
+
+/** The contract every RateLimiter adapter keeps (ADR-15, ADR-21), run against the in-memory and the PostgreSQL adapter. */
+const ADAPTERS: readonly (readonly [string, (clock: Clock) => Promise<RateLimiter>])[] = [
+  ['', async (clock) => new InMemorySlidingWindowRateLimiter(clock)],
+  [' over PostgreSQL', async (clock) => new PostgresSlidingWindowRateLimiter((await createTestDatabase()).database.pool, clock)],
+];
 
 const THREE_PER_MINUTE: RateLimit = { maximumAttempts: 3, windowMilliseconds: 60_000 };
 
-function limiterAt(instant: string) {
+describe.each(ADAPTERS)('sliding-window rate limiter%s', (_adapter, newLimiter) => {
+async function limiterAt(instant: string) {
   const clock = new FixedClock(new Date(instant));
-  return { clock, limiter: new InMemorySlidingWindowRateLimiter(clock) };
+  return { clock, limiter: await newLimiter(clock) };
 }
 
-describe('sliding-window rate limiter', () => {
   it('admits attempts up to the limit and refuses the next one inside the window', async () => {
-    const { limiter } = limiterAt('2026-11-07T10:00:00Z');
+    const { limiter } = await limiterAt('2026-11-07T10:00:00Z');
     const verdicts = [];
     for (let attempt = 0; attempt < 4; attempt += 1) {
       verdicts.push(await limiter.attempt('phone/+201', THREE_PER_MINUTE));
@@ -21,7 +31,7 @@ describe('sliding-window rate limiter', () => {
   });
 
   it('admits again once the oldest attempt has left the window', async () => {
-    const { clock, limiter } = limiterAt('2026-11-07T10:00:00Z');
+    const { clock, limiter } = await limiterAt('2026-11-07T10:00:00Z');
     await limiter.attempt('key', THREE_PER_MINUTE);
     clock.advanceByMilliseconds(30_000);
     await limiter.attempt('key', THREE_PER_MINUTE);
@@ -32,7 +42,7 @@ describe('sliding-window rate limiter', () => {
   });
 
   it('does not count a refused attempt, so a flood never extends the refusal', async () => {
-    const { clock, limiter } = limiterAt('2026-11-07T10:00:00Z');
+    const { clock, limiter } = await limiterAt('2026-11-07T10:00:00Z');
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await limiter.attempt('key', THREE_PER_MINUTE);
     }
@@ -41,7 +51,7 @@ describe('sliding-window rate limiter', () => {
   });
 
   it('keeps keys independent', async () => {
-    const { limiter } = limiterAt('2026-11-07T10:00:00Z');
+    const { limiter } = await limiterAt('2026-11-07T10:00:00Z');
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await limiter.attempt('one', THREE_PER_MINUTE);
     }

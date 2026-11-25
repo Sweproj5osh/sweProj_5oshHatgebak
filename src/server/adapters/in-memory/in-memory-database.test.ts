@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import { createTestDatabase } from '../../test-support/postgres-test-database';
+import type { TableAccess, Transaction } from '../../shared/unit-of-work';
 import { InMemoryDatabase } from './in-memory-database';
+
+/** The contract every TableAccess adapter keeps (ADR-13, ADR-21), run against the in-memory and the PostgreSQL adapter. */
+type DatabaseUnderTest = TableAccess & { begin(): Transaction };
+const ADAPTERS: readonly (readonly [string, () => Promise<DatabaseUnderTest>])[] = [
+  ['InMemoryDatabase', async () => new InMemoryDatabase()],
+  ['PostgresDatabase', async () => (await createTestDatabase()).database],
+];
 
 const TICKETS = 'tickets';
 
-async function databaseWithOneTicket(): Promise<InMemoryDatabase> {
-  const database = new InMemoryDatabase();
+describe.each(ADAPTERS)('%s transactions (P1, ADR-13)', (_adapter, newDatabase) => {
+async function databaseWithOneTicket(): Promise<DatabaseUnderTest> {
+  const database = await newDatabase();
   await database.insert(TICKETS, 't-1', { ticketId: 't-1', state: 'open' });
   return database;
 }
 
-describe('InMemoryDatabase transactions (P1, ADR-13)', () => {
   it('shows staged inserts inside the transaction and nowhere else until commit', async () => {
-    const database = new InMemoryDatabase();
+    const database = await newDatabase();
     const transaction = database.begin();
     await transaction.insert(TICKETS, 't-1', { ticketId: 't-1' });
     expect(await transaction.list(TICKETS)).toHaveLength(1);
@@ -22,7 +31,7 @@ describe('InMemoryDatabase transactions (P1, ADR-13)', () => {
   });
 
   it('discards staged inserts on rollback', async () => {
-    const database = new InMemoryDatabase();
+    const database = await newDatabase();
     const transaction = database.begin();
     await transaction.insert(TICKETS, 't-1', { ticketId: 't-1' });
     await transaction.rollback();
@@ -67,7 +76,7 @@ describe('InMemoryDatabase transactions (P1, ADR-13)', () => {
   });
 
   it('keeps two open transactions blind to each other\'s staged rows', async () => {
-    const database = new InMemoryDatabase();
+    const database = await newDatabase();
     const first = database.begin();
     const second = database.begin();
     await first.insert(TICKETS, 't-1', { ticketId: 't-1' });
@@ -83,13 +92,13 @@ describe('InMemoryDatabase transactions (P1, ADR-13)', () => {
   });
 
   it('refuses to be used after it ended', async () => {
-    const transaction = new InMemoryDatabase().begin();
+    const transaction = (await newDatabase()).begin();
     await transaction.commit();
     await expect(transaction.insert(TICKETS, 't-1', {})).rejects.toThrow('already committed');
   });
 
   it('never reaches audit_log: the audit store has its own port (ADR-10, ADR-13)', async () => {
-    const database = new InMemoryDatabase();
+    const database = await newDatabase();
     const transaction = database.begin();
     const refusal = 'audit_log is reachable only through the audit log store';
     await expect(transaction.insert('audit_log', '1', {})).rejects.toThrow(refusal);
