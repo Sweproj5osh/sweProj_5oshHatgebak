@@ -8,6 +8,22 @@ on:
 jobs:
   tests-and-fitness:
     runs-on: ubuntu-latest
+    # ADR-21: the tests run only against a real PostgreSQL.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sayes
+          POSTGRES_PASSWORD: sayes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sayes"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      POSTGRES_URL: postgres://sayes:sayes@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,3 +34,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run fitness
+      # ADR-17, ADR-18: the app bundles with the shared client (a Node-only import would fail here).
+      - run: npm run bundle --workspace @sayes/mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://localhost:3000

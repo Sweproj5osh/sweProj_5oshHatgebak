@@ -3,8 +3,8 @@
  * business rule; it sends the scanned code, shows the site the server bound, and keeps the request id for retrying the
  * same write after a lost answer. Who the attendant is comes from the token on every call, never from a body.
  */
-import type { SiteId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { SiteId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
 
 /** Lino's clock-in answer: the site the signed code named, now bound to the attendant's session. */
 export interface AttendantClockInSuccess {

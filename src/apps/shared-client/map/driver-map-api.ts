@@ -5,7 +5,7 @@
  *
  * The shapes are Lino's `NearbySite`, `FreeSpaceBand` and `NearbyRefusal` from the sites-and-areas public interface.
  */
-import type { SiteId } from '../../../shared/identifiers';
+import type { SiteId } from '../../../server/shared/identifiers';
 
 export type FreeSpaceBand = 'free' | 'few' | 'full' | 'unknown';
 

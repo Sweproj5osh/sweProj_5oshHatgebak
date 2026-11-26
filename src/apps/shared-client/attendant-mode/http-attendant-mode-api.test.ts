@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryServer, type InMemoryApplication } from '../../../entrypoint/composition';
-import { TEST_TOKEN_SECRET, tokenFor } from '../../../entrypoint/test-helpers';
-import type { PersonId, SiteId } from '../../../shared/identifiers';
+import { composeTestServer, type ComposedApplication } from '../../../server/test-support/compose-test-application';
+import { TEST_TOKEN_SECRET, tokenFor } from '../../../server/test-support/test-helpers';
+import type { PersonId, SiteId } from '../../../server/shared/identifiers';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { AttendantModeClient } from './attendant-mode-client';
 import { HttpAttendantModeApi } from './http-attendant-mode-api';
@@ -25,7 +25,7 @@ function valueOf<Value>(outcome: { ok: true; value: Value } | { ok: false; error
   return outcome.value;
 }
 
-async function licensedAttendantAtOneSite(app: InMemoryApplication): Promise<{ attendant: PersonId; siteId: SiteId; siteCode: string }> {
+async function licensedAttendantAtOneSite(app: ComposedApplication): Promise<{ attendant: PersonId; siteId: SiteId; siteCode: string }> {
   const { accounts, siteRegistry, licensing } = app.moduleDependencies;
   const chair = valueOf(await accounts.bootstrapChair('01000000000', 'The Chair'));
   const districtId = valueOf(await siteRegistry.createDistrict(chair, 'Zamalek'));
@@ -39,7 +39,7 @@ async function licensedAttendantAtOneSite(app: InMemoryApplication): Promise<{ a
 }
 
 async function buildStack(drops: AnswerDrops = { remaining: 0 }) {
-  const app = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET });
+  const app = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET });
   const { attendant, siteId, siteCode } = await licensedAttendantAtOneSite(app);
   const api = new HttpAttendantModeApi({ handle: answerDroppingHandle(app.handle, drops), token: () => tokenFor('attendant', { personId: attendant }) });
   let serial = 1;

@@ -53,22 +53,6 @@ function resolveTarget(importer: string, specifier: string): string | undefined 
   return path.resolve(path.dirname(importer), specifier).replace(SOURCE_EXTENSIONS, '');
 }
 
-/** The module folder name when `filePath` lies under src/modules/<module>/, otherwise undefined. */
-export function moduleOf(repositoryRoot: string, filePath: string | undefined): string | undefined {
-  if (filePath === undefined) {
-    return undefined;
-  }
-  const relative = path.relative(path.join(repositoryRoot, 'src', 'modules'), filePath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    return undefined;
-  }
-  return relative.split(path.sep)[0];
-}
-
-export function isPublicInterfaceOf(repositoryRoot: string, moduleName: string, target: string): boolean {
-  return target === path.join(repositoryRoot, 'src', 'modules', moduleName, 'public');
-}
-
 export function describeEdge(repositoryRoot: string, edge: ImportEdge): string {
   return `${path.relative(repositoryRoot, edge.importer)} imports "${edge.specifier}"`;
 }

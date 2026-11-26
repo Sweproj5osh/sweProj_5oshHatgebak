@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const COMPOSITION_MODULE = path.join('src', 'entrypoint', 'composition.ts');
-export const REGISTRY_FACTORY_EXPORT = 'composeInMemoryRegistry';
+export const COMPOSITION_MODULE = path.join('src', 'server', 'composition', 'compose-server.ts');
+export const REGISTRY_FACTORY_EXPORT = 'composeDeclaredRegistry';
 
 /** An operation as the static fitness functions see it: its declarations only, never its handler. */
 export interface DeclaredOperation {

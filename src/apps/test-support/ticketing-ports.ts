@@ -3,9 +3,9 @@
  * a committee price for a site, so a close can charge a fee, and a plate for a car, so a receipt can print it. The
  * operations under test are the ones the server runs; only these two ports are the test's.
  */
-import { createPriceList, type PriceList, type PriceVersion } from '../../modules/committee-prices/public';
-import type { PlateLookup } from '../../modules/ticketing/public';
-import { fail, succeed } from '../../shared/result';
+import { createPriceList, type PriceList, type PriceVersion } from '../../server/modules/parking-and-prices/committee-prices/index';
+import type { PlateLookup } from '../../server/modules/parking-and-prices/ticketing/index';
+import { fail, succeed } from '../../server/shared/result';
 
 /** The price every site in a test charges: ten pounds for the first hour, five for each later one, fifty a day. */
 export const TEST_PRICE = { firstHourFee: 10, eachLaterHourFee: 5, dailyCap: 50 };

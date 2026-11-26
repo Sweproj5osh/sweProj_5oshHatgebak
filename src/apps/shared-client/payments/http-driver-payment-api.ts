@@ -2,7 +2,7 @@
  * HTTP adapter for the Driver App payment flow: call the main system with the driver's token and map its answers to
  * app-level refusal and transport errors. No fee ever travels from here (Rule I).
  */
-import type { RequestId } from '../../../shared/request-id';
+import type { RequestId } from '../../../server/shared/request-id';
 import { optionalString, requiredNumber, requiredRecord, requiredString, requiredWord, type ServerAnswer } from '../server-answer';
 import { asTransportFailureIfServerFailed, ServerCall, ServerRefusedError, UNAUTHORIZED, type EntryPointHandle } from '../server-call';
 import {

@@ -8,15 +8,23 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "tsx src/entrypoint/main.ts",
-    "typecheck": "tsc --noEmit",
+    "start": "tsx src/server/main.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/apps/mobile",
     "test": "vitest run",
-    "fitness": "tsx src/fitness/run-all.ts"
+    "fitness": "tsx src/fitness/run-all.ts",
+    "db:migrate": "tsx src/server/adapters/postgres/migrate.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
-  }
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "workspaces": [
+    "src/apps/mobile"
+  ]
 }

@@ -6,8 +6,7 @@ import { f11WriteSchemasCarryNoTimestamp } from './f11-write-schemas-carry-no-ti
 import { f12PersonalFieldsHaveARedactionRule, namesPersonalData } from './f12-personal-fields-have-a-redaction-rule';
 import { f13OnlySignInIsPublic } from './f13-only-sign-in-is-public';
 import { f1CommitteePricesIsPure } from './f1-committee-prices-is-pure';
-import { f2CrossModuleImportsUsePublicInterfaces } from './f2-cross-module-imports-use-public-interfaces';
-import { f8MustStayOnNeverImportsMayFail } from './f8-must-stay-on-never-imports-may-fail';
+import { f14ProductionCodeNeverReachesTestCode } from './f14-production-code-never-reaches-test-code';
 import { FIXTURES_FOLDER } from './support/import-scanner';
 import { columnsDeclaredIn } from './support/sql-columns';
 
@@ -32,26 +31,32 @@ describe('each fitness function fails on its planted violation', () => {
     const result = await f1CommitteePricesIsPure(fixture('f1-violation'));
     expect(result.passed).toBe(false);
     expect(result.violations).toHaveLength(2);
-    expect(result.violations.every((violation) => violation.startsWith('src/modules/committee-prices/internal/leaky-fee-calculator.ts'))).toBe(true);
+    expect(result.violations.every((violation) => violation.startsWith('src/server/modules/parking-and-prices/committee-prices/leaky-fee-calculator.ts'))).toBe(true);
     expect(result.checked).toBe(1);
   });
 
-  it('F2 catches an import of another module\'s internal file', async () => {
-    const result = await f2CrossModuleImportsUsePublicInterfaces(fixture('f2-violation'));
+  it('F14 catches a production file importing a test file', async () => {
+    const result = await f14ProductionCodeNeverReachesTestCode(fixture('f14-test-file-violation'));
     expect(result.passed).toBe(false);
-    expect(result.violations[0]).toContain('audit-log/internal/read-scope');
+    expect(result.violations[0]).toContain('opening.test');
   });
 
-  it('F2 catches a module importing the entry point', async () => {
-    const result = await f2CrossModuleImportsUsePublicInterfaces(fixture('f2-entrypoint-violation'));
+  it('F14 catches a production file importing a test world', async () => {
+    const result = await f14ProductionCodeNeverReachesTestCode(fixture('f14-test-support-violation'));
     expect(result.passed).toBe(false);
-    expect(result.violations[0]).toContain('src/entrypoint, which no module or app may import');
+    expect(result.violations[0]).toContain('testing/ticketing-world');
   });
 
-  it('F8 catches a must-stay-on module importing a may-fail module', async () => {
-    const result = await f8MustStayOnNeverImportsMayFail(fixture('f8-violation'));
+  it('F14 catches a production file importing the fitness functions', async () => {
+    const result = await f14ProductionCodeNeverReachesTestCode(fixture('f14-fitness-violation'));
     expect(result.passed).toBe(false);
-    expect(result.violations[0]).toContain('ticketing reaches may-fail module notifications');
+    expect(result.violations[0]).toContain('fitness/support/import-scanner');
+  });
+
+  it('F14 catches a composition root wiring an in-memory storage adapter', async () => {
+    const result = await f14ProductionCodeNeverReachesTestCode(fixture('f14-in-memory-violation'));
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toContain('a storage adapter other than PostgreSQL');
   });
 
   it('F10 catches personal columns in CREATE TABLE, ALTER TABLE ADD, a quoted camelCase name and RENAME COLUMN ... TO', async () => {

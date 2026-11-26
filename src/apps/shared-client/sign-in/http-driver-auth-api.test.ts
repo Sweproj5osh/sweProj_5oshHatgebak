@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composeInMemoryServer } from '../../../entrypoint/composition';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
+import { composeTestServer } from '../../../server/test-support/compose-test-application';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { fromAddress } from '../../test-support/from-address';
 import { DriverSignInClient } from './driver-sign-in-client';
@@ -18,7 +18,7 @@ const UNKNOWN_PHONE = '01199999999';
 const CHAIR = { personId: 'chair-1', role: 'chair' } as const;
 
 function buildStack(drops: AnswerDrops = { remaining: 0 }) {
-  const app = composeInMemoryServer({ tokenSecret: TEST_TOKEN_SECRET, clock: new FixedClock(new Date('2026-11-06T12:00:00Z')) });
+  const app = composeTestServer({ tokenSecret: TEST_TOKEN_SECRET, clock: new FixedClock(new Date('2026-11-06T12:00:00Z')) });
   const api = new HttpDriverAuthApi({ handle: answerDroppingHandle(fromAddress(app.handle, TEST_ADDRESS), drops) });
 
   let serial = 1;

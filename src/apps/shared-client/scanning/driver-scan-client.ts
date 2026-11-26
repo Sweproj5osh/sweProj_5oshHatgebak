@@ -7,8 +7,8 @@
  * A request id is kept only while the retry is for the same scan. A different code or site is a different request
  * and gets a new id, so a retry can never silently send an older scan in place of the one the driver just made.
  */
-import type { TicketId } from '../../../shared/identifiers';
-import type { RequestId } from '../../../shared/request-id';
+import type { TicketId } from '../../../server/shared/identifiers';
+import type { RequestId } from '../../../server/shared/request-id';
 import { RequestIdKeeper } from '../request-id';
 import { ServerTransportError } from '../server-call';
 import { TicketScanRefusedError, type OpenTicketScanInput, type ScannedTicket, type TicketScanApi, type TicketScanRefusal } from './ticket-scan-api';

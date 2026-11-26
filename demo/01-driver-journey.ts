@@ -6,12 +6,14 @@
  *
  * Run from the repository root:   npx tsx demo/01-driver-journey.ts
  */
-import { composeInMemoryServer } from '../src/entrypoint/composition';
-import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/entrypoint/bootstrap';
-import type { HttpRequest } from '../src/entrypoint/http';
-import { signedSiteCodes } from '../src/modules/sites-and-areas/public';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
-import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title } from './lib';
+import { composeTestServer } from '../src/server/test-support/compose-test-application';
+import { BOOTSTRAP_CHAIR_NAME_VARIABLE, BOOTSTRAP_CHAIR_PHONE_VARIABLE } from '../src/server/composition/bootstrap';
+import { pathWith } from '../src/apps/shared-client/route-path';
+import type { HttpRequest } from '../src/server/http/http';
+import type { HttpMethod } from '../src/server/shared/operation-contract';
+import { signedSiteCodes } from '../src/server/modules/identity-and-registry/sites-and-areas/index';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
+import { bodyOf, bold, dim, expectThat, note, say, scene, showExchange, table, title, demoDatabase } from './lib';
 
 const TOKEN_SECRET = 'demo-token-secret-that-is-long-enough';
 const SITE_CODE_SECRET = 'demo-site-code-secret-long-enough';
@@ -22,7 +24,7 @@ const CLIENT_ADDRESS = '203.0.113.7';
 /** The recording sender keys codes by the international form of the number: 01012345678 becomes +201012345678. */
 const international = (phone: string): string => `+20${phone.slice(1)}`;
 
-const app = composeInMemoryServer({ tokenSecret: TOKEN_SECRET, siteCodeSecret: SITE_CODE_SECRET });
+const app = composeTestServer({ database: await demoDatabase('driver_journey'), tokenSecret: TOKEN_SECRET, siteCodeSecret: SITE_CODE_SECRET });
 
 let requestCounter = 0;
 /** Request ids of writes the server refused: the audit trail must hold no entry for any of them. */
@@ -37,24 +39,24 @@ interface Call {
 }
 
 /** Sends one request through the real entry point, the way the HTTP server would hand it over. */
-async function send(label: string, method: 'GET' | 'POST', path: string, call: Call = {}, quiet = false) {
+async function send(label: string, method: HttpMethod, path: string, call: Call = {}, quiet = false) {
   const headers: Record<string, string> = {};
   if (call.token !== undefined) {
     headers['authorization'] = `Bearer ${call.token}`;
   }
-  if (method === 'POST' || call.requestId !== undefined) {
+  if (method !== 'GET' || call.requestId !== undefined) {
     headers[REQUEST_ID_HEADER] = call.requestId ?? nextRequestId();
   }
   const request: HttpRequest = {
     method,
-    path,
+    path: pathWith(path, { ...call.query, ...(call.body as Record<string, unknown> | undefined) }),
     query: call.query ?? {},
     headers,
     address: CLIENT_ADDRESS,
     ...(call.body === undefined ? {} : { body: call.body }),
   };
   const response = await app.handle(request);
-  if (method === 'POST' && response.status >= 400) {
+  if (method !== 'GET' && response.status >= 400) {
     refusedWriteRequestIds.push(headers[REQUEST_ID_HEADER] ?? '');
   }
   if (!quiet) {
@@ -72,9 +74,9 @@ function mustBe(response: { status: number; body: unknown }, status: number, wha
 }
 
 async function signInDriver(phone: string, quiet = true): Promise<string> {
-  await send('Ask for a one-time code', 'POST', '/sign-in/code', { body: { phone } }, quiet);
+  await send('Ask for a one-time code', 'POST', '/sign-in-codes', { body: { phone } }, quiet);
   const code = app.signInCodes.lastCodeSentTo(international(phone)) ?? 'no code was sent';
-  const signedIn = await send('Sign in with the code', 'POST', '/sign-in', { body: { phone, code } }, quiet);
+  const signedIn = await send('Sign in with the code', 'POST', '/sessions', { body: { phone, code } }, quiet);
   return bodyOf<{ token: string }>(signedIn).token;
 }
 
@@ -109,13 +111,13 @@ async function main(): Promise<void> {
   scene(2, 'The Chair signs in with two steps: a one-time code, then a password');
   note('Committee roles need a password as a second factor. Setting the very first password is an operator action.');
   await app.accounts.signIn.setCommitteePassword(bootstrap.chairId, bootstrap.chairId, CHAIR_PASSWORD);
-  await send('Ask for a one-time code', 'POST', '/sign-in/code', { body: { phone: CHAIR_PHONE } });
+  await send('Ask for a one-time code', 'POST', '/sign-in-codes', { body: { phone: CHAIR_PHONE } });
   const chairCode = app.signInCodes.lastCodeSentTo(international(CHAIR_PHONE)) ?? 'no code was sent';
-  const codeOnly = await send('Code alone is not enough for the Chair', 'POST', '/sign-in', { body: { phone: CHAIR_PHONE, code: chairCode } });
+  const codeOnly = await send('Code alone is not enough for the Chair', 'POST', '/sessions', { body: { phone: CHAIR_PHONE, code: chairCode } });
   expectThat(codeOnly.status === 401, 'A committee role cannot sign in with the code alone ("second step required")');
-  await send('Ask for a fresh code', 'POST', '/sign-in/code', { body: { phone: CHAIR_PHONE } }, true);
+  await send('Ask for a fresh code', 'POST', '/sign-in-codes', { body: { phone: CHAIR_PHONE } }, true);
   const freshCode = app.signInCodes.lastCodeSentTo(international(CHAIR_PHONE)) ?? 'no code was sent';
-  const chairSignIn = await send('Code + password', 'POST', '/sign-in/committee', {
+  const chairSignIn = await send('Code + password', 'POST', '/committee-sessions', {
     body: { phone: CHAIR_PHONE, code: freshCode, password: CHAIR_PASSWORD },
   });
   expectThat(chairSignIn.status === 200, 'The Chair is signed in');
@@ -142,8 +144,8 @@ async function main(): Promise<void> {
   });
   mustBe(site, 201, 'Create site');
   const siteId = bodyOf<{ siteId: string }>(site).siteId;
-  await send('Open every day, all day', 'POST', '/sites/hours', { token: chairToken, body: { siteId, hours: 'daily 00:00-24:00' } });
-  await send('Read the site back', 'GET', '/sites/status', { token: chairToken, query: { siteId } });
+  await send('Open every day, all day', 'PUT', '/sites/:siteId/opening-hours', { token: chairToken, body: { siteId, hours: 'daily 00:00-24:00' } });
+  await send('Read the site back', 'GET', '/sites/:siteId/status', { token: chairToken, query: { siteId } });
   const codes = signedSiteCodes(SITE_CODE_SECRET, siteId);
   note('The committee prints two signed codes for the street signs: one at the entrance, one at the exit.');
   say(`Entry code (printed on the sign): ${dim(codes.entryCode.slice(0, 44))}...`);
@@ -152,9 +154,9 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------------------------------------------
   scene(4, 'A driver opens the app, signs in with a phone number, and saves a car');
   const driverPhone = '01011112222';
-  await send('Ask for a one-time code', 'POST', '/sign-in/code', { body: { phone: driverPhone } });
+  await send('Ask for a one-time code', 'POST', '/sign-in-codes', { body: { phone: driverPhone } });
   const driverCode = app.signInCodes.lastCodeSentTo(international(driverPhone)) ?? 'no code was sent';
-  const driverSignIn = await send('Sign in with the code (first time = account is created)', 'POST', '/sign-in', {
+  const driverSignIn = await send('Sign in with the code (first time = account is created)', 'POST', '/sessions', {
     body: { phone: driverPhone, code: driverCode },
   });
   expectThat(driverSignIn.status === 201, 'A new phone number becomes a driver account');
@@ -168,18 +170,18 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------------------------------------------
   scene(5, 'The driver looks at the map and checks free spaces before driving there');
   note('Expect two server log lines below: the map\'s free-space band and first-hour fee are not wired into the');
-  note('composition yet (known gap, QUESTIONS.md item 17), so the map answers "unknown" for them and keeps working.');
-  await send('Streets near the driver', 'GET', '/sites/nearby', {
+  note('composition yet (known gap, docs/team/QUESTIONS.md item 17), so the map answers "unknown" for them and keeps working.');
+  await send('Streets near the driver', 'GET', '/sites', {
     token: driverToken,
     query: { latitude: '30.0626', longitude: '31.2197', radius: '1500' },
   });
-  const spaces = await send('Free spaces on 26 July Street', 'GET', '/tickets/free-spaces', { token: driverToken, query: { siteId } });
+  const spaces = await send('Free spaces on 26 July Street', 'GET', '/sites/:siteId/free-spaces', { token: driverToken, query: { siteId } });
   expectThat(bodyOf<{ freeSpaces: number }>(spaces).freeSpaces === 3, 'All 3 spaces are free');
 
   // ---------------------------------------------------------------------------------------------------------------
   scene(6, 'The driver scans the entry code: a ticket opens, time is stamped by the SERVER');
   const entryRequestId = nextRequestId();
-  const opened = await send('Scan entry code', 'POST', '/tickets/open', {
+  const opened = await send('Scan entry code', 'POST', '/tickets', {
     token: driverToken,
     requestId: entryRequestId,
     body: { siteId, carRef, entryCode: codes.entryCode },
@@ -190,33 +192,33 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------------------------------------------------------
   scene(7, 'The server refuses what it must refuse');
-  const repeated = await send('Weak signal: the phone resends the SAME scan with the SAME request id', 'POST', '/tickets/open', {
+  const repeated = await send('Weak signal: the phone resends the SAME scan with the SAME request id', 'POST', '/tickets', {
     token: driverToken,
     requestId: entryRequestId,
     body: { siteId, carRef, entryCode: codes.entryCode },
   });
   expectThat(repeated.status === 201 && JSON.stringify(repeated.body) === JSON.stringify(opened.body), 'Same request id = same answer, no second ticket');
 
-  const sameCarAgain = await send('A new scan for a car that is already parked', 'POST', '/tickets/open', {
+  const sameCarAgain = await send('A new scan for a car that is already parked', 'POST', '/tickets', {
     token: driverToken,
     body: { siteId, carRef, entryCode: codes.entryCode },
   });
   expectThat(sameCarAgain.status === 409, 'One open ticket per car');
 
-  const forged = await send('A made-up code (someone prints a fake sign)', 'POST', '/tickets/open', {
+  const forged = await send('A made-up code (someone prints a fake sign)', 'POST', '/tickets', {
     token: driverToken,
     body: { siteId, carRef, entryCode: 'entry-this-is-not-a-real-code' },
   });
   expectThat(forged.status === 403, 'Forged codes are rejected (codes are signed)');
 
-  const cheeky = await send('A phone that tries to choose its own entry time', 'POST', '/tickets/open', {
+  const cheeky = await send('A phone that tries to choose its own entry time', 'POST', '/tickets', {
     token: driverToken,
     body: { siteId, carRef, entryCode: codes.entryCode, openedAt: '2020-01-01T00:00:00Z' },
   });
   expectThat(cheeky.status === 400, 'No client may send a time: the server clock is the only clock');
 
   const otherDriverToken = await signInDriver('01033334444');
-  const strangersCar = await send("Another driver scans using the first driver's car", 'POST', '/tickets/open', {
+  const strangersCar = await send("Another driver scans using the first driver's car", 'POST', '/tickets', {
     token: otherDriverToken,
     body: { siteId, carRef, entryCode: codes.entryCode },
   });
@@ -239,14 +241,14 @@ async function main(): Promise<void> {
   const carC = await addCar(driverC, 'KLM 456');
   const driverD = await signInDriver('01088889999');
   const carD = await addCar(driverD, 'QRS 321');
-  await send('Driver B scans the entry code', 'POST', '/tickets/open', { token: driverB, body: { siteId, carRef: carB, entryCode: codes.entryCode } });
-  await send('Driver C scans the entry code', 'POST', '/tickets/open', { token: driverC, body: { siteId, carRef: carC, entryCode: codes.entryCode } });
-  const full = await send('Driver D arrives, but the street is full', 'POST', '/tickets/open', {
+  await send('Driver B scans the entry code', 'POST', '/tickets', { token: driverB, body: { siteId, carRef: carB, entryCode: codes.entryCode } });
+  await send('Driver C scans the entry code', 'POST', '/tickets', { token: driverC, body: { siteId, carRef: carC, entryCode: codes.entryCode } });
+  const full = await send('Driver D arrives, but the street is full', 'POST', '/tickets', {
     token: driverD,
     body: { siteId, carRef: carD, entryCode: codes.entryCode },
   });
   expectThat(full.status === 409 && bodyOf<{ error: string }>(full).error === 'site full', 'The 4th car is refused: "site full"');
-  const noSpaces = await send('Free spaces now', 'GET', '/tickets/free-spaces', { token: driverD, query: { siteId } });
+  const noSpaces = await send('Free spaces now', 'GET', '/sites/:siteId/free-spaces', { token: driverD, query: { siteId } });
   expectThat(bodyOf<{ freeSpaces: number }>(noSpaces).freeSpaces === 0, 'The free-space count is derived from the tickets: 0 left');
   const history = await send("Driver A's ticket history", 'GET', '/tickets', { token: driverToken });
   expectThat(bodyOf<{ tickets: unknown[] }>(history).tickets.length === 1, 'Each driver sees only their own tickets');

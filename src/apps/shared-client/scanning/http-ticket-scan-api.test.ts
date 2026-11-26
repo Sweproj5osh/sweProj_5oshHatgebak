@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { InMemoryApplicationOptions } from '../../../entrypoint/composition';
-import { readRequest, TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../entrypoint/test-helpers';
-import { FixedClock } from '../../../shared/clock';
+import type { TestApplicationOptions } from '../../../server/test-support/compose-test-application';
+import { readRequest, TEST_TOKEN_SECRET, testApplication, tokenFor } from '../../../server/test-support/test-helpers';
+import { FixedClock } from '../../../server/shared/clock';
 import { answerDroppingHandle, type AnswerDrops } from '../../test-support/answer-dropping-handle';
 import { priceListFor, TEST_PRICE } from '../../test-support/ticketing-ports';
 import { DriverScanClient } from './driver-scan-client';
@@ -19,7 +19,7 @@ const scanAt = (siteId: string) => ({ siteId, carRef: CAR, entryCode: `entry-${s
  * Karim's ticketing operations exactly as the composition root registers them on main, on the real pipeline. The test
  * fills only the committee price (so a close can charge) and, where a test asks, car ownership.
  */
-async function buildStack(drops: AnswerDrops = { remaining: 0 }, moduleDependencies: InMemoryApplicationOptions['moduleDependencies'] = {}) {
+async function buildStack(drops: AnswerDrops = { remaining: 0 }, moduleDependencies: TestApplicationOptions['moduleDependencies'] = {}) {
   const clock = new FixedClock(START);
   const prices = await priceListFor(['site-1', 'site-2']);
   const app = testApplication({ tokenSecret: TEST_TOKEN_SECRET, clock, moduleDependencies: { prices, ...moduleDependencies } });
@@ -29,7 +29,7 @@ async function buildStack(drops: AnswerDrops = { remaining: 0 }, moduleDependenc
   const driverEntries = async () => (await app.audit.readByScope({ personId: DRIVER_OF_THE_TOKEN, role: 'driver' })).map((entry) => entry.operation);
   /** Counted through Karim's open read `ticketing.freeSpaces`, so the count is the server's (Rule G). */
   const openTicketsAt = async (siteId: string) => {
-    const answer = await app.handle(readRequest('/tickets/free-spaces', tokenFor('driver'), { siteId }));
+    const answer = await app.handle(readRequest('/sites/:siteId/free-spaces', tokenFor('driver'), { siteId }));
     return STAND_IN_CAPACITY - Number((answer.body as { freeSpaces: number }).freeSpaces);
   };
   return { client, clock, driverEntries, openTicketsAt };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isWellFormedRequestId } from '../../shared/request-id';
+import { isWellFormedRequestId } from '../../server/shared/request-id';
 import { randomRequestId, RequestIdKeeper } from './request-id';
 
 function countingKeeper() {

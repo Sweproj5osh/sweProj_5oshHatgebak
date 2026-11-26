@@ -3,28 +3,30 @@
  *
  *   20 drivers want 5 spaces  ->  a phone retries the same scan 10 times at once  ->  a stolen request id
  *   is reused with other content  ->  somebody guesses sign-in codes  ->  fees can never pass the cap
- *   ->  somebody edits the audit log directly in the database and is caught.
+ *   ->  somebody edits a copy of the audit log and is caught; the real log cannot be edited at all.
  *
  * Uses the project's test composition (stand-in site register: every street has 5 spaces and signs "entry-<site>"),
  * the same one the project's own fitness functions run on.
  *
  * Run from the repository root:   npx tsx demo/03-integrity-guarantees.ts
  */
-import { AUDIT_LOG_HEAD_TABLE, AUDIT_LOG_TABLE, InMemoryDatabase } from '../src/adapters/in-memory/in-memory-database';
-import { composeInMemoryApplication } from '../src/entrypoint/composition';
-import type { HttpRequest } from '../src/entrypoint/http';
-import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/entrypoint/test-helpers';
-import { createFeeCalculator, type PriceVersion } from '../src/modules/committee-prices/public';
-import { createTicketOpening, TableTicketStore } from '../src/modules/ticketing/public';
-import { FixedClock } from '../src/shared/clock';
-import { REQUEST_ID_HEADER } from '../src/shared/request-id';
-import { fail, succeed } from '../src/shared/result';
-import { bodyOf, bold, expectThat, note, say, scene, showExchange, title } from './lib';
+import { PostgresAuditLogStore } from '../src/server/adapters/postgres/postgres-audit-log-store';
+import { createHashChainedAuditTrail, type AuditLogStore } from '../src/server/modules/foundation/audit-log/index';
+import { ArrayAuditLogStore } from '../src/server/test-support/array-audit-log-store';
+import { composeTestApplication } from '../src/server/test-support/compose-test-application';
+import type { HttpRequest } from '../src/server/http/http';
+import { TEST_ADDRESS, TEST_TOKEN_SECRET, tokenFor } from '../src/server/test-support/test-helpers';
+import { createFeeCalculator, type PriceVersion } from '../src/server/modules/parking-and-prices/committee-prices/index';
+import { createTicketOpening, TableTicketStore } from '../src/server/modules/parking-and-prices/ticketing/index';
+import { FixedClock } from '../src/server/shared/clock';
+import { REQUEST_ID_HEADER } from '../src/server/shared/request-id';
+import { fail, succeed } from '../src/server/shared/result';
+import { bodyOf, bold, demoDatabase, expectThat, note, say, scene, showExchange, title } from './lib';
 
 const clock = new FixedClock(new Date('2026-11-09T08:00:00Z'));
-const app = composeInMemoryApplication({ tokenSecret: TEST_TOKEN_SECRET, clock });
+const app = composeTestApplication({ database: await demoDatabase('integrity'), tokenSecret: TEST_TOKEN_SECRET, clock });
 
-function driverRequest(personId: string, requestId: string, body: unknown, path = '/tickets/open'): HttpRequest {
+function driverRequest(personId: string, requestId: string, body: unknown, path = '/tickets'): HttpRequest {
   return {
     method: 'POST',
     path,
@@ -58,7 +60,7 @@ async function main(): Promise<void> {
   expectThat(openNow === 5, `The tickets themselves agree: ${openNow} open tickets at the street (free spaces are counted from tickets, never stored)`);
 
   note('(b) Twenty openers race at the same instant inside one unit of work: the project\'s own fitness function F3.');
-  const raceDatabase = new InMemoryDatabase();
+  const raceDatabase = await demoDatabase('integrity_race');
   const raceStore = new TableTicketStore();
   const opening = createTicketOpening({
     sites: {
@@ -111,7 +113,7 @@ async function main(): Promise<void> {
   for (let attempt = 1; attempt <= 7; attempt += 1) {
     const guess = await app.handle({
       method: 'POST',
-      path: '/sign-in',
+      path: '/sessions',
       query: {},
       headers: { [REQUEST_ID_HEADER]: `guess-request-${String(attempt).padStart(4, '0')}` },
       address: TEST_ADDRESS,
@@ -161,35 +163,34 @@ async function main(): Promise<void> {
   expectThat(await verify(), 'Before the attack: the chain verifies');
 
   try {
-    await app.database.replace(AUDIT_LOG_TABLE, '3', {});
+    await app.database.replace('audit_log', '3', {});
     expectThat(false, 'The application\'s own table access refuses to touch audit_log');
   } catch (error) {
     expectThat(true, `The application's own table access refuses to touch audit_log ("${error instanceof Error ? error.message : String(error)}")`);
   }
 
-  note('Now the attacker bypasses the application and writes to the storage underneath (here: the raw in-memory tables).');
-  const target = app.database.tables.find<Record<string, unknown>>(AUDIT_LOG_TABLE, '3');
+  note('The real log cannot be edited: the application\'s database role has no UPDATE or DELETE right on audit_log');
+  note('(npm test proves it, task Z2). So the attacker edits a copy of the stored records, and verification is run on that copy.');
+  const stored = new PostgresAuditLogStore(app.database.committed);
+  const records = await stored.readAll();
+  const head = await stored.head();
+  const verifyCopy = (copy: AuditLogStore) => createHashChainedAuditTrail(copy, clock).verifyChain();
+  const target = records.find((record) => record.id === 3);
   if (target === undefined) {
     throw new Error('entry 3 was expected to exist');
   }
-  say(`Entry 3 says the operation was ${bold(String(target['operation']))} by ${String(target['personId'])}.`);
-  app.database.tables.replace(AUDIT_LOG_TABLE, '3', { ...target, personId: 'driver-innocent' });
+  say(`Entry 3 says the operation was ${bold(target.operation)} by ${String(target.personId)}.`);
+  const edited = new ArrayAuditLogStore(records.map((record) => (record.id === 3 ? { ...record, personId: 'driver-innocent' } : record)), head);
   say('The attacker changes the name of the person who did it...');
-  expectThat(!(await verify()), 'Verification FAILS: the edited entry no longer matches its hash');
-  app.database.tables.replace(AUDIT_LOG_TABLE, '3', target);
-  expectThat(await verify(), '(Put back as it was: the chain verifies again, so the check itself is not stuck on "broken")');
+  expectThat(!(await verifyCopy(edited)), 'Verification FAILS: the edited entry no longer matches its hash');
+  expectThat(await verifyCopy(new ArrayAuditLogStore(records, head)), '(An untouched copy verifies, so the check itself is not stuck on "broken")');
 
   const last = entries[entries.length - 1]!;
   say(`Second attack: delete the most recent entry (#${last.id}) so the log looks shorter...`);
-  const lastRow = app.database.tables.find<Record<string, unknown>>(AUDIT_LOG_TABLE, String(last.id));
-  app.database.tables.remove(AUDIT_LOG_TABLE, String(last.id));
-  expectThat(!(await verify()), 'Verification FAILS: the head record still names the deleted entry, so a cut tail is caught');
-  if (lastRow !== undefined) {
-    app.database.tables.insert(AUDIT_LOG_TABLE, String(last.id), lastRow);
-  }
-  expectThat(await verify(), '(Put back: the chain verifies again)');
-  note(`In PostgreSQL there is a third wall: the application's database role has no UPDATE or DELETE right on audit_log.`);
-  note(`Head table used for the tail check: ${AUDIT_LOG_HEAD_TABLE}.`);
+  const shortened = new ArrayAuditLogStore(records.filter((record) => record.id !== last.id), head);
+  expectThat(!(await verifyCopy(shortened)), 'Verification FAILS: the head record still names the deleted entry, so a cut tail is caught');
+  expectThat(await verify(), '(The real log was never touched: it still verifies)');
+  note('Head table used for the tail check: audit_log.head.');
 
   console.log('');
   say(bold('Demo 3 complete.'));
