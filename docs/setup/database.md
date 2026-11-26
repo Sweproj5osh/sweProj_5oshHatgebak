@@ -6,8 +6,8 @@ all need `POSTGRES_URL`.
 ## Getting a PostgreSQL
 Any PostgreSQL 14 or later works.
 - **Docker:** `docker compose -f db/compose.yaml up -d`, then
-  `export POSTGRES_URL=postgres://sayes:sayes@localhost:5432/postgres`. (The compose file was not run on the machine
-  the restructure was made on, whose Docker did not answer; a local PostgreSQL 14 was used instead.)
+  `export POSTGRES_URL=postgres://sayes:sayes@localhost:5433/postgres` (host port 5433, so it never clashes with a local
+  PostgreSQL on 5432).
 - **A local installation** (for example Homebrew's `postgresql@14`): `export POSTGRES_URL=postgres://$USER@localhost:5432/postgres`.
 
 ## Migrations
