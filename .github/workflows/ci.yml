@@ -34,3 +34,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run fitness
+      # ADR-17, ADR-18: the app bundles with the shared client (a Node-only import would fail here).
+      - run: npm run bundle --workspace @sayes/mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://localhost:3000

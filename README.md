@@ -31,7 +31,7 @@ and the folder map in [docs/architecture/overview.md](docs/architecture/overview
 ## Running things
 ```bash
 npm ci                 # install (Node.js 24)
-npm run typecheck      # TypeScript, strict mode
+npm run typecheck      # TypeScript, strict mode: the server, and the app in src/apps/mobile (docs/setup/mobile-app.md)
 npm test               # Vitest, against the PostgreSQL named by POSTGRES_URL (docs/setup/database.md)
 npm run fitness        # the static fitness functions F1, F10, F11, F12, F13, F14
 npx tsx src/fitness/f14-production-code-never-reaches-test-code.ts     # one fitness function alone

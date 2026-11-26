@@ -162,8 +162,8 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 ## 11. Stack
 TypeScript on Node.js 24, ECMAScript modules, strict mode. Vitest for tests, `tsx` to run scripts. HTTPS only, through
 Node's built-in `https` module behind our own small router (ADR-22); no plain-HTTP listener. PostgreSQL through SQL migrations in `db/migrations/` and the
-adapters in `src/server/adapters/postgres/`; every test run needs a real PostgreSQL named by `POSTGRES_URL` (ADR-21). The apps: Expo (React Native) for iPhone, Android and the committee
-web build. Formatting and naming follow the code already in the repository.
+adapters in `src/server/adapters/postgres/`; every test run needs a real PostgreSQL named by `POSTGRES_URL` (ADR-21). The app: one Expo (React Native) app for every role at
+`src/apps/mobile`, an npm workspace (ADR-17, ADR-18). Formatting and naming follow the code already in the repository.
 
 ## 12. How to work: branches, pull requests, review
 1. Branch from `main`: `area-<letter>/<task-id>-<short-name>` (for example `area-c/c9-deposit-receipt`). Zeyad's

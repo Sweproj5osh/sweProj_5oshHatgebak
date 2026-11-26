@@ -3,6 +3,7 @@ import { request } from 'node:https';
 export interface HttpsAnswer {
   readonly status: number;
   json(): Promise<unknown>;
+  text(): Promise<string>;
 }
 
 /**
@@ -16,7 +17,7 @@ export function httpsFetch(url: string, init: { method?: string; headers?: Recor
       incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
       incoming.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8');
-        resolve({ status: incoming.statusCode ?? 0, json: async () => JSON.parse(text) as unknown });
+        resolve({ status: incoming.statusCode ?? 0, json: async () => JSON.parse(text) as unknown, text: async () => text });
       });
       incoming.on('error', reject);
     });

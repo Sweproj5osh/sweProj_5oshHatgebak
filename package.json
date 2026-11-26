@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "tsx src/server/main.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/apps/mobile",
     "test": "vitest run",
     "fitness": "tsx src/fitness/run-all.ts",
     "db:migrate": "tsx src/server/adapters/postgres/migrate.ts"
@@ -23,5 +23,8 @@
   },
   "dependencies": {
     "pg": "^8.23.1"
-  }
+  },
+  "workspaces": [
+    "src/apps/mobile"
+  ]
 }

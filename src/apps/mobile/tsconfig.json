@@ -1,0 +1,13 @@
+{
+  "extends": ["expo/tsconfig.base", "../../../tsconfig.base.json"],
+  "compilerOptions": {
+    "jsx": "react-native",
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "paths": {
+      "@sayes/shared-client/*": ["../shared-client/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../shared-client/**/*.ts"],
+  "exclude": ["node_modules", "dist", "../shared-client/**/*.test.ts"]
+}

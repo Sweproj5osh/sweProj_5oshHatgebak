@@ -5,5 +5,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "db/**/*.ts", "demo/**/*.ts", "vitest.config.ts"],
-  "exclude": ["node_modules", "src/fitness/fixtures/**"]
+  "exclude": ["node_modules", "src/fitness/fixtures/**", "src/apps/mobile/**"]
 }

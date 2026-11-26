@@ -21,6 +21,7 @@
 | `src/server/modules/messages-and-complaints/` | Area 5: `notifications.ts`, `evidence.ts`, `complaints-inspections-ratings.ts` | Mahi (Teammate D) |
 | `src/apps/shared-client/` | The HTTP client library the apps and the server-side tests share | Mahi (Teammate D) |
 | `src/apps/test-support/` | Test-only client fakes | Mahi (Teammate D) |
+| `src/apps/mobile/` | The one Expo app for every role (`docs/setup/mobile-app.md`) | Mahi (Teammate D) |
 | `src/fitness/` | The static fitness functions and their planted violations | Zeyad |
 | `db/migrations/` | PostgreSQL migrations | Zeyad (and each owner for their tables) |
 | `demo/` | The demo scripts (`docs/demo/DEMO.md`) | Teammate A |
