@@ -16,6 +16,7 @@ passes, the numbers are reported, and the fitness functions stay green.
 5. The server's clock is the only clock. No time, fee or count is ever taken from a phone.
 6. Nothing merges without green tests, green fitness functions and one review by Zeyad.
 7. Until the foundation (area 1) lands on day 3 (Saturday 7 November), build against in-memory stand-ins and unit tests. Do not wait.
+   (Superseded 25 November 2026 by ADR-21: the system and its tests run only against a real PostgreSQL.)
 
 Reading before you start: `docs/adr/README.md`, then the records named in your area, then your area's rows in
 `uml/architecture_walkthrough_decisions.md` Q12.

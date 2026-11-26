@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createHashChainedAuditTrail, type AuditEntry } from '../../modules/foundation/audit-log/index';
 import { FixedClock } from '../../shared/clock';
+import { ArrayAuditLogStore } from '../../test-support/array-audit-log-store';
 import { createTestDatabase } from '../../test-support/postgres-test-database';
-import { InMemoryAuditLogStore } from '../in-memory/in-memory-audit-log-store';
-import { InMemoryDatabase } from '../in-memory/in-memory-database';
 import { PostgresAuditLogStore } from './postgres-audit-log-store';
 import { PostgresOutboxStore } from './postgres-outbox-store';
 import { PostgresResponseStore } from './postgres-response-store';
@@ -27,11 +26,11 @@ const ENTRIES: readonly AuditEntry[] = [
 ];
 
 describe('PostgreSQL audit log store (ADR-10, ADR-21)', () => {
-  it('keeps every record exactly as the in-memory store did, so the chain and the head verify', async () => {
+  it('keeps every record exactly as the trail built it, so the chain and the head verify', async () => {
     const { database } = await createTestDatabase();
     const clock = new FixedClock(START);
-    const reference = new InMemoryDatabase();
-    const expected = createHashChainedAuditTrail(new InMemoryAuditLogStore(reference.tables), new FixedClock(START));
+    const reference = new ArrayAuditLogStore();
+    const expected = createHashChainedAuditTrail(reference, new FixedClock(START));
     for (const entry of ENTRIES) {
       const transaction = database.begin();
       await createHashChainedAuditTrail(new PostgresAuditLogStore(transaction), clock).append(entry);
@@ -40,7 +39,7 @@ describe('PostgreSQL audit log store (ADR-10, ADR-21)', () => {
     }
     const stored = createHashChainedAuditTrail(new PostgresAuditLogStore(database.committed), clock);
     expect(await stored.verifyChain()).toBe(true);
-    expect(await new PostgresAuditLogStore(database.committed).readAll()).toEqual(await new InMemoryAuditLogStore(reference.tables).readAll());
+    expect(await new PostgresAuditLogStore(database.committed).readAll()).toEqual(await reference.readAll());
     expect(await stored.readByScope({ personId: 'chair-1', role: 'chair' })).toHaveLength(ENTRIES.length);
   });
 

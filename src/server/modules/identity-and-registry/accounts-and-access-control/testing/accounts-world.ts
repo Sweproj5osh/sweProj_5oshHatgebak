@@ -39,7 +39,7 @@ export class FakeCarPresence implements CarPresence {
   }
 }
 
-/** This module over the in-memory database, a fixed clock, the recording code sender, a token issuer and a fake car presence. */
+/** This module over a fresh PostgreSQL test database, a fixed clock, the recording code sender, a token issuer and a fake car presence. */
 export interface AccountsWorld {
   readonly accounts: AccountsAndAccessControl;
   readonly database: PostgresDatabase;

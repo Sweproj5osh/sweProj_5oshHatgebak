@@ -181,7 +181,7 @@ export function createLicensingAssignmentAttendance(dependencies: LicensingAssig
   };
 }
 
-/** The stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database and PostgreSQL later. */
+/** The stores over the shared TableAccess (ADR-13): served by the PostgreSQL adapter (ADR-21). */
 export function createLicensingStores(): LicensingAssignmentAttendanceStores {
   return {
     assignments: new TableAssignmentsStore(),

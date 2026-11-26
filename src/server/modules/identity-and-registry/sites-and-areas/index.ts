@@ -235,7 +235,7 @@ export function createSiteLocator(database: TableAccess, stores: SitesAndAreasSt
   return new PlacesLocator(database, stores.places);
 }
 
-/** The stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database and PostgreSQL later. */
+/** The stores over the shared TableAccess (ADR-13): served by the PostgreSQL adapter (ADR-21). */
 export function createSitesStores(): SitesAndAreasStores {
   return { places: new TablePlacesStore(), capacity: new TableCapacityStore(), calendar: new TableSiteCalendarStore() };
 }

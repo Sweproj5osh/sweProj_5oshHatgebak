@@ -3,8 +3,8 @@ import type { RequestId } from '../../../shared/request-id';
 import type { PaymentRecord } from './index';
 
 /**
- * Storage ports owned by this module. The in-memory adapter in `adapters/` implements them for every test; the
- * PostgreSQL adapter will implement the same ports over the `payments` schema.
+ * Storage ports owned by this module. The table-access adapter in `adapters/` implements them over TableAccess, which
+ * PostgreSQL serves (ADR-21), records kept in the `payments` schema.
  */
 
 /** One row of the payments table: the public record plus what the module keeps for itself. */

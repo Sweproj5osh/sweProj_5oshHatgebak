@@ -35,11 +35,14 @@ npm run typecheck      # TypeScript, strict mode
 npm test               # Vitest, against the PostgreSQL named by POSTGRES_URL (docs/setup/database.md)
 npm run fitness        # the static fitness functions F1, F10, F11, F12, F13, F14
 npx tsx src/fitness/f14-production-code-never-reaches-test-code.ts     # one fitness function alone
-cp .env.example .env && npm start                                      # the HTTPS entry point (TLS_CERT_PATH, TLS_KEY_PATH: docs/setup/https.md)
+npm run db:migrate     # apply the migrations the database named by POSTGRES_URL lacks (as its owner)
+cp .env.example .env && npm start                                      # the HTTPS entry point: POSTGRES_URL, TLS_CERT_PATH, TLS_KEY_PATH
 ```
 Every test run needs a real PostgreSQL named by `POSTGRES_URL` (ADR-21): each test application gets its own database
 cloned from a migrated template, and the run drops them at the end. `npm run db:migrate` applies the migrations a
 database lacks. The database test for task Z2 (the application role cannot update or delete `audit_log`) always runs.
+`npm start` stops with a clear message when `POSTGRES_URL` is missing, when PostgreSQL does not answer, when a
+migration is not applied, or when the TLS certificate is missing; there is no in-memory storage to fall back on.
 
 ## How a write travels
 Token (one person, one role, signed by the server) → permission table → `X-Request-Id` required → body rejected if
@@ -58,7 +61,7 @@ test (`src/server/http/audit-coverage.test.ts`) then checks every registered wri
 4. The apps hold no business rule: they display and collect; the server decides.
 5. The server's clock is the only clock.
 6. Nothing merges without green tests, green fitness functions and one review by Zeyad.
-7. Until the foundation lands, build against in-memory stand-ins and unit tests.
+7. Tests run against a real PostgreSQL; there is no in-memory storage (ADR-21).
 
 ## Where to read more
 - [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the fitness functions.

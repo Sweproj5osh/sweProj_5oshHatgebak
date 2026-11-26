@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createTestDatabase } from '../../test-support/postgres-test-database';
 import type { TableAccess, Transaction } from '../../shared/unit-of-work';
-import { InMemoryDatabase } from './in-memory-database';
 
-/** The contract every TableAccess adapter keeps (ADR-13, ADR-21), run against the in-memory and the PostgreSQL adapter. */
+/**
+ * The contract the TableAccess adapter keeps (ADR-13, ADR-21). The same expected values held for the in-memory
+ * database until it was deleted (ADR-21).
+ */
 type DatabaseUnderTest = TableAccess & { begin(): Transaction };
 const ADAPTERS: readonly (readonly [string, () => Promise<DatabaseUnderTest>])[] = [
-  ['InMemoryDatabase', async () => new InMemoryDatabase()],
   ['PostgresDatabase', async () => (await createTestDatabase()).database],
 ];
 

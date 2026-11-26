@@ -41,7 +41,7 @@ export interface PaymentGateway {
  */
 export type AttemptState = 'pending' | 'paid' | 'failed';
 
-/** The fake provider for tests and the in-memory server (C1); the composition root builds it through this function. */
+/** The fake provider for tests and, until task C18, the server (C1); the composition root builds it through this function. */
 export { createFakePaymentGateway, type FakePaymentGateway } from './adapters/fake-payment-gateway';
 
 export interface PaymentRecord {

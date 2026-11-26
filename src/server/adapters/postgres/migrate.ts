@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
+import type { Queryable } from './postgres-database';
 import { readPostgresUrl } from './postgres-url';
 
 export const MIGRATIONS_FOLDER = path.join('db', 'migrations');
@@ -36,7 +37,7 @@ export async function migrate(connectionString: string, folder: string = path.re
 }
 
 /** The migrations a database has not applied yet; start-up refuses to serve while any is missing. */
-export async function pendingMigrations(through: pg.Pool, folder: string = path.resolve(MIGRATIONS_FOLDER)): Promise<readonly string[]> {
+export async function pendingMigrations(through: Queryable, folder: string = path.resolve(MIGRATIONS_FOLDER)): Promise<readonly string[]> {
   const files = await migrationFiles(folder);
   const table = await through.query<{ present: string | null }>("SELECT to_regclass('foundation.schema_migrations') AS present");
   if (table.rows[0]?.present === null) {

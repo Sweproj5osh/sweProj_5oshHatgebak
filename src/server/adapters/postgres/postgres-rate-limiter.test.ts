@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock } from '../../shared/clock';
 import type { RateLimit } from '../../shared/rate-limiter';
-import { PostgresSlidingWindowRateLimiter } from '../postgres/postgres-rate-limiter';
+import { PostgresSlidingWindowRateLimiter } from './postgres-rate-limiter';
 import { createTestDatabase } from '../../test-support/postgres-test-database';
 import type { Clock } from '../../shared/clock';
 import type { RateLimiter } from '../../shared/rate-limiter';
-import { InMemorySlidingWindowRateLimiter } from './in-memory-rate-limiter';
 
-/** The contract every RateLimiter adapter keeps (ADR-15, ADR-21), run against the in-memory and the PostgreSQL adapter. */
+/**
+ * The contract the RateLimiter adapter keeps (ADR-15, ADR-21). The same expected values held for the in-memory
+ * limiter until it was deleted (ADR-21).
+ */
 const ADAPTERS: readonly (readonly [string, (clock: Clock) => Promise<RateLimiter>])[] = [
-  ['', async (clock) => new InMemorySlidingWindowRateLimiter(clock)],
   [' over PostgreSQL', async (clock) => new PostgresSlidingWindowRateLimiter((await createTestDatabase()).database, clock)],
 ];
 

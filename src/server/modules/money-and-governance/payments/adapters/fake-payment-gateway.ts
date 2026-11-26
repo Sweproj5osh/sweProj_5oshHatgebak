@@ -4,7 +4,7 @@ import type { ChargeOutcome, ChargeResult, PaymentGateway } from '../index';
 import { PROVIDER_TIMEOUT_MILLISECONDS } from '../payment-ledger';
 
 /**
- * The stand-in for the outside payment provider (task C1, ADR-11). Every test and the in-memory server run on it;
+ * The stand-in for the outside payment provider (task C1, ADR-11). Every test and, until then, the server run on it;
  * the real adapter of task C18 replaces it by configuration only.
  *
  * The answer is chosen by the amount's last whole-pound digit: 1 → paid, 2 → declined, 3 → pending, 9 → a slow

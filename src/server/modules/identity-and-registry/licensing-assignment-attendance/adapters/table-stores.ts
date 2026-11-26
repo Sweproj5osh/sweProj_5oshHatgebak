@@ -16,8 +16,8 @@ import type {
 } from '../ports';
 
 /**
- * This module's stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database of every
- * test and a PostgreSQL unit of work later. Table names follow `db/migrations/0002_identity_and_registry.sql`.
+ * This module's stores over the shared TableAccess (ADR-13), served by the PostgreSQL adapter (ADR-21) in the server
+ * and in every test. Table names follow `db/migrations/0002_identity_and_registry.sql`.
  */
 export const ATTENDANT_ASSIGNMENTS_TABLE = 'licensing_assignment_attendance.attendant_assignments';
 export const INSPECTOR_ASSIGNMENTS_TABLE = 'licensing_assignment_attendance.inspector_assignments';

@@ -18,7 +18,7 @@
 | F11 | no timestamp field in a body schema; calendar times only on committee operations | static | kept | no timestamp from a client |
 | F12 | every personal field in a write has a redaction rule | static | kept | personal-data redaction |
 | F13 | only `requestSignInCode` and `signIn` are public | static | kept | sign-in is the only public operation |
-| F14 | no production file imports test-only code (`*.test.ts`, `test-support/`, `testing/`, `src/fitness`) | static | added | the running application never reaches a stand-in or a fake |
+| F14 | no production file imports test-only code (`*.test.ts`, `test-support/`, `testing/`, `src/fitness`); the composition root wires no storage adapter but the PostgreSQL ones | static | added | the running application never reaches a stand-in, a fake or any in-memory storage |
 
 The fixtures live in `src/fitness/fixtures/`.
 

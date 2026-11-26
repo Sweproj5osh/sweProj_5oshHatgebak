@@ -18,8 +18,8 @@ import type {
 } from '../ports';
 
 /**
- * This module's stores over the shared TableAccess (ADR-13): the same adapter serves the in-memory database of every
- * test and a PostgreSQL unit of work later. The table names are the ones of
+ * This module's stores over the shared TableAccess (ADR-13), served by the PostgreSQL adapter (ADR-21) in the server
+ * and in every test. The table names are the ones of
  * `db/migrations/0002_identity_and_registry.sql`; names, phones and plates sit only in the `personal_data` tables.
  */
 export const PEOPLE_TABLE = 'accounts_and_access_control.people';

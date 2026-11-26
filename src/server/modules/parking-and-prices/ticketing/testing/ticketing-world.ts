@@ -79,7 +79,7 @@ export const ATTENDANT_AT_SITE_2: ClockedInAttendant = { attendantId: 'attendant
 export const ATTENDANT_CLOCKED_OUT: ClockedInAttendant = { attendantId: 'attendant-unknown' };
 
 /**
- * Access checks for the in-memory application: everyone is live, and each named person's session is bound to the site
+ * Access checks for the test application: everyone is live, and each named person's session is bound to the site
  * given here (the stand-in for Lino's clock-in, P26 Q4). The shape is `AccessChecks` from the entry point, left
  * unnamed so this support file imports nothing from `src/entrypoint` (F2).
  */
@@ -159,7 +159,7 @@ export interface WorldOptions {
 }
 
 /**
- * The ticketing module over an in-memory database, with its ports faked. Each wrapper below (`openTicket`, `closeTicket`,
+ * The ticketing module over a fresh PostgreSQL test database, with its ports faked. Each wrapper below (`openTicket`, `closeTicket`,
  * …) runs one call in its own unit of work and commits, as one request through the entry point would (ADR-13); a test
  * that needs several calls in one transaction uses `transact` directly.
  */

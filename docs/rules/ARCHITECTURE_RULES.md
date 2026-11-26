@@ -138,7 +138,9 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 - Payment provider: 8-second timeout, then the ticket stays closed and unpaid and the driver sees "pay later or pay
   cash". A "pending" answer is recorded and polled, never guessed.
 - Attendant offline: refuse the write with a clear message. No local queue in version one.
-- Database unreachable: writes stop and say so; reads may continue from a read copy. No local fallback.
+- Database unreachable: writes stop and say so; reads may continue from a read copy. No local fallback. At start-up a
+  missing `POSTGRES_URL`, an unreachable database or an unapplied migration stops the server with a clear message
+  (ADR-21).
 - Any may-fail module down: the request to it fails alone; a ticket still opens, closes and gets paid.
 - Language model down: "assistant unavailable"; the map still works.
 
@@ -182,7 +184,8 @@ Static, in `npm run fitness` (ADR-16): F1 Prices imports nothing outside itself 
 outside `personal_data` · F11 no body schema in the composed registry accepts a timestamp, and `localDateTime` appears
 only on committee operations · F12 every personal field (plate, phone, name, password, latitude, longitude) in a write
 or public schema has an `omit` or `replace` rule · F13 the public operations are exactly a subset of
-`requestSignInCode` and `signIn` · F14 no production file imports test-only code.
+`requestSignInCode` and `signIn` · F14 no production file imports test-only code, and the composition root wires no
+storage adapter but the PostgreSQL ones.
 
 Tests, in `npm test`: F3 twenty parallel opens on five spaces give five tickets · F4 fee ≤ cap for any input · F5 one
 audit entry per successful write or public write, none per failed one, none per telemetry post, and every read that

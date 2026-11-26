@@ -20,7 +20,7 @@ export const TEST_START = new Date('2026-11-05T08:00:00Z');
 const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${identity.personId}` };
 const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
 
-/** Access control and the site registry wired together over one in-memory database, the way the composition root wires them. */
+/** Access control and the site registry wired together over one fresh PostgreSQL test database, the way the composition root wires them. */
 export interface RegistryWorld {
   readonly clock: FixedClock;
   readonly database: PostgresDatabase;

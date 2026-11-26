@@ -53,6 +53,12 @@ describe('each fitness function fails on its planted violation', () => {
     expect(result.violations[0]).toContain('fitness/support/import-scanner');
   });
 
+  it('F14 catches a composition root wiring an in-memory storage adapter', async () => {
+    const result = await f14ProductionCodeNeverReachesTestCode(fixture('f14-in-memory-violation'));
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toContain('a storage adapter other than PostgreSQL');
+  });
+
   it('F10 catches personal columns in CREATE TABLE, ALTER TABLE ADD, a quoted camelCase name and RENAME COLUMN ... TO', async () => {
     const result = await f10PersonalDataColumnsStayInTheirSchema(fixture('f10-violation'));
     expect(result.passed).toBe(false);

@@ -74,7 +74,7 @@ export interface AuditTrail {
 }
 
 /**
- * Storage port. Adapters live in src/adapters; the in-memory one is the default for every test.
+ * Storage port. The adapter lives in src/server/adapters/postgres (ADR-21); the tamper proofs use a test-only array copy.
  * The chain derives each record's id and prevHash from the last record, so reading the last record and appending the
  * next must be serialized across every running copy of the server: the PostgreSQL adapter takes
  * `pg_advisory_xact_lock(<constant>)` inside the write's transaction before `lastRecord()` and `appendRecord()`.

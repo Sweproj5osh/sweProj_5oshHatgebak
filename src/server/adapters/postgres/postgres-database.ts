@@ -37,7 +37,7 @@ function locate(table: string): { readonly schema: string; readonly recordTable:
 /**
  * TableAccess over PostgreSQL (ADR-21): every record is stored whole, as the `json` text of the object written, under
  * its key, in the `records` table of its schema. A refused insert, replace or remove throws the same message as the
- * in-memory database did and leaves the transaction usable.
+ * in-memory database (deleted, ADR-21) did and leaves the transaction usable.
  */
 async function readRecord<Stored extends Row>(through: Queryable, table: string, key: string): Promise<Stored | undefined> {
   const { schema, recordTable } = locate(table);

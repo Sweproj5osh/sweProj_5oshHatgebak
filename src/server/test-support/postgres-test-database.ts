@@ -23,7 +23,7 @@ let counter = 0;
 
 /**
  * Test-only: a fresh database for one test application, cloned from the run's migrated template, so every composition
- * starts empty, as `new InMemoryDatabase()` did. It is returned at once and created meanwhile; every statement waits
+ * starts empty, as each one did when tests ran in memory. It is returned at once and created meanwhile; every statement waits
  * for it. The pools close when the test file ends (postgres-test-cleanup.ts).
  */
 export function freshTestDatabase(): PostgresDatabase {

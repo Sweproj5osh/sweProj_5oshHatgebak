@@ -5,8 +5,8 @@ import type { District, Site, Zone } from '../domain/places';
 import type { CapacityChangeRow, CapacityStore, PlacesStore, SiteCalendarStore, SpecialEventRow } from '../ports';
 
 /**
- * This module's stores over the shared TableAccess (ADR-13): the same adapters serve the in-memory database of every
- * test and a PostgreSQL unit of work later. Table names follow `db/migrations/0002_identity_and_registry.sql`.
+ * This module's stores over the shared TableAccess (ADR-13), served by the PostgreSQL adapter (ADR-21) in the server
+ * and in every test. Table names follow `db/migrations/0002_identity_and_registry.sql`.
  */
 export const DISTRICTS_TABLE = 'sites_and_areas.districts';
 export const ZONES_TABLE = 'sites_and_areas.zones';

@@ -53,7 +53,7 @@ const NO_TOKENS_NEEDED: TokenIssuer = { issue: (identity) => `fake-token:${ident
 const NO_PLATE_IS_READ_HERE: CarPresence = { carSeenAt: async () => false };
 
 /**
- * Access control, the site registry and this module wired over one in-memory database the way the composition root
+ * Access control, the site registry and this module wired over one fresh PostgreSQL test database the way the composition root
  * wires them, with two districts, each holding one zone and one site, and a member appointed to district one.
  */
 export interface LicensingWorld {
