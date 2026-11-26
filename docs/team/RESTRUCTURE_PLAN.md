@@ -662,3 +662,32 @@ questions of section 8 were settled with the defaults this plan already recommen
 - a body or query may repeat a path field with the same value (another value is refused with 400), so the client's
   requests and the tests' bodies are unchanged apart from the URL;
 - the root PDFs and the local `.env.example` and `.gitignore` edits stay uncommitted.
+
+---
+
+## Results (26 November 2026)
+
+| Check | Baseline (`cd13eae`) | After R11 |
+|---|---|---|
+| `npm run typecheck` | exit 0 (server) | exit 0 (server, the demos, and the app without Node types) |
+| `npm test` | 719 passed, 1 skipped, on in-memory storage, 1.7 s | 732 passed, 0 skipped, on PostgreSQL, about 35 s; identical in three runs in a row |
+| `npm run fitness` | 7 passed (F1, F2, F8-static, F10–F13) | 6 passed (F1, F10–F14) |
+| Composed registry | 48 operations | the same 48, same order, same declarations; only method and path changed |
+| Demos 01–03 | PASS 20, 22, 14 | PASS 20, 22, 14, against PostgreSQL |
+| Parallel-arrivals gap (20 separate opens, 5 spaces) | 6 tickets in 30 of 30 runs | 5 in 30 of 30 runs (ADR-23) |
+
+Tests no longer present from the baseline (18): the three F2/F8-static proofs (F14 has four), and the fourteen
+in-memory twins of the adapter contract tests, which still pass on PostgreSQL with the same expected values; the Z2
+test changed from skipped to passed. No test's expected value was edited: the changed assertion lines differ only in
+the URL they call, an `await` on the now-asynchronous outbox read, or the F1 fixture's own file path.
+
+Departures from the plan, each recorded in a decision record or the commit that made it:
+- R9 moved every composition onto PostgreSQL at once (tests, server, demos), because many tests use the production
+  composition; R10 kept the start-up refusals and the deletion of the in-memory adapters.
+- R9b (ADR-23): on PostgreSQL the parallel-arrivals gap grew from 6 to 11–14 tickets for 5 spaces, so the site lock
+  the TicketStore contract already required was added; ticketing's code is unchanged.
+- Three routes keep their id in the body (`POST /erasures`, `POST /attendant-releases`, `POST /payments`); a body or
+  query may repeat a path field with the same value.
+- `npm audit` reports three moderate findings, all in Expo's build tooling (`minimatch` via `@expo/fingerprint`).
+- Not verified on the restructure machine: `db/compose.yaml` (Docker did not answer; a local PostgreSQL 14 was used)
+  and the CI workflow (nothing was pushed).
