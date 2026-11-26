@@ -1,6 +1,6 @@
 # ADR-15: Sign-in goes through the single entry point as a `public` operation kind
 
-**Status:** Accepted · **Date:** 2026-11-07 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-07 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Review day (section 17, P3): "the entry point refuses token-less requests, so Lino's complete sign-in module has no

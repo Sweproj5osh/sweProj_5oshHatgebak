@@ -1,5 +1,5 @@
 /**
- * Audit Log — owner: Zeyad (Area 1). Must-stay-on set.
+ * Audit Log — owner: the team (Area 1, ADR-24). Must-stay-on set.
  * Append-only, hash-chained record of every action (ADR-10). Needs nothing from other modules.
  */
 import type { DistrictId, PersonId, Role } from '../../../shared/identifiers';

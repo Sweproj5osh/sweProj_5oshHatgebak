@@ -1,6 +1,6 @@
 # ADR-09: An offline attendant is refused in version one
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 An attendant with no signal taps "cash paid" or opens an assisted ticket. Accepting the action offline risks two tickets

@@ -1,6 +1,6 @@
 # ADR-17: One repository with npm workspaces; every document under docs/
 
-**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** Lino (Teammate A), at the team's instruction to carry out the restructure without the usual review; Zeyad Khaled to confirm
+**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** the team (recorded by Lino, Teammate A, the scrum master; ADR-24)
 
 ## Context
 The phone app will be React Native with Expo, which needs its own `package.json` and bundler configuration. Nothing in

@@ -1,6 +1,6 @@
 # ADR-10: Append-only, hash-chained audit log with scoped read access
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Accountability is the product: a sayes cannot be trusted on his word and neither can a committee member about a price

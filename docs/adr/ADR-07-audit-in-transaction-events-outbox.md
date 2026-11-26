@@ -1,6 +1,6 @@
 # ADR-07: Audit entry inside the transaction; in-process events with an outbox; no message broker
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 The call style decides how failure spreads. If Ticketing waits on Notifications, a slow Notifications slows every

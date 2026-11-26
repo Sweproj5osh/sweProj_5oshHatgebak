@@ -1,5 +1,5 @@
 /**
- * Scheduler — owner: Zeyad (Area 1, Sprint 2: Z11–Z13). May-fail set.
+ * Scheduler — owner: the team (Area 1, Sprint 2: Z11–Z13). May-fail set.
  * Time-driven jobs run once per due time with retry: stale tickets, retention purge. Needs TicketDesk, PersonalData,
  * MoneyCheck. Provides no interface to other modules (Q12); this registry is for job owners.
  */

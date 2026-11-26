@@ -2,9 +2,9 @@
 
 One file per decision that is expensive to change later. Every record has the same five parts: Context (the problem and
 the forces), Decision (what we chose), Alternatives rejected (and why each lost), Consequences (what becomes easier, what
-becomes harder), Related (the decisions it depends on). Status is Accepted unless marked otherwise.
+becomes harder), Related (the decisions it depends on). Status is Accepted unless marked otherwise. Decisions are the team's (ADR-24).
 
-ADR-01 to ADR-12 were decided by Zeyad Khaled on 4 November 2026, one question at a time, following the
+ADR-01 to ADR-12 were written by Zeyad Khaled on 4 November 2026, one question at a time, following the
 eleven-question walkthrough recorded in `uml/architecture_walkthrough_decisions.md`, section 16. ADR-13 to ADR-15 were
 decided on 7 November 2026, the review day of the teammates' first pull requests (section 17, P1 to P3). ADR-16 to
 ADR-22 record the restructure of 25 November 2026 (`docs/team/RESTRUCTURE_PLAN.md`). Ranked
@@ -35,3 +35,4 @@ qualities are from ADR-01.
 | [ADR-21](ADR-21-postgresql-only.md) | PostgreSQL only, through `POSTGRES_URL`; no in-memory database |
 | [ADR-22](ADR-22-rest-routes-and-https.md) | Resource-style REST routes, one controller per resource, HTTPS only |
 | [ADR-23](ADR-23-site-lock-on-opening.md) | The PostgreSQL ticket store locks the site while it opens a ticket |
+| [ADR-24](ADR-24-the-team-decides.md) | The team decides; any other teammate's review merges a pull request |

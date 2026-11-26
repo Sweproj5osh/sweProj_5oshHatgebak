@@ -1,6 +1,6 @@
 # ADR-12: The system issues the cash-deposit receipt; the inspector confirms
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Earlier documents said the attendant records a cash deposit "with a receipt photo" of an outside paper receipt. Zeyad:

@@ -1,6 +1,6 @@
 # ADR-05: Two apps; only the Staff App gets a web build
 
-**Status:** Superseded by ADR-18 (2026-11-25) · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Superseded by ADR-18 (2026-11-25) · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Five roles. Drivers are not staff and should not download staff screens. Committee members work from a laptop as well as

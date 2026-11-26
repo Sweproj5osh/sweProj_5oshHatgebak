@@ -691,3 +691,5 @@ Departures from the plan, each recorded in a decision record or the commit that 
 - `npm audit` reports three moderate findings, all in Expo's build tooling (`minimatch` via `@expo/fingerprint`).
 - Not verified on the restructure machine: `db/compose.yaml` (Docker did not answer; a local PostgreSQL 14 was used)
   and the CI workflow (nothing was pushed).
+- 26 November 2026, ADR-24: decisions are the team's, any other teammate's review merges a pull request, and Area 1
+  belongs to the team. Where this plan asks Zeyad to approve or decide, read "the team".

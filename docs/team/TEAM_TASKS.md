@@ -1,6 +1,6 @@
 # Team task sheet — Street Parking Management System
 
-Written 4 November 2026 by Zeyad Khaled (architect) from the decisions in `docs/adr/` and
+Written 4 November 2026 by Zeyad Khaled from the decisions in `docs/adr/` and
 `uml/architecture_walkthrough_decisions.md` section 16. Deadline 1 December 2026.
 
 Five areas, one owner each. Each task says **what to build**, **what it must do**, **how to test it** and **what to
@@ -14,7 +14,7 @@ passes, the numbers are reported, and the fitness functions stay green.
 3. Every write operation leaves exactly one audit entry, written inside the same transaction. A failed write leaves none.
 4. The apps hold no business rule: they display and collect; the server decides.
 5. The server's clock is the only clock. No time, fee or count is ever taken from a phone.
-6. Nothing merges without green tests, green fitness functions and one review by Zeyad.
+6. Nothing merges without green tests, green fitness functions and one review by another teammate (ADR-24).
 7. Until the foundation (area 1) lands on day 3 (Saturday 7 November), build against in-memory stand-ins and unit tests. Do not wait.
    (Superseded 25 November 2026 by ADR-21: the system and its tests run only against a real PostgreSQL.)
 
@@ -29,7 +29,7 @@ Two sprints, everything implemented by the end of the second.
 
 ---
 
-## Area 1 — Foundation (Zeyad)
+## Area 1 — Foundation (the team, ADR-24)
 Records: ADR-03, ADR-07, ADR-08, ADR-10, ADR-11.
 
 | # | Sprint | Build | It must | Test it by | Report |
@@ -155,7 +155,7 @@ notifications, photo evidence, complaints, inspections, ratings and disputes, an
 | D17 | 2 | The assistant service | A separate service with its own database; take a driver's token and English text; answer with sites, prices, directions or ticket status by calling the main system as the app does; time out and say "assistant unavailable" when the language model fails | "find parking near the AUC gate" → sites list; stop the language model → unavailable within the timeout; the main system untouched | Answer latency; timeout honoured |
 | D18 | 2 | Actions with a confirm tap | Prepare an action (open my ticket, pay) as a pending action; the Driver App shows it; nothing happens until the driver taps confirm | "open my ticket at site 12" → pending; confirm → ticket opened; no confirm → nothing | Actions executed without a tap (0) |
 | D19 | 2 | Conversation history | Keep history only in the assistant's database under the pseudonym; delete on request; purge after 90 days | History survives a restart; delete → empty; the main database has no chat table | Rows purged per run |
-| D20 | 2 | Isolation proof (with Zeyad) | The main-system suite passes with the assistant stopped | Run fitness function F9 | Pass/fail |
+| D20 | 2 | Isolation proof (with Area 1) | The main-system suite passes with the assistant stopped | Run fitness function F9 | Pass/fail |
 
 ---
 

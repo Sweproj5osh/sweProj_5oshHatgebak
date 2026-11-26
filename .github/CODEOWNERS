@@ -1,2 +1,2 @@
-# Every change needs a review from the architect before it merges (docs/rules/ARCHITECTURE_RULES.md, section 12).
-*  @Zab-17
+# No required code owner (ADR-24): a pull request merges after one review by a teammate other than its author
+# (docs/rules/ARCHITECTURE_RULES.md, section 12).

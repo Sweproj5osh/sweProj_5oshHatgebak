@@ -1,6 +1,6 @@
 # ADR-06: One writer per table; personal data in a separate store behind pseudonyms
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Data is the hardest thing to change after launch. Two modules writing one table are secretly one module. Instant

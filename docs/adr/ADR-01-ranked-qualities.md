@@ -1,6 +1,6 @@
 # ADR-01: Qualities ranked — integrity, accountability, reliability and availability, security
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 The system exists to organize street parking that today has no organization at all, and to prevent stealing, bullying

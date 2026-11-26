@@ -1,6 +1,6 @@
 # ADR-04: The AI Assistant is a second, separate service
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 A driver should be able to write "find me parking near the AUC gate" and have it done. A language-model call is slow

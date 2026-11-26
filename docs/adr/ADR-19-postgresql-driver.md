@@ -1,6 +1,6 @@
 # ADR-19: Runtime dependency: the PostgreSQL driver `pg`
 
-**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** Lino (Teammate A), at the team's instruction to carry out the restructure without the usual review; Zeyad Khaled to confirm
+**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** the team (recorded by Lino, Teammate A, the scrum master; ADR-24)
 
 ## Context
 The application must run only against PostgreSQL (ADR-21). Node has no built-in PostgreSQL client, and AGENTS.md rule 7

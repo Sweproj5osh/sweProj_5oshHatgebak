@@ -1,6 +1,6 @@
 # ADR-11: Providers sit behind ports frozen before any provider is chosen
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 The database, server host, map, photo storage, payment provider, push or SMS provider and language-model provider are

@@ -1,6 +1,6 @@
 # ADR-14: Audit entries carry no personal data; each write declares its redaction
 
-**Status:** Accepted · **Date:** 2026-11-07 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-07 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Review day (section 17, P2): "the pipeline copies the whole request body into the audit entry; plates, coordinates,

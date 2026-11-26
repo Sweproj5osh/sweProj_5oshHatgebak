@@ -22,7 +22,7 @@ and the folder map in [docs/architecture/overview.md](docs/architecture/overview
 
 | Owner | Area module (`src/server/modules/…`) and its components |
 |---|---|
-| Zeyad (Area 1) | `foundation/`: `audit-log`, `scheduler`, plus the foundation: `src/server/http`, `src/server/composition`, `src/server/shared`, `src/server/adapters`, `src/server/test-support`, `src/fitness`, `db/` |
+| The team (Area 1) | `foundation/`: `audit-log`, `scheduler`, plus the foundation: `src/server/http`, `src/server/composition`, `src/server/shared`, `src/server/adapters`, `src/server/test-support`, `src/fitness`, `db/` |
 | Lino (Teammate A) (Area 2) | `identity-and-registry/`: `accounts-and-access-control`, `sites-and-areas`, `licensing-assignment-attendance` |
 | Karim (Teammate B) (Area 3) | `parking-and-prices/`: `committee-prices`, `ticketing` |
 | Amina (Teammate C) (Area 4) | `money-and-governance/`: `payments`, `cash-custody`, `approvals`, `money-check-dashboard` |
@@ -60,12 +60,12 @@ test (`src/server/http/audit-coverage.test.ts`) then checks every registered wri
 3. Every write leaves exactly one audit entry, inside the same transaction; a failed write leaves none.
 4. The apps hold no business rule: they display and collect; the server decides.
 5. The server's clock is the only clock.
-6. Nothing merges without green tests, green fitness functions and one review by Zeyad.
+6. Nothing merges without green tests, green fitness functions and one review by another teammate (ADR-24).
 7. Tests run against a real PostgreSQL; there is no in-memory storage (ADR-21).
 
 ## Where to read more
 - [docs/rules/ARCHITECTURE_RULES.md](docs/rules/ARCHITECTURE_RULES.md): the binding rules, the nine lettered rules A–I, the fitness functions.
-- [docs/adr/](docs/adr/README.md): the Architecture Decision Records (ADR-01 to ADR-22).
+- [docs/adr/](docs/adr/README.md): the Architecture Decision Records (ADR-01 to ADR-24).
 - [docs/team/TEAM_TASKS.md](docs/team/TEAM_TASKS.md): every task, its test and its report numbers.
 - [docs/pdf/UML_Component_Architecture_V3_diagrams.pdf](docs/pdf/UML_Component_Architecture_V3_diagrams.pdf): the component diagrams.
 - [AGENTS.md](AGENTS.md): instructions for AI coding agents working here.

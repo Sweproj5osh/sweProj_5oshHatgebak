@@ -2,8 +2,8 @@
 
 This file binds every person and every AI coding agent working in this repository. Read it before writing a line.
 The reasons behind each rule are in `docs/adr/` (fifteen Architecture Decision Records) and the task list is in
-`docs/team/TEAM_TASKS.md`. When this file and a pull request disagree, this file wins until Zeyad Khaled (the architect
-and the only decision maker) changes it through a new decision record.
+`docs/team/TEAM_TASKS.md`. When this file and a pull request disagree, this file wins until the team changes it
+through a new decision record (ADR-24).
 
 ## 1. What the system is
 A street parking management system for Cairo. It exists to **organize and protect**: a driver knows the real, legal
@@ -43,13 +43,13 @@ Privacy (Law 151 of 2020) is a constraint, obeyed not ranked. Performance, scala
 | `parking-and-prices/ticketing` | `TicketDesk`, `TicketQuery` | Karim (Teammate B) | must stay on |
 | `parking-and-prices/committee-prices` | `PriceList`, `FeeCalculator` | Karim (Teammate B) | must stay on |
 | `money-and-governance/payments` | `PaymentLedger`, port `PaymentGateway` | Amina (Teammate C) | must stay on |
-| `foundation/audit-log` | `AuditTrail` | Zeyad | must stay on |
+| `foundation/audit-log` | `AuditTrail` | The team | must stay on |
 | `money-and-governance/cash-custody.ts` | `DepositLedger` | Amina (Teammate C) | may fail |
 | `identity-and-registry/licensing-assignment-attendance` | `LicenceStatus`, `Assignments`, `Attendance` | Lino (Teammate A) | may fail |
 | `money-and-governance/approvals.ts` | `ApprovalDesk` | Amina (Teammate C) | may fail |
 | `messages-and-complaints/complaints-inspections-ratings.ts` | `Complaints`, `Inspections`, `Scores` | Mahi (Teammate D) | may fail |
 | `money-and-governance/money-check-dashboard.ts` | `MoneyCheck` | Amina (Teammate C) | may fail |
-| `foundation/scheduler.ts` | none (it calls others) | Zeyad | may fail |
+| `foundation/scheduler.ts` | none (it calls others) | The team | may fail |
 | `messages-and-complaints/notifications.ts` | `Notifier`, port `MessageDelivery` | Mahi (Teammate D) | may fail |
 | `messages-and-complaints/evidence.ts` | `EvidenceStore`, port `PhotoStorage` | Mahi (Teammate D) | may fail |
 
@@ -166,18 +166,18 @@ adapters in `src/server/adapters/postgres/`; every test run needs a real Postgre
 `src/apps/mobile`, an npm workspace (ADR-17, ADR-18). Formatting and naming follow the code already in the repository.
 
 ## 12. How to work: branches, pull requests, review
-1. Branch from `main`: `area-<letter>/<task-id>-<short-name>` (for example `area-c/c9-deposit-receipt`). Zeyad's
-   branches are `foundation/<task-ids>`.
+1. Branch from `main`: `area-<letter>/<task-id>-<short-name>` (for example `area-c/c9-deposit-receipt`).
 2. One task per pull request where possible. The description states: the task id, how to test it (commands), and the
    numbers the task asks you to report.
 3. `npm test` and `npm run fitness` are green on the branch; the continuous-integration run on the pull request is
    green.
-4. One review by Zeyad, then merge by squash. Nobody merges their own pull request without that review.
+4. One review by a teammate other than the author, then merge by squash (ADR-24). Nobody merges their own pull request
+   without that review.
 5. A pull request that changes a rule in this file or in `docs/adr/` is refused until the decision record exists.
 
 ## 13. Definition of done, for every task
 Every "Test it by" step in `docs/team/TEAM_TASKS.md` passes, as an automated test where possible; the "Report" numbers are
-in the pull request; tests and fitness functions are green; one review by Zeyad.
+in the pull request; tests and fitness functions are green; one review by another teammate.
 
 ## 14. The fitness functions
 Static, in `npm run fitness` (ADR-16): F1 Prices imports nothing outside itself · F10 no plate, phone or name column
@@ -204,4 +204,4 @@ where the code cannot say it; errors carry context and are never swallowed.
 
 ## 16. Changing a rule
 Open a pull request that adds `docs/adr/ADR-NN-<slug>.md` (context, decision, alternatives rejected, consequences,
-related) and edits this file in the same change. Zeyad decides. Until it is merged, the old rule stands.
+related) and edits this file in the same change. The team decides (ADR-24). Until it is merged, the old rule stands.

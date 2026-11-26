@@ -1,6 +1,6 @@
 # ADR-23: The PostgreSQL ticket store locks the site while it opens a ticket
 
-**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** Lino (Teammate A), at the team's instruction to carry out the restructure without the usual review; Karim (Teammate B) and Zeyad Khaled to confirm
+**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** the team (recorded by Lino, Teammate A, the scrum master; ADR-24)
 
 ## Context
 Rule E and fitness function F3 say a site never has more open tickets than spaces. The `TicketStore` contract already

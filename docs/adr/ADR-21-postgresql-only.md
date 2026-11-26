@@ -1,6 +1,6 @@
 # ADR-21: PostgreSQL only, through POSTGRES_URL; no in-memory database
 
-**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** Lino (Teammate A), at the team's instruction to carry out the restructure without the usual review; Zeyad Khaled to confirm
+**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** the team (recorded by Lino, Teammate A, the scrum master; ADR-24)
 
 ## Context
 With `DATABASE_URL` unset the server and every test ran on in-memory adapters, so a server could run for days on

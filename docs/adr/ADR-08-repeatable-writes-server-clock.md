@@ -1,6 +1,6 @@
 # ADR-08: Every write is repeatable; the server is the only clock
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 On Cairo streets the signal drops daily. A scan or a payment whose answer is lost will be retried by the driver. A

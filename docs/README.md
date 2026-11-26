@@ -9,7 +9,7 @@ folder. A pull request that changes code updates the documents that describe it.
 | [rules/](rules/ARCHITECTURE_RULES.md) | The binding rules, with their reasons |
 | [architecture/](architecture/overview.md) | The overview and folder map, the modules and their owners, the controller pattern, the REST route catalogue and the fitness functions |
 | [setup/](setup/database.md) | Setting up the database, HTTPS and the app (`setup/mobile-app.md`) |
-| [adr/](adr/README.md) | The Architecture Decision Records, ADR-01 to ADR-22 |
+| [adr/](adr/README.md) | The Architecture Decision Records, ADR-01 to ADR-24 |
 | [team/](team/TEAM_TASKS.md) | The task sheet, the open questions, test reports and the restructure plan |
 | [demo/](demo/DEMO.md) | How to run and present the demo scripts in `demo/` |
 | [pdf/](pdf/) | The component diagrams |

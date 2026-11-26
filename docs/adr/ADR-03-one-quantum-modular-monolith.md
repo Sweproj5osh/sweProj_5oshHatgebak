@@ -1,6 +1,6 @@
 # ADR-03: One deployable unit — a modular monolith with Clean Architecture inside, run as stateless copies
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 An architecture quantum is a piece deployed on its own with its own qualities. A second quantum is worth its cost only

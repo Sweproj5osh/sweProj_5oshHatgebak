@@ -1,6 +1,6 @@
 # ADR-13: The unit of work reaches the modules
 
-**Status:** Accepted · **Date:** 2026-11-07 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-07 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Review day (section 17 of `uml/architecture_walkthrough_decisions.md`, P1): "the pipeline's transaction wraps the audit

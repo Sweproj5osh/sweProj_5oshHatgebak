@@ -1,6 +1,6 @@
 # ADR-20: Runtime dependencies of the app: Expo, React, React Native, expo-crypto
 
-**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** Lino (Teammate A), at the team's instruction to carry out the restructure without the usual review; Zeyad Khaled to confirm
+**Status:** Accepted · **Date:** 2026-11-25 · **Decided by:** the team (recorded by Lino, Teammate A, the scrum master; ADR-24)
 
 ## Context
 The app is built with Expo (ADR-18). AGENTS.md rule 7 requires a decision record before any new runtime dependency.

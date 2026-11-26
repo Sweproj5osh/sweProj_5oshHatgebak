@@ -1,6 +1,6 @@
 # ADR-02: Fourteen components found by actor/actions, not by database tables
 
-**Status:** Accepted · **Date:** 2026-11-04 · **Decided by:** Zeyad Khaled
+**Status:** Accepted · **Date:** 2026-11-04 · **Written by:** Zeyad Khaled · **Decided by:** the team (ADR-24)
 
 ## Context
 Five roles (Driver, Attendant, Inspector, Committee Member, Committee Chair) plus time-driven work. The 3-to-5 role
